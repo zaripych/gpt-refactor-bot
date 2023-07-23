@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'fs/promises';
 
 import type { Message } from '../chat-gpt/api';
+import { prettierMarkdown } from '../prettier/prettier';
 import { parseMessages } from './parse';
 import { serializeMessages } from './serialize';
 
@@ -14,14 +15,22 @@ export const conversationState = (conversationFile: string) => {
     };
 
     const save = async () => {
-        contents = await serializeMessages(messages);
-        await writeFile(conversationFile, contents, 'utf-8');
+        contents = serializeMessages(messages);
+        await writeFile(
+            conversationFile,
+            await prettierMarkdown(contents),
+            'utf-8'
+        );
     };
 
     const hint = async (message: string) => {
-        contents = await serializeMessages(messages);
+        contents = serializeMessages(messages);
         contents += `\n\n> @hint ${message}\n\n`;
-        await writeFile(conversationFile, contents, 'utf-8');
+        await writeFile(
+            conversationFile,
+            await prettierMarkdown(contents),
+            'utf-8'
+        );
     };
 
     const canSend = () =>
