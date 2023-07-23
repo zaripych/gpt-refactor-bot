@@ -6,6 +6,15 @@ refactoring tasks using "Plan and Execute" techniques.
 
 ## Installation
 
-```bash
-pnpm add refactor-bot
+```
+git clone git@github.com:zaripych/refactor-bot.git
+```
+
+## Usage
+
+```
+pnpm install
+cd /path/to/your/project
+pnpm add /path/to/refactor-bot
+pnpm refactor-bot --help
 ```
