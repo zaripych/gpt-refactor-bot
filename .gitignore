@@ -1,0 +1,4 @@
+.env
+node_modules
+.tsc-out
+src/test.ts

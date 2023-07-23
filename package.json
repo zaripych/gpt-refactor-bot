@@ -1,0 +1,44 @@
+{
+    "name": "refactor-bot",
+    "version": "0.0.0-development",
+    "private": true,
+    "description": "refactor-bot --help",
+    "type": "module",
+    "bin": {
+        "refactor-bot": "./bin/refactor-bot.ts"
+    },
+    "scripts": {
+        "lint": "repka lint",
+        "refactor-bot": "tsx ./bin/refactor-bot.ts"
+    },
+    "dependencies": {
+        "chalk": "5.2.0",
+        "chokidar": "3.5.3",
+        "dotenv": "16.3.1",
+        "fast-glob": "3.2.12",
+        "js-yaml": "4.1.0",
+        "lodash-es": "4.17.21",
+        "ora": "6.3.1",
+        "prompts": "2.4.2",
+        "strip-ansi": "7.1.0",
+        "ts-morph": "19.0.0",
+        "tsx": "3.12.7",
+        "undici": "5.22.1",
+        "yargs": "17.7.2",
+        "zod": "3.21.4",
+        "zod-to-json-schema": "3.21.2"
+    },
+    "devDependencies": {
+        "@repka-kit/ts": "1.0.0-beta.7",
+        "@types/js-yaml": "4.0.5",
+        "@types/lodash-es": "4.17.7",
+        "@types/node": "20.4.2",
+        "@types/prompts": "2.4.4",
+        "@types/yargs": "17.0.24",
+        "utility-types": "3.10.0"
+    },
+    "peerDependencies": {
+        "prettier": "2.8.8",
+        "typescript": "^5.0.4"
+    }
+}

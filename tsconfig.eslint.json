@@ -1,0 +1,15 @@
+{
+    // Hello fellow developer 👋
+    //
+    // I'm very sorry to be a shameful plug of an extra config.
+    //
+    // Please commit me along with the rest of the code, I will help
+    // you lint package level scripts that are essential for building and
+    // bundling your pretty packages.
+    "extends": "@repka-kit/ts/configs/tsconfig.base.json",
+    "compilerOptions": {
+        "outDir": ".tsc-out",
+        "tsBuildInfoFile": ".tsc-out/.tsbuildinfo"
+    },
+    "include": ["*.ts"]
+}
