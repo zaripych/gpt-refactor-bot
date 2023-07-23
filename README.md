@@ -56,6 +56,9 @@ ChatGPT.
 Select a file, and then you will be prompted to enter a message using your
 editor. Save the message with `---` at the end to send it.
 
+See example conversation at
+[`.refactor-bot/prompts/example.md`](.refactor-bot/prompts/example.md).
+
 ## Roadmap
 
 Currently working on `refactor` command, which will allow you to perform
