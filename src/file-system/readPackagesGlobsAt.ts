@@ -29,5 +29,5 @@ export const readPackagesGlobsAt = async (repoRoot: string) => {
         tryReadingPnpmWorkspaceYaml(repoRoot).catch(() => undefined),
         tryReadingPackageJsonWorkspaces(repoRoot).catch(() => undefined),
     ]);
-    return pnpmWorkspaces || packageJsonWorkspaces || ['package.json'];
+    return pnpmWorkspaces || packageJsonWorkspaces || ['.'];
 };
