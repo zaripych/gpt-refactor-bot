@@ -66,12 +66,12 @@ refactoring.
 
 ## Expectations
 
--   You have `glow` installed and available in your `PATH` for formatting
-    `markdown` in terminals
 -   Source code is TypeScript
 -   `git` for version control
 -   `prettier` for code formatting
 -   `VSCode` as editor
+-   You have `glow` installed and available in your `PATH` for formatting
+    `markdown` in terminals (optional)
 
 ^ These are just a convenience assumptions at the moment and might change in
 future.
