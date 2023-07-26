@@ -1,54 +1,43 @@
-export type RefactorConfig = {
+import { z } from 'zod';
+
+export const refactorConfigSchema = z.object({
     /**
      * Short name of the refactoring
      */
-    name: string;
+    name: z.string(),
 
     /**
-     * Description of the refactor
+     * Objective of the refactor
      */
-    description: string;
+    objective: z.string(),
 
     /**
      * GitHub repository which is the target of the refactor, could be
      * undefined if the target is current repository.
      */
-    repository?: string;
+    repository: z.string().url().optional(),
 
     /**
      * git ref to start the refactor from, could be undefined if the
      * target is currently checked out ref.
      */
-    ref?: string;
+    ref: z.string().optional(),
 
     /**
      * Globs that represent files to be refactored, this can also be
      * automatically inferred from the goal description.
      */
-    target?: string[];
+    target: z.array(z.string()).optional(),
 
     /**
-     * @todo
+     * Maximum amount of money we can spend on a single run
      */
-    permissions?: {
-        /**
-         * List of files that can be read by the refactor-bot
-         */
-        read: string[];
+    budgetCents: z.number().optional().default(10_00),
 
-        /**
-         * List of files that can be written by the refactor-bot
-         */
-        write: string[];
+    /**
+     * An optional list of package.json scripts to run before the refactor starts
+     */
+    bootstrapScripts: z.array(z.string()).optional(),
+});
 
-        /**
-         * List of functions that can be called by the refactor-bot
-         */
-        functions: string[];
-    };
-};
-
-export type RefactorState = {
-    step: 'goal-enrichment';
-    config: RefactorConfig;
-};
+export type RefactorConfig = z.infer<typeof refactorConfigSchema>;

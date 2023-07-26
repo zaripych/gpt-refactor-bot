@@ -30,20 +30,35 @@ type Opts = {
     source: string;
 };
 
-export async function createSandbox(opts: Opts) {
+export function sandboxLocation(
+    opts: Pick<Opts, 'tag' | 'root' | 'sandboxId'>
+) {
     const {
         tag,
-        root = join(tmpdir(), 'refactor-bot-sandboxes'),
-        sandboxId = randomText(16),
+        root = join(tmpdir(), '.refactor-bot', 'sandboxes'),
+        sandboxId = randomText(8),
     } = opts;
 
     const sandboxDirectoryPath = join(root, `${tag}-${sandboxId}`);
 
+    return {
+        sandboxId,
+        sandboxDirectoryPath,
+    };
+}
+
+export async function createSandbox(opts: Opts) {
+    const { sandboxId, sandboxDirectoryPath } = sandboxLocation(opts);
+
     await mkdir(sandboxDirectoryPath, { recursive: true });
 
-    await spawnResult('rsync', ['-a', opts.source, sandboxDirectoryPath], {
-        exitCodes: [0],
-    });
+    await spawnResult(
+        'rsync',
+        ['-a', opts.source + '/', sandboxDirectoryPath],
+        {
+            exitCodes: [0],
+        }
+    );
 
     await ensureSandboxSafe(sandboxDirectoryPath);
 

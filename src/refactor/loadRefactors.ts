@@ -8,7 +8,7 @@ import type { RefactorConfig } from './types';
 export async function loadRefactorConfigs() {
     const repoRoot = await findRepositoryRoot();
 
-    const refactors = await fg('refactors/*/goal.md', {
+    const refactors = await fg('.refactor-bot/refactors/*/goal.md', {
         cwd: repoRoot,
         absolute: true,
     });
@@ -19,7 +19,8 @@ export async function loadRefactorConfigs() {
             const baseDirectory = basename(dirname(goalDescriptionFile));
             return {
                 name: baseDirectory,
-                description: goal,
+                objective: goal,
+                budgetCents: 10_00,
             } satisfies RefactorConfig;
         })
     );

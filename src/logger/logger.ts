@@ -6,7 +6,7 @@ type LogLevel = (typeof levels)[number];
 
 type Params = Parameters<typeof console.log>;
 
-type Logger = {
+export type Logger = {
     logLevel: LogLevel;
     debug(...params: Params): void;
     info(...params: Params): void;

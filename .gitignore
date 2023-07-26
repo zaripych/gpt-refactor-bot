@@ -2,3 +2,4 @@
 node_modules
 .tsc-out
 src/test.ts
+.refactor-bot/refactors/*/state

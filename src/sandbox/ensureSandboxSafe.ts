@@ -9,6 +9,7 @@ export async function ensureSandboxSafe(location: string) {
         dot: true,
         onlyFiles: false,
         absolute: true,
+        stats: true,
     }) as AsyncIterable<fg.Entry>;
 
     for await (const entry of iterable) {
