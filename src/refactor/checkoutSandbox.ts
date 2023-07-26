@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { spawnResult } from '../child-process/spawnResult';
 import { gitClone } from '../git/gitClone';
 import { determinePackageManager } from '../package-manager/determinePackageManager';
 import { installDependencies } from '../package-manager/installDependencies';
@@ -54,6 +55,18 @@ export async function checkoutSandbox(
         directory: sandboxDirectoryPath,
         packageManager,
     });
+
+    if (config.bootstrapScripts) {
+        await config.bootstrapScripts.reduce(async (previous, script) => {
+            await previous;
+
+            await spawnResult(packageManager, ['run', script], {
+                cwd: sandboxDirectoryPath,
+                exitCodes: [0],
+                logOnError: 'combined',
+            });
+        }, Promise.resolve());
+    }
 
     return {
         sandboxDirectoryPath,

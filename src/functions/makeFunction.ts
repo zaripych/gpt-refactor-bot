@@ -1,13 +1,26 @@
 import type { z, ZodSchema } from 'zod';
 
-export type Opts = {
+import type { makeDependencies } from './dependencies';
+
+export type FunctionsConfig = {
     /**
      * Whether to perform strict validation of the arguments and result
      * against the schema. This is always `true` when used by function
      * calling mechanisms, but can be set to `false` when calling the
-     * function directly.
+     * function directly for testing purposes.
      */
-    strict?: boolean;
+    strict: boolean;
+
+    /**
+     * The root of the repository to use when calling the functions,
+     * defaults to the return value of `findRepositoryRoot`.
+     */
+    repositoryRoot: string;
+
+    /**
+     * Dependencies to use when calling the functions
+     */
+    dependencies: typeof makeDependencies;
 };
 
 /**
@@ -18,7 +31,7 @@ export type Opts = {
  * Zod schema is converted to JSON schema.
  */
 export type FunctionDefinition<Name extends string, Args, Result> = {
-    (args: Args, callOpts?: Opts): Promise<Result>;
+    (args: Args, config: FunctionsConfig): Promise<Result>;
     name: Name;
     description: string;
     argsSchema: ZodSchema;
@@ -34,14 +47,17 @@ export const makeFunction = <
     resultSchema: ZodSchema;
     name: Name;
     description: string;
-    implementation: (args: z.infer<Schema>) => Promise<R>;
+    implementation: (
+        args: z.infer<Schema>,
+        config: FunctionsConfig
+    ) => Promise<R>;
 }): FunctionDefinition<Name, z.infer<Schema>, R> =>
     Object.defineProperties(
         Object.assign(
-            async (args: z.infer<Schema>, callOpts?: Opts) => {
+            async (args: z.infer<Schema>, config: FunctionsConfig) => {
                 const validatedArgs = opts.argsSchema.parse(args) as unknown;
-                const result = await opts.implementation(validatedArgs);
-                if (callOpts?.strict ?? true) {
+                const result = await opts.implementation(validatedArgs, config);
+                if (config.strict) {
                     return opts.resultSchema.parse(result) as unknown;
                 }
                 return result;

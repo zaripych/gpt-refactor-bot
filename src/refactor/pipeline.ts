@@ -110,7 +110,7 @@ export const pipeline: <
 
         const loadedResults: Map<string, unknown> = new Map();
 
-        for (const element of elements.reverse()) {
+        for (const element of elements.concat().reverse()) {
             const file = element.name + '.yaml';
             const location = join(root, file);
 
@@ -194,7 +194,11 @@ export const pipeline: <
                     });
                 }
 
-                return Object.assign(value as object, result);
+                const next = Object.assign(value as object, result);
+
+                logger.debug(`Current state`, next);
+
+                return next;
             },
             Promise.resolve(initialInput)
         );

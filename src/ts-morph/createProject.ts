@@ -3,25 +3,24 @@ import { orderBy } from 'lodash-es';
 import { basename, dirname } from 'path';
 
 import { findPackageName } from '../file-system/findPackageName';
-import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { readPackagesGlobsAt } from '../file-system/readPackagesGlobsAt';
 
-export async function createProject(opts?: {
-    repoRoot?: string;
+export async function createProject(opts: {
+    repositoryRoot: string;
     scope?: string[];
 }) {
-    const repoRoot = opts?.repoRoot ?? (await findRepositoryRoot());
+    const repositoryRoot = opts.repositoryRoot;
 
-    const scope = opts?.scope;
+    const scope = opts.scope;
 
     const { Project } = await import('ts-morph');
 
-    const packages = await readPackagesGlobsAt(repoRoot);
+    const packages = await readPackagesGlobsAt(repositoryRoot);
 
     const typescriptPackages = await fg(
         packages.map((p) => `${p}/tsconfig.json`),
         {
-            cwd: repoRoot,
+            cwd: repositoryRoot,
             absolute: true,
         }
     );
@@ -68,6 +67,6 @@ export async function createProject(opts?: {
 
     return {
         project,
-        repoRoot,
+        repoRoot: repositoryRoot,
     };
 }

@@ -7,12 +7,14 @@ import type {
 } from '../chat-gpt/api';
 import { calculatePriceCents, chatCompletions } from '../chat-gpt/api';
 import { executeFunction } from '../functions/executeFunction';
+import type { FunctionsConfig } from '../functions/makeFunction';
 import { isTruthy } from '../utils/isTruthy';
 
 export const promptWithFunctions = async (opts: {
     systemPrompt?: string;
     userPrompt: string;
     functions: FunctionDefinition[];
+    functionsConfig: Omit<FunctionsConfig, 'strict'>;
     budgetCents: number;
     shouldStop?: (messages: Message[]) => true | Message;
     temperature?: number;
@@ -64,6 +66,8 @@ export const promptWithFunctions = async (opts: {
             const { functionCall } = choice.message;
 
             const result = await executeFunction({
+                ...opts.functionsConfig,
+                strict: true,
                 name: functionCall.name,
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                 arguments: JSON.parse(functionCall.arguments),

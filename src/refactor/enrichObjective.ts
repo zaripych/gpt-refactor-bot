@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { markdown } from '../markdown/markdown';
 import { makeDependencies } from './dependencies';
 import { promptWithFunctions } from './promptWithFunctions';
-import type { RefactorConfig } from './types';
 
 export const enrichObjectiveResultSchema = z.object({
     /**
@@ -36,7 +35,11 @@ Produce retrieved extra information as a final message.
     `;
 
 export async function enrichObjective(
-    input: RefactorConfig,
+    input: {
+        objective: string;
+        budgetCents: number;
+        sandboxDirectoryPath: string;
+    },
     getDeps = makeDependencies
 ): Promise<EnrichObjectiveResponse> {
     const { includeFunctions } = getDeps();
@@ -46,8 +49,12 @@ export async function enrichObjective(
     const { messages, spentCents } = await promptWithFunctions({
         systemPrompt,
         userPrompt,
-        functions: await includeFunctions(),
         budgetCents: input.budgetCents,
+        functions: await includeFunctions(),
+        functionsConfig: {
+            repositoryRoot: input.sandboxDirectoryPath,
+            dependencies: getDeps,
+        },
     });
 
     const lastMessage = messages[messages.length - 1];

@@ -3,6 +3,7 @@ import type { AnyZodObject, ZodObject, ZodSchema } from 'zod';
 import { z } from 'zod';
 
 import { createProject } from '../ts-morph/createProject';
+import type { FunctionsConfig } from './makeFunction';
 import { makeFunction } from './makeFunction';
 
 const contextSchema = z.object({
@@ -35,7 +36,7 @@ export const makeTsFunction = <
         resultSchema: opts.resultSchema,
         name: opts.name,
         description: opts.description,
-        implementation: async ({ scope, ...args }) => {
+        implementation: async ({ scope, ...args }, config: FunctionsConfig) => {
             const { project } = await createProject({ scope });
             return opts.implementation(project, args);
         },

@@ -13,19 +13,32 @@ import {
     enrichObjectiveResultSchema,
 } from './enrichObjective';
 import { pipeline } from './pipeline';
+import { planFiles, planFilesResultSchema } from './planFiles';
 import { type RefactorConfig, refactorConfigSchema } from './types';
 
 const createPipe = (getDeps = makeDependencies) => {
     const pipe = pipeline<RefactorConfig>()
         .append({
             name: 'checkout-sandbox',
-            transform: (config) => checkoutSandbox(config, getDeps),
+            transform: (state) => checkoutSandbox(state, getDeps),
             resultSchema: checkoutSandboxResultSchema,
         })
         .append({
             name: 'enrich-objective',
-            transform: (config) => enrichObjective(config, getDeps),
+            transform: (state) => enrichObjective(state, getDeps),
             resultSchema: enrichObjectiveResultSchema,
+        })
+        .append({
+            name: 'plan-files',
+            transform: (state) =>
+                planFiles(
+                    {
+                        objective: state.enrichedObjective,
+                        budgetCents: state.budgetCents,
+                    },
+                    getDeps
+                ),
+            resultSchema: planFilesResultSchema,
         });
 
     return pipe;

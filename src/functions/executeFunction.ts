@@ -1,4 +1,5 @@
-import type { Opts } from './makeFunction';
+import { makeDependencies } from './dependencies';
+import type { FunctionsConfig } from './makeFunction';
 import type { functions } from './registry';
 
 type ArgumentsOf<Name extends string> = Parameters<
@@ -9,8 +10,7 @@ export const executeFunction = async <Name extends string>(
     opts: {
         name: Name;
         arguments: ArgumentsOf<Name>;
-    },
-    callOpts?: Opts
+    } & Partial<FunctionsConfig>
 ) => {
     const { functions } = await import('./registry');
 
@@ -20,8 +20,16 @@ export const executeFunction = async <Name extends string>(
         throw new Error(`Cannot find function ${opts.name}`);
     }
 
+    const dependencies = opts.dependencies ?? makeDependencies;
+
+    const { findRepositoryRoot } = dependencies();
+
     try {
-        return await fn(opts.arguments as never, callOpts);
+        return await fn(opts.arguments as never, {
+            strict: opts.strict ?? true,
+            repositoryRoot: opts.repositoryRoot ?? (await findRepositoryRoot()),
+            dependencies: opts.dependencies ?? makeDependencies,
+        });
     } catch (err: unknown) {
         if (err instanceof Error) {
             console.error(err);
