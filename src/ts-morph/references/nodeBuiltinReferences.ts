@@ -1,5 +1,6 @@
 import type { Project } from 'ts-morph';
 
+import type { FunctionsConfig } from '../../functions/makeFunction';
 import { findSourceFilePathsWhereModuleIsImported } from './findSourceFilePathsWhereModuleIsImported';
 import { languageServiceReferences } from './languageServiceReferences';
 import { mergeReferences } from './mergeReferences';
@@ -7,6 +8,7 @@ import type { Args, FileReferences } from './types';
 
 export async function nodeBuiltinReferences(
     project: Project,
+    config: FunctionsConfig,
     args: Args & {
         module: string;
         alreadyFoundFiles: Map<string, FileReferences>;
@@ -22,7 +24,7 @@ export async function nodeBuiltinReferences(
 
     const referencesArray = await Promise.all(
         Array.from(imports).map((filePath) =>
-            languageServiceReferences(project, {
+            languageServiceReferences(project, config, {
                 ...args,
                 initialFilePath: filePath,
             }).catch(

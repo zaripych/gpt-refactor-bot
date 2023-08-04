@@ -1,4 +1,5 @@
 import { spawnResult } from '../child-process/spawnResult';
+import { gitCheckout } from './gitCheckout';
 
 export async function gitClone(opts: {
     repository: string;
@@ -12,9 +13,6 @@ export async function gitClone(opts: {
     });
 
     if (ref) {
-        await spawnResult('git', ['checkout', ref], {
-            exitCodes: [0],
-            logOnError: 'stderr',
-        });
+        await gitCheckout({ location: cloneDestination, ref });
     }
 }

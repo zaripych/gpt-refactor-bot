@@ -7,10 +7,15 @@ type ArgumentsOf<Name extends string> = Parameters<
 >[0];
 
 export const executeFunction = async <Name extends string>(
-    opts: {
-        name: Name;
-        arguments: ArgumentsOf<Name>;
-    } & Partial<FunctionsConfig>
+    opts:
+        | ({
+              name: Name;
+              arguments: ArgumentsOf<Name>;
+          } & Partial<FunctionsConfig>)
+        | ({
+              name: string;
+              arguments: never;
+          } & Partial<FunctionsConfig>)
 ) => {
     const { functions } = await import('./registry');
 

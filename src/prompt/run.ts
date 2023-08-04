@@ -8,7 +8,7 @@ import prompts from 'prompts';
 import stripAnsi from 'strip-ansi';
 
 import type {
-    FunctionResponseMessage,
+    FunctionResultMessage,
     Message,
     Models,
     Response,
@@ -286,11 +286,7 @@ export const run = async (opts: {
                 );
             }
 
-            const currentChoice = response.choices[0];
-            if (!currentChoice) {
-                throw new Error(`No choices returned from the API`);
-            }
-            choice = currentChoice;
+            choice = response.choices[0];
 
             // print last known request/message:
             if (convo.lastMessage && !opts.watch) {
@@ -363,7 +359,7 @@ export const run = async (opts: {
                                 role: 'function',
                                 name: functionCall.name,
                                 content: JSON.stringify(executeResult),
-                            } satisfies FunctionResponseMessage)
+                            } satisfies FunctionResultMessage)
                     )
                     .catch(
                         (e: unknown) =>
@@ -377,7 +373,7 @@ export const run = async (opts: {
                                             ? e.message
                                             : String(e),
                                 }),
-                            } satisfies FunctionResponseMessage)
+                            } satisfies FunctionResultMessage)
                     );
 
                 convo.messages.push(result);

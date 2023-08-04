@@ -26,6 +26,7 @@ export const makeTsFunction = <
     description: string;
     implementation: (
         project: Project,
+        config: FunctionsConfig,
         args: z.infer<ArgSchema>
     ) => Promise<z.infer<ResultSchema>>;
 }) =>
@@ -37,7 +38,10 @@ export const makeTsFunction = <
         name: opts.name,
         description: opts.description,
         implementation: async ({ scope, ...args }, config: FunctionsConfig) => {
-            const { project } = await createProject({ scope });
-            return opts.implementation(project, args);
+            const { project } = await createProject({
+                scope,
+                repositoryRoot: config.repositoryRoot,
+            });
+            return opts.implementation(project, config, args);
         },
     });

@@ -2,7 +2,10 @@ import { z } from 'zod';
 
 import type { FunctionCallMessage, MessageRole } from '../chat-gpt/api';
 
-const parseRole = (message: string, index: number): MessageRole => {
+const parseRole = (
+    message: string,
+    index: number
+): MessageRole | 'function' => {
     if (index === 0) {
         return 'system';
     }

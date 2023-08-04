@@ -1,10 +1,11 @@
 import { orderBy } from 'lodash-es';
-import { relative } from 'path';
+import { join, relative } from 'path';
 import type { CallExpression, Project, ts } from 'ts-morph';
 import { Node, SyntaxKind } from 'ts-morph';
 import { z } from 'zod';
 
 import { findPackageName } from '../file-system/findPackageName';
+import type { FunctionsConfig } from '../functions/makeFunction';
 import { makeTsFunction } from '../functions/makeTsFunction';
 import { markdown } from '../markdown/markdown';
 import { firstLineOf } from '../utils/firstLineOf';
@@ -20,7 +21,7 @@ const argsSchema = z.object({
     initialFilePath: z
         .string()
         .describe(
-            'The file path where to start looking for the module imports, since relative module specifiers with same name can point to different modules in different directories, specifying initial file path can help disambiguate between them'
+            'A valid file path where to start looking for the module imports. Since relative module specifiers with same name can point to different modules in different directories, specifying initial file path can help disambiguate between them.'
         )
         .optional(),
 });
@@ -81,14 +82,19 @@ function getSourceFileFromDynamicImportStringLiteral(
 
 export async function moduleImports(
     project: Project,
+    config: FunctionsConfig,
     args: Args
 ): Promise<Array<FileImports>> {
     const findImport = (node: Node<ts.Node>) =>
         node.isKind(SyntaxKind.ImportDeclaration) &&
         node.getModuleSpecifierValue().trim() === args.module.trim();
 
-    const initialSourceFile = args.initialFilePath
-        ? project.getSourceFileOrThrow(args.initialFilePath)
+    const fullInitialFilePath = args.initialFilePath
+        ? join(config.repositoryRoot, args.initialFilePath)
+        : undefined;
+
+    const initialSourceFile = fullInitialFilePath
+        ? project.getSourceFileOrThrow(fullInitialFilePath)
         : project.getSourceFiles().find((file) => {
               const descendant = file.getFirstDescendant(findImport);
               return !!descendant;
@@ -96,17 +102,21 @@ export async function moduleImports(
 
     if (!initialSourceFile) {
         if (args.initialFilePath) {
-            throw new Error(`No source files found at ${args.initialFilePath}`);
+            throw new Error(
+                `No source files found at "${args.initialFilePath}"`
+            );
         } else {
-            throw new Error(`No source files found that import ${args.module}`);
+            throw new Error(
+                `No source files found that import "${args.module}"`
+            );
         }
     }
 
     const firstImport = initialSourceFile
         .getFirstDescendantOrThrow(findImport, () =>
             args.initialFilePath
-                ? `Cannot find import declaration importing module ${args.module} in file ${args.initialFilePath}`
-                : `Cannot find import declaration importing module ${args.module}`
+                ? `Cannot find import declaration importing module "${args.module}" in file "${args.initialFilePath}"`
+                : `Cannot find import declaration importing module "${args.module}"`
         )
         .asKindOrThrow(SyntaxKind.ImportDeclaration);
 
@@ -173,7 +183,10 @@ export async function moduleImports(
             }
 
             const lineAndCol = sourceFile.getLineAndColumnAtPos(node.getPos());
-            const filePath = relative(process.cwd(), sourceFile.getFilePath());
+            const filePath = relative(
+                config.repositoryRoot,
+                sourceFile.getFilePath()
+            );
 
             const fileInfo = results.get(filePath) || {
                 filePath,

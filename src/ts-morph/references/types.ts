@@ -12,7 +12,7 @@ export const argsSchema = z.object({
     initialFilePath: z
         .string()
         .describe(
-            'The file path where to start looking for the identifier, since identifiers can have same name in different files, specifying initial file path can help disambiguate between them'
+            'A valid file path where to start looking for the identifier. Since identifiers can have same name in different files, specifying initial file path can help disambiguate between them.'
         )
         .optional(),
     includeFilePaths: z

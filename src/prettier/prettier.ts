@@ -14,3 +14,11 @@ export async function prettierMarkdown(md: string) {
         ...(await loadConfig()),
     });
 }
+
+export async function prettierTypescript(ts: string) {
+    return prettierPackage.format(ts, {
+        parser: 'typescript',
+        embeddedLanguageFormatting: 'auto',
+        ...(await loadConfig()),
+    });
+}

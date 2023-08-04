@@ -15,6 +15,11 @@ export type RegularMessageShape = {
     content: string;
 };
 
+export type RegularAssistantMessageShape = {
+    role: 'assistant';
+    content: string;
+};
+
 export type FunctionCallMessageShape = {
     role: 'assistant';
     content: null;
@@ -34,6 +39,10 @@ export type MessageShape =
     | RegularMessageShape
     | FunctionCallMessageShape
     | FunctionResponseMessageShape;
+
+export type ResponseMessageShape =
+    | RegularAssistantMessageShape
+    | FunctionCallMessageShape;
 
 export type FunctionDefinitionShape = {
     name: string;
@@ -58,9 +67,14 @@ export type ResponseShape = {
     choices: [
         {
             index: number;
-            message: MessageShape;
+            message: ResponseMessageShape;
             finish_reason: 'stop' | 'function_call';
-        }
+        },
+        ...{
+            index: number;
+            message: ResponseMessageShape;
+            finish_reason: 'stop' | 'function_call';
+        }[]
     ];
     usage: {
         prompt_tokens: number;

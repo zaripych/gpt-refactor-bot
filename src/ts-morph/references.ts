@@ -1,5 +1,6 @@
 import type { Project } from 'ts-morph';
 
+import type { FunctionsConfig } from '../functions/makeFunction';
 import { makeTsFunction } from '../functions/makeTsFunction';
 import { markdown } from '../markdown/markdown';
 import { languageServiceReferences } from './references/languageServiceReferences';
@@ -9,9 +10,10 @@ import { argsSchema, resultSchema } from './references/types';
 
 export async function references(
     project: Project,
+    config: FunctionsConfig,
     args: Args
 ): Promise<Array<FileReferences>> {
-    const initialRefs = await languageServiceReferences(project, args);
+    const initialRefs = await languageServiceReferences(project, config, args);
 
     /**
      * This workaround is required as node builtins cause references to only
@@ -38,7 +40,7 @@ export async function references(
             )?.module;
 
             if (moduleName) {
-                const result = await nodeBuiltinReferences(project, {
+                const result = await nodeBuiltinReferences(project, config, {
                     ...args,
                     module: moduleName,
                     alreadyFoundFiles: initialRefs,
