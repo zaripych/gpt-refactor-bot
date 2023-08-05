@@ -1,8 +1,19 @@
 import { z } from 'zod';
 
 import { markdown } from '../markdown/markdown';
+import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { makeDependencies } from './dependencies';
 import { promptWithFunctions } from './promptWithFunctions';
+import { refactorConfigSchema } from './types';
+
+export const enrichObjectiveInputSchema = refactorConfigSchema
+    .pick({
+        objective: true,
+        budgetCents: true,
+    })
+    .augment({
+        sandboxDirectoryPath: z.string(),
+    });
 
 export const enrichObjectiveResultSchema = z.object({
     /**
@@ -34,42 +45,51 @@ The extra information is meant to help to determine the steps needed to achieve 
 Produce retrieved extra information as a final message.
     `;
 
-export async function enrichObjective(
-    input: {
-        objective: string;
-        budgetCents: number;
-        sandboxDirectoryPath: string;
+export const enrichObjective = makePipelineFunction({
+    name: 'enrich-objective',
+    inputSchema: enrichObjectiveInputSchema,
+    resultSchema: enrichObjectiveResultSchema,
+    transform: async (
+        input,
+        persistence,
+        getDeps = makeDependencies
+    ): Promise<EnrichObjectiveResponse> => {
+        const { includeFunctions } = getDeps();
+
+        const userPrompt = enrichPromptText(input.objective);
+
+        const { messages, spentCents } = await promptWithFunctions(
+            {
+                preface: systemPrompt,
+                prompt: userPrompt,
+                temperature: 0,
+                budgetCents: input.budgetCents,
+                functions: await includeFunctions(),
+                functionsConfig: {
+                    repositoryRoot: input.sandboxDirectoryPath,
+                    dependencies: getDeps,
+                },
+            },
+            persistence
+        );
+
+        const lastMessage = messages[messages.length - 1];
+        if (!lastMessage) {
+            throw new Error(`No messages found after prompt`);
+        }
+        if (lastMessage.role !== 'assistant') {
+            throw new Error(`Expected last message to be from assistant`);
+        }
+        if ('functionCall' in lastMessage) {
+            throw new Error(`Expected last message to not be a function-call`);
+        }
+
+        return {
+            spentCents,
+            enrichedObjective: [
+                input.objective.trim(),
+                lastMessage.content.trim(),
+            ].join('\n\n'),
+        };
     },
-    getDeps = makeDependencies
-): Promise<EnrichObjectiveResponse> {
-    const { includeFunctions } = getDeps();
-
-    const userPrompt = enrichPromptText(input.objective);
-
-    const { messages, spentCents } = await promptWithFunctions({
-        systemPrompt,
-        userPrompt,
-        budgetCents: input.budgetCents,
-        functions: await includeFunctions(),
-        functionsConfig: {
-            repositoryRoot: input.sandboxDirectoryPath,
-            dependencies: getDeps,
-        },
-    });
-
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage) {
-        throw new Error(`No messages found after prompt`);
-    }
-    if (lastMessage.role !== 'assistant') {
-        throw new Error(`Expected last message to be from assistant`);
-    }
-    if ('functionCall' in lastMessage) {
-        throw new Error(`Expected last message to not be a function-call`);
-    }
-
-    return {
-        spentCents,
-        enrichedObjective: [input.objective, lastMessage.content].join('\n\n'),
-    };
-}
+});

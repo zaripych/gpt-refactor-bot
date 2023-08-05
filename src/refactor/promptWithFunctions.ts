@@ -1,114 +1,203 @@
-import type {
-    FunctionDefinition,
-    FunctionResponseMessage,
-    Message,
-    Models,
-    Response,
+import { z } from 'zod';
+
+import type { FunctionResultMessage, Message } from '../chat-gpt/api';
+import {
+    calculatePriceCents,
+    chatCompletions,
+    functionDefinitionSchema,
+    messageSchema,
+    modelsSchema,
+    responseSchema,
 } from '../chat-gpt/api';
-import { calculatePriceCents, chatCompletions } from '../chat-gpt/api';
+import { makeDependencies } from '../functions/dependencies';
 import { executeFunction } from '../functions/executeFunction';
-import type { FunctionsConfig } from '../functions/makeFunction';
+import { makePipelineFunction } from '../pipeline/makePipelineFunction';
+import { pipeline } from '../pipeline/pipeline';
 import { isTruthy } from '../utils/isTruthy';
 
-export const promptWithFunctions = async (opts: {
-    systemPrompt?: string;
-    userPrompt: string;
-    functions: FunctionDefinition[];
-    functionsConfig: Omit<FunctionsConfig, 'strict'>;
-    budgetCents: number;
-    shouldStop?: (messages: Message[]) => true | Message;
-    temperature?: number;
-    model?: Models;
-}) => {
-    const messages: Message[] = [
-        opts.systemPrompt && {
-            content: opts.systemPrompt,
-            role: 'system' as const,
-        },
-        {
-            content: opts.userPrompt,
-            role: 'user' as const,
-        },
-    ].filter(isTruthy);
+export const promptWithFunctionsInputSchema = z.object({
+    preface: z.string().optional(),
+    prompt: z.string(),
+    temperature: z.number(),
+    budgetCents: z.number(),
+    functions: z.array(functionDefinitionSchema),
+    functionsConfig: z.object({
+        repositoryRoot: z.string(),
+        dependencies: z
+            .function()
+            .transform((value) => value as typeof makeDependencies)
+            .optional()
+            .default(makeDependencies),
+    }),
+    persistLocation: z.string().optional(),
+    shouldStop: z
+        .function()
+        .transform((value) => value as (messages: Message[]) => true | Message)
+        .optional(),
+    model: modelsSchema.optional().default('gpt-3.5-turbo'),
+});
 
-    const model = opts.model ?? 'gpt-3.5-turbo';
+export const promptWithFunctionsResultSchema = z.object({
+    messages: z.array(messageSchema),
+    spentCents: z.number(),
+});
 
-    let spentCents = 0;
-    let choice: Response['choices'][number] | undefined;
+export const promptWithFunctions = makePipelineFunction({
+    name: 'prompt-with-functions',
+    inputSchema: promptWithFunctionsInputSchema,
+    resultSchema: promptWithFunctionsResultSchema,
+    transform: async (opts, persistence) => {
+        type InitialState = z.infer<typeof initialStateSchema>;
 
-    while (spentCents < opts.budgetCents) {
-        const response = await chatCompletions({
-            model,
-            messages: messages,
-            functions: opts.functions,
-            temperature: opts.temperature ?? 0,
+        const initialStateSchema = z.object({
+            messages: z.array(messageSchema),
+            spentCents: z.number(),
         });
 
-        spentCents += calculatePriceCents({
-            ...response,
-            model,
+        const resultSchema = z.object({
+            response: responseSchema,
+            spentCents: z.number(),
         });
 
-        if (response.choices.length > 1) {
-            throw new Error(
-                `There are more than one choice returned from the API, the current implementation is not designed to handle multiple choices`
-            );
-        }
+        const pipe = pipeline(initialStateSchema)
+            .append({
+                name: 'chat-completions',
+                transform: async (state) => {
+                    const response = await chatCompletions({
+                        model: opts.model,
+                        messages: state.messages,
+                        functions: opts.functions,
+                        temperature: opts.temperature,
+                    });
 
-        choice = response.choices[0];
-        if (!choice) {
-            throw new Error(`No choices returned from the API`);
-        }
+                    const spentCents = calculatePriceCents({
+                        ...response,
+                        model: opts.model,
+                    });
 
-        messages.push(choice.message);
-
-        if (choice.finishReason === 'function_call') {
-            const { functionCall } = choice.message;
-
-            const result = await executeFunction({
-                ...opts.functionsConfig,
-                strict: true,
-                name: functionCall.name,
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                arguments: JSON.parse(functionCall.arguments),
+                    return {
+                        spentCents,
+                        response,
+                    };
+                },
+                inputSchema: initialStateSchema.pick({
+                    messages: true,
+                }),
+                resultSchema,
             })
-                .then(
-                    (executeResult) =>
-                        ({
-                            role: 'function',
-                            name: functionCall.name,
-                            content: JSON.stringify(executeResult),
-                        } satisfies FunctionResponseMessage)
-                )
-                .catch(
-                    (e: unknown) =>
-                        ({
-                            role: 'function',
-                            name: functionCall.name,
-                            content: JSON.stringify({
-                                status: 'error',
-                                message:
-                                    e instanceof Error ? e.message : String(e),
-                            }),
-                        } satisfies FunctionResponseMessage)
-                );
+            .combineLast((state, { response, spentCents }) => ({
+                messages: [...state.messages, response.choices[0].message],
+                response,
+                spentCents: state.spentCents + spentCents,
+            }));
 
-            messages.push(result);
-        }
+        const initialState = (): InitialState => {
+            const messages: Message[] = [
+                opts.preface && {
+                    content: opts.preface,
+                    role: 'system' as const,
+                },
+                {
+                    content: opts.prompt,
+                    role: 'user' as const,
+                },
+            ].filter(isTruthy);
 
-        if (choice.finishReason === 'stop') {
-            const shouldStop = opts.shouldStop ?? (() => true);
-            const next = shouldStop(messages);
-            if (next === true) {
-                break;
-            } else {
-                messages.push(next);
+            return {
+                messages,
+                spentCents: 0,
+            };
+        };
+
+        let state = initialState();
+
+        try {
+            while (state.spentCents < opts.budgetCents) {
+                const next = await pipe.transform(state, persistence);
+
+                if ('functionCall' in next.response.choices[0].message) {
+                    const { functionCall } = next.response.choices[0].message;
+
+                    if (
+                        !opts.functions.find(
+                            (fn) => fn.name === functionCall.name
+                        )
+                    ) {
+                        next.messages.push({
+                            role: 'system',
+                            content:
+                                `Function "${functionCall.name}" is not a valid ` +
+                                `function name. Valid function names are: ` +
+                                `${opts.functions
+                                    .map((fn) => fn.name)
+                                    .join(', ')}`,
+                        });
+                    } else {
+                        let parsedArgs: unknown | undefined;
+                        try {
+                            parsedArgs = JSON.parse(functionCall.arguments);
+                        } catch (e) {
+                            next.messages.push({
+                                role: 'system',
+                                content: `Cannot parse function arguments as JSON`,
+                            });
+                        }
+
+                        if (parsedArgs) {
+                            const result = await executeFunction({
+                                ...opts.functionsConfig,
+                                strict: true,
+                                name: functionCall.name,
+                                arguments: parsedArgs as never,
+                            })
+                                .then(
+                                    (executeResult) =>
+                                        ({
+                                            role: 'function',
+                                            name: functionCall.name,
+                                            content:
+                                                JSON.stringify(executeResult),
+                                        } satisfies FunctionResultMessage)
+                                )
+                                .catch((e) => ({
+                                    role: 'function' as const,
+                                    name: functionCall.name,
+                                    content: JSON.stringify({
+                                        status: 'error',
+                                        message:
+                                            e instanceof Error
+                                                ? e.message
+                                                : String(e),
+                                    }),
+                                }));
+
+                            next.messages.push(result);
+                        }
+                    }
+                }
+
+                if (next.response.choices[0].finishReason === 'stop') {
+                    const shouldStop = opts.shouldStop ?? (() => true);
+                    const shouldStopResult = shouldStop(next.messages);
+                    if (shouldStopResult === true) {
+                        state = next;
+                        break;
+                    } else {
+                        next.messages.push(shouldStopResult);
+                    }
+                }
+
+                state = next;
+            }
+        } finally {
+            if (persistence) {
+                await pipe.clean(persistence);
             }
         }
-    }
 
-    return {
-        messages,
-        spentCents,
-    };
-};
+        return {
+            messages: state.messages,
+            spentCents: state.spentCents,
+        };
+    },
+});

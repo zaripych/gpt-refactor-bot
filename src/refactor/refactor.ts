@@ -1,45 +1,32 @@
-import fg from 'fast-glob';
-import { basename, dirname, join } from 'path';
+import { join } from 'path';
 
-import { hasOneElement } from '../utils/hasOne';
+import { pipeline } from '../pipeline/pipeline';
 import { randomText } from '../utils/randomText';
-import {
-    checkoutSandbox,
-    checkoutSandboxResultSchema,
-} from './checkoutSandbox';
+import { checkoutSandbox } from './checkoutSandbox';
 import { makeDependencies } from './dependencies';
-import {
-    enrichObjective,
-    enrichObjectiveResultSchema,
-} from './enrichObjective';
-import { pipeline } from './pipeline';
-import { planFiles, planFilesResultSchema } from './planFiles';
+import { enrichObjective } from './enrichObjective';
+import { planFiles } from './planFiles';
+import { refactorMultiple } from './refactorMultiple';
 import { type RefactorConfig, refactorConfigSchema } from './types';
 
-const createPipe = (getDeps = makeDependencies) => {
-    const pipe = pipeline<RefactorConfig>()
-        .append({
-            name: 'checkout-sandbox',
-            transform: (state) => checkoutSandbox(state, getDeps),
-            resultSchema: checkoutSandboxResultSchema,
-        })
-        .append({
-            name: 'enrich-objective',
-            transform: (state) => enrichObjective(state, getDeps),
-            resultSchema: enrichObjectiveResultSchema,
-        })
-        .append({
-            name: 'plan-files',
-            transform: (state) =>
-                planFiles(
-                    {
-                        objective: state.enrichedObjective,
-                        budgetCents: state.budgetCents,
-                    },
-                    getDeps
-                ),
-            resultSchema: planFilesResultSchema,
-        });
+const createPipe = () => {
+    const pipe = pipeline(refactorConfigSchema)
+        .append(checkoutSandbox)
+        .append(enrichObjective)
+        .append(planFiles)
+        .append(refactorMultiple)
+        .combineAll((state, result) =>
+            'spentCents' in result && 'spentCents' in state
+                ? {
+                      ...state,
+                      ...result,
+                      spentCents: state.spentCents + result.spentCents,
+                  }
+                : {
+                      ...state,
+                      ...result,
+                  }
+        );
 
     return pipe;
 };
@@ -47,56 +34,39 @@ const createPipe = (getDeps = makeDependencies) => {
 async function loadRefactorState(
     opts: {
         id?: string;
-        config?: RefactorConfig;
+        config: RefactorConfig;
     },
     getDeps = makeDependencies
 ) {
     const { findRepositoryRoot } = getDeps();
 
-    const pipe = createPipe(getDeps);
+    const pipe = createPipe();
 
     const root = await findRepositoryRoot();
 
     if (opts.id) {
-        const init = await fg(`.refactor-bot/refactors/*/state/${opts.id}/*`, {
-            cwd: root,
-        });
-
-        if (!hasOneElement(init)) {
-            throw new Error(
-                `Cannot find files to load state from for id "${opts.id}"`
-            );
-        }
-
-        const name = basename(dirname(dirname(dirname(init[0]))));
-
-        const location = join(root, `.refactor-bot/refactors/${name}/state/`);
-
-        const { initialInput } = await pipe.load({
-            id: opts.id,
-            location,
-            initialInputSchema: refactorConfigSchema,
-        });
+        const location = join(
+            root,
+            `.refactor-bot/refactors/${opts.config.name}/state/`,
+            opts.id
+        );
 
         return {
-            config: initialInput,
             pipe,
             location,
+            id: opts.id,
         };
     } else {
-        if (!opts.config) {
-            throw new Error(
-                `No id of previous refactor run nor config has been provided, please provide either id or config`
-            );
-        }
+        const id = randomText(8);
 
         return {
-            config: opts.config,
             pipe,
             location: join(
                 root,
-                `.refactor-bot/refactors/${opts.config.name}/state/`
+                `.refactor-bot/refactors/${opts.config.name}/state/`,
+                id
             ),
+            id,
         };
     }
 }
@@ -104,20 +74,25 @@ async function loadRefactorState(
 export async function refactor(
     opts: {
         id?: string;
-        config?: RefactorConfig;
+        config: RefactorConfig;
     },
     getDeps = makeDependencies
 ) {
     const { logger } = getDeps();
 
-    const id = opts.id ?? randomText(8);
+    const { pipe, location, id } = await loadRefactorState(opts, getDeps);
 
     logger.debug(`Starting refactor with id "${id}"`);
 
-    const { pipe, config, location } = await loadRefactorState(opts, getDeps);
-
-    await pipe.transform(config, {
-        id,
+    const persistence = {
         location,
-    });
+    };
+    try {
+        process.on('SIGINT', () => {
+            pipe.abort();
+        });
+        await pipe.transform(opts.config, persistence);
+    } finally {
+        await pipe.clean(persistence);
+    }
 }

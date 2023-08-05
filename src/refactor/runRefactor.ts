@@ -1,5 +1,9 @@
+import fg from 'fast-glob';
+import { basename, dirname } from 'path';
 import prompts from 'prompts';
 
+import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
+import { hasOneElement } from '../utils/hasOne';
 import { loadRefactorConfigs } from './loadRefactors';
 import { refactor } from './refactor';
 import type { RefactorConfig } from './types';
@@ -44,8 +48,32 @@ async function determineConfig(opts: {
     }
 
     if (opts.id) {
+        const repoRoot = await findRepositoryRoot();
+
+        const init = await fg(
+            `.refactor-bot/refactors/*/state/${opts.id}/*/*`,
+            {
+                cwd: repoRoot,
+            }
+        );
+
+        if (!hasOneElement(init)) {
+            throw new Error(
+                `Cannot find files to load state from for id "${opts.id}"`
+            );
+        }
+
+        const name = basename(dirname(dirname(dirname(dirname(init[0])))));
+
+        const config = opts.configs.find((config) => config.name === name);
+        if (!config) {
+            throw new Error(
+                `No refactor config has been found, please provide id for an existing refactor`
+            );
+        }
+
         return {
-            config: undefined,
+            config,
         };
     }
 

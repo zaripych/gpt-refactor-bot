@@ -23,6 +23,9 @@ dependencies:
   lodash-es:
     specifier: 4.17.21
     version: 4.17.21
+  micromatch:
+    specifier: 4.0.5
+    version: 4.0.5
   object-hash:
     specifier: 3.0.0
     version: 3.0.0
@@ -73,6 +76,9 @@ devDependencies:
   '@types/lodash-es':
     specifier: 4.17.7
     version: 4.17.7
+  '@types/micromatch':
+    specifier: 4.0.2
+    version: 4.0.2
   '@types/node':
     specifier: 20.4.2
     version: 20.4.2
@@ -1291,6 +1297,10 @@ packages:
       '@babel/types': 7.22.5
     dev: true
 
+  /@types/braces@3.0.2:
+    resolution: {integrity: sha512-U5tlMYa0U/2eFTmJgKcPWQOEICP173sJDa6OjHbj5Tv+NVaYcrq2xmdWpNXOwWYGwJu+jER/pfTLdoQ31q8PzA==}
+    dev: true
+
   /@types/estree@1.0.1:
     resolution: {integrity: sha512-LG4opVs2ANWZ1TJoKc937iMmNstM/d0ae1vNbnBvBhqCSezgVUOzcLCqbI5elV8Vy6WKwKjaqR+zO9VKirBBCA==}
     dev: true
@@ -1351,6 +1361,12 @@ packages:
 
   /@types/lodash@4.14.195:
     resolution: {integrity: sha512-Hwx9EUgdwf2GLarOjQp5ZH8ZmblzcbTBC2wtQWNKARBSxM9ezRIAUpeDTgoQRAFB0+8CNWXVA9+MaSOzOF3nPg==}
+    dev: true
+
+  /@types/micromatch@4.0.2:
+    resolution: {integrity: sha512-oqXqVb0ci19GtH0vOA/U2TmHTcRY9kuZl4mqUxe0QmJAlIW13kzhuK5pi1i9+ngav8FjpSb9FVS/GE00GLX1VA==}
+    dependencies:
+      '@types/braces': 3.0.2
     dev: true
 
   /@types/minimatch@5.1.2:

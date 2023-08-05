@@ -1,74 +1,194 @@
+import { readFile } from 'fs/promises';
+import hash from 'object-hash';
+import { join } from 'path';
 import { z } from 'zod';
 
-import { spawnResult } from '../child-process/spawnResult';
+import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
+import { gitAddAll } from '../git/gitAddAll';
+import { gitCheckout } from '../git/gitCheckout';
 import { gitClone } from '../git/gitClone';
+import { gitCommit } from '../git/gitCommit';
+import { gitCurrentBranch } from '../git/gitCurrentBranch';
+import { gitDefaultBranch } from '../git/gitDefaultBranch';
+import { gitRevParse } from '../git/gitRevParse';
+import { gitStatus } from '../git/gitStatus';
 import { determinePackageManager } from '../package-manager/determinePackageManager';
 import { installDependencies } from '../package-manager/installDependencies';
+import { runPackageManagerScript } from '../package-manager/runPackageManagerScript';
+import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { createSandbox, sandboxLocation } from '../sandbox/createSandbox';
+import { ensureTruthy } from '../utils/isTruthy';
 import { makeDependencies } from './dependencies';
-import type { RefactorConfig } from './types';
+import { refactorConfigSchema } from './types';
+
+export const checkoutSandboxInputSchema = refactorConfigSchema
+    .pick({
+        name: true,
+        repository: true,
+        ref: true,
+        bootstrapScripts: true,
+    })
+    .transform(async (input) => {
+        if (!input.repository) {
+            const root = await findRepositoryRoot();
+            const status = await gitStatus({
+                location: root,
+            });
+            const allFiles = Object.values(status).flat();
+
+            if (allFiles.length > 0) {
+                const contents = new Map(
+                    await Promise.all(
+                        allFiles.map((file) =>
+                            readFile(join(root, file), 'utf-8')
+                                .then((data) => [file, data] as const)
+                                .catch((err: unknown) => {
+                                    if (
+                                        err &&
+                                        typeof err === 'object' &&
+                                        'code' in err &&
+                                        err.code === 'ENOENT'
+                                    ) {
+                                        return [file, ''] as const;
+                                    }
+                                    throw err;
+                                })
+                        )
+                    )
+                );
+
+                const changedFilesHash = hash(contents);
+
+                return {
+                    ...input,
+                    changedFilesHash,
+                };
+            }
+        }
+
+        return {
+            ...input,
+            changedFilesHash: undefined,
+        };
+    });
 
 export const checkoutSandboxResultSchema = z.object({
+    startCommit: z.string(),
+    originalBranch: z.string().optional(),
+    defaultBranch: z.string(),
     sandboxDirectoryPath: z.string(),
 });
 
-export async function checkoutSandbox(
-    config: RefactorConfig,
-    getDeps = makeDependencies
-) {
-    const { logger, findRepositoryRoot } = getDeps();
+export const checkoutSandbox = makePipelineFunction({
+    name: 'checkout-sandbox',
+    transform: async (config, _persistence, getDeps = makeDependencies) => {
+        const { logger, findRepositoryRoot } = getDeps();
 
-    const root = await findRepositoryRoot();
+        const root = await findRepositoryRoot();
 
-    const { sandboxId, sandboxDirectoryPath } = sandboxLocation({
-        tag: config.name,
-    });
-
-    if (config.repository) {
-        logger.debug(`Cloning "${config.repository}"`);
-
-        await gitClone({
-            repository: config.repository,
-            cloneDestination: sandboxDirectoryPath,
-            ref: config.ref,
-        });
-    } else {
-        logger.debug(`Creating sandbox from "${root}"`);
-
-        /**
-         * @todo: this might copy some files that might be
-         * sensitive, we should probably introduce a way to
-         * ignore some files (ie .env)
-         */
-        await createSandbox({
+        const { sandboxId, sandboxDirectoryPath } = sandboxLocation({
             tag: config.name,
-            source: root,
-            sandboxId,
+            /**
+             * @todo don't forget to change this before committing
+             */
+            sandboxId: 'unr87ijk',
         });
-    }
 
-    const packageManager = await determinePackageManager({
-        directory: sandboxDirectoryPath,
-    });
+        if (config.repository) {
+            logger.debug(`Cloning "${config.repository}"`);
 
-    await installDependencies({
-        directory: sandboxDirectoryPath,
-        packageManager,
-    });
-
-    if (config.bootstrapScripts) {
-        await config.bootstrapScripts.reduce(async (previous, script) => {
-            await previous;
-
-            await spawnResult(packageManager, ['run', script], {
-                cwd: sandboxDirectoryPath,
-                exitCodes: [0],
-                logOnError: 'combined',
+            await gitClone({
+                repository: config.repository,
+                cloneDestination: sandboxDirectoryPath,
+                ref: config.ref,
             });
-        }, Promise.resolve());
-    }
+        } else {
+            logger.debug(`Creating sandbox from "${root}"`);
 
-    return {
-        sandboxDirectoryPath,
-    };
-}
+            /**
+             * @todo: this might copy some files that might be
+             * sensitive, we should probably introduce a way to
+             * ignore some files (ie .env)
+             */
+            await createSandbox({
+                tag: config.name,
+                source: root,
+                sandboxId,
+            });
+
+            if (config.ref) {
+                await gitCheckout({
+                    location: sandboxDirectoryPath,
+                    ref: config.ref,
+                });
+            }
+        }
+
+        const status = await gitStatus({
+            location: sandboxDirectoryPath,
+        });
+
+        if (Object.values(status).some((files) => files.length > 0)) {
+            logger.warn(
+                `Sandbox has non-committed files. We are going to commit ` +
+                    `those files to ensure that the sandbox is in a clean ` +
+                    `state before refactor.`
+            );
+
+            await gitAddAll({
+                location: sandboxDirectoryPath,
+            });
+
+            await gitCommit({
+                location: sandboxDirectoryPath,
+                message:
+                    `chore: cleanup before refactor - committing` +
+                    ` modified changes that are not part of ` +
+                    ` the refactor`,
+            });
+        }
+
+        const branch = await gitCurrentBranch({
+            location: sandboxDirectoryPath,
+        });
+
+        const refactorStartCommit = await gitRevParse({
+            location: sandboxDirectoryPath,
+            ref: 'HEAD',
+        });
+
+        const defaultBranch = await gitDefaultBranch({
+            location: sandboxDirectoryPath,
+        });
+
+        const packageManager = await determinePackageManager({
+            directory: sandboxDirectoryPath,
+        });
+
+        await installDependencies({
+            directory: sandboxDirectoryPath,
+            packageManager,
+        });
+
+        if (config.bootstrapScripts) {
+            await config.bootstrapScripts.reduce(async (previous, script) => {
+                await previous;
+
+                await runPackageManagerScript({
+                    packageManager,
+                    script,
+                    location: sandboxDirectoryPath,
+                });
+            }, Promise.resolve());
+        }
+
+        return {
+            startCommit: refactorStartCommit,
+            originalBranch: branch,
+            defaultBranch: ensureTruthy(defaultBranch),
+            sandboxDirectoryPath,
+        };
+    },
+    inputSchema: checkoutSandboxInputSchema,
+    resultSchema: checkoutSandboxResultSchema,
+});
