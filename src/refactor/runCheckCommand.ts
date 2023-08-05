@@ -1,7 +1,8 @@
-import { normalize, sep } from 'path';
+import { basename, normalize, sep } from 'path';
 
 import { logger } from '../logger/logger';
 import { runPackageManagerScript } from '../package-manager/runPackageManagerScript';
+import { escapeRegExp } from '../utils/escapeRegExp';
 import { ensureHasOneElement } from '../utils/hasOne';
 import { UnreachableError } from '../utils/UnreachableError';
 
@@ -72,6 +73,7 @@ export async function runCheckCommandWithParser(opts: {
         script: opts.script.args[0],
         args: opts.script.args.slice(1),
         location: opts.location,
+        logOnError: undefined,
     });
 
     const chooseOutput = () => {
@@ -85,9 +87,14 @@ export async function runCheckCommandWithParser(opts: {
         }
     };
 
+    const parentDirectoryRegex = new RegExp(
+        `^.*${escapeRegExp(sep + normalize(basename(opts.location) + sep))}`,
+        'g'
+    );
+
     return opts
         .outputParser(chooseOutput())
-        .map((data) => data.replaceAll(normalize(opts.location + sep), './'));
+        .map((data) => data.replaceAll(parentDirectoryRegex, './'));
 }
 
 export async function runCheckCommand(opts: {

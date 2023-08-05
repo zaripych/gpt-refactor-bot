@@ -24,6 +24,12 @@ export const refactorConfigSchema = z.object({
     ref: z.string().optional(),
 
     /**
+     * Whether to allow modified files in the working tree, before
+     * starting the refactor. Defaults to false.
+     */
+    allowDirtyWorkingTree: z.boolean().optional().default(false),
+
+    /**
      * Globs that represent files to be refactored, this can also be
      * automatically inferred from the goal description.
      */

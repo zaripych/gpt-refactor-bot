@@ -1,9 +1,27 @@
 import fg from 'fast-glob';
 import { readFile } from 'fs/promises';
+import { load as loadYaml } from 'js-yaml';
 import { basename, dirname } from 'path';
+import { z } from 'zod';
 
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
-import type { RefactorConfig } from './types';
+import { refactorConfigSchema } from './types';
+
+async function parseConfig(opts: { defaultName: string; contents: string }) {
+    const configRegex = /```yaml\s*((.|\n(?!```))*)\s*```/g;
+    const match = configRegex.exec(opts.contents) || [];
+    const config = match[1] || '';
+    const parsedConfig = await refactorConfigSchema
+        .setKey('name', z.string().default(opts.defaultName))
+        .setKey('objective', z.string().optional())
+        .parseAsync(loadYaml(config));
+    return {
+        ...parsedConfig,
+        objective:
+            parsedConfig.objective ||
+            opts.contents.replace(configRegex, '').trim(),
+    };
+}
 
 export async function loadRefactorConfigs() {
     const repoRoot = await findRepositoryRoot();
@@ -15,13 +33,12 @@ export async function loadRefactorConfigs() {
 
     return Promise.all(
         refactors.map(async (goalDescriptionFile) => {
-            const goal = await readFile(goalDescriptionFile, 'utf-8');
-            const baseDirectory = basename(dirname(goalDescriptionFile));
-            return {
-                name: baseDirectory,
-                objective: goal,
-                budgetCents: 10_00,
-            } satisfies RefactorConfig;
+            const contents = await readFile(goalDescriptionFile, 'utf-8');
+            const defaultName = basename(dirname(goalDescriptionFile));
+            return await parseConfig({
+                defaultName,
+                contents,
+            });
         })
     );
 }

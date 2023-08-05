@@ -5,11 +5,11 @@ import { z } from 'zod';
 
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { gitAddAll } from '../git/gitAddAll';
-import { gitCheckout } from '../git/gitCheckout';
 import { gitClone } from '../git/gitClone';
 import { gitCommit } from '../git/gitCommit';
 import { gitCurrentBranch } from '../git/gitCurrentBranch';
 import { gitDefaultBranch } from '../git/gitDefaultBranch';
+import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
 import { gitStatus } from '../git/gitStatus';
 import { determinePackageManager } from '../package-manager/determinePackageManager';
@@ -27,9 +27,10 @@ export const checkoutSandboxInputSchema = refactorConfigSchema
         repository: true,
         ref: true,
         bootstrapScripts: true,
+        allowDirtyWorkingTree: true,
     })
     .transform(async (input) => {
-        if (!input.repository) {
+        if (!input.repository && !input.ref) {
             const root = await findRepositoryRoot();
             const status = await gitStatus({
                 location: root,
@@ -117,7 +118,10 @@ export const checkoutSandbox = makePipelineFunction({
             });
 
             if (config.ref) {
-                await gitCheckout({
+                await gitAddAll({
+                    location: sandboxDirectoryPath,
+                });
+                await gitResetHard({
                     location: sandboxDirectoryPath,
                     ref: config.ref,
                 });
@@ -129,6 +133,16 @@ export const checkoutSandbox = makePipelineFunction({
         });
 
         if (Object.values(status).some((files) => files.length > 0)) {
+            if (!config.allowDirtyWorkingTree) {
+                throw new Error(
+                    `Sandbox has non-committed files, please set ` +
+                        `allowDirtyWorkingTree to ignore this and continue. ` +
+                        `Running with dirty working tree will lead to non ` +
+                        `deterministic results even when refactor is run ` +
+                        `multiple times with the same "id". `
+                );
+            }
+
             logger.warn(
                 `Sandbox has non-committed files. We are going to commit ` +
                     `those files to ensure that the sandbox is in a clean ` +

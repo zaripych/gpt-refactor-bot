@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { gitAdd } from '../git/gitAdd';
 import { gitCommit } from '../git/gitCommit';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
-import { executeFileTask } from './executeTask';
+import { executeFileTask } from './executeFileTask';
 import { planTasks } from './planTasks';
 import { refactorConfigSchema } from './types';
 
@@ -23,13 +23,6 @@ export const refactorMultipleInputSchema = refactorConfigSchema
     });
 
 export const refactorMultipleResultSchema = z.object({
-    completedTasks: z.array(z.string()),
-    failedTasks: z.array(
-        z.object({
-            task: z.string(),
-            message: z.string(),
-        })
-    ),
     spentCents: z.number(),
 });
 
@@ -45,11 +38,6 @@ export const refactorMultiple = makePipelineFunction({
         const { plannedFiles } = input;
 
         let spentCents = 0;
-        const completedTasks: string[] = [];
-        const failedTasks: {
-            task: string;
-            message: string;
-        }[] = [];
 
         const planTasksWithPersistence = planTasks.withPersistence();
         const executeFileTaskWithPersistence =
@@ -67,6 +55,12 @@ export const refactorMultiple = makePipelineFunction({
                     persistence
                 );
                 spentCents += state.spentCents;
+
+                const completedTasks: string[] = [];
+                const failedTasks: {
+                    task: string;
+                    message: string;
+                }[] = [];
 
                 for (const task of state.tasks) {
                     try {
@@ -114,6 +108,10 @@ export const refactorMultiple = makePipelineFunction({
                         }
                     }
                 }
+
+                if (failedTasks.length > 0) {
+                    throw new Error('Aborting because some refactoring failed');
+                }
             }
         } finally {
             if (persistence) {
@@ -123,8 +121,6 @@ export const refactorMultiple = makePipelineFunction({
         }
 
         return {
-            completedTasks,
-            failedTasks,
             spentCents,
         };
     },

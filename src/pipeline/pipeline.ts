@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { join, normalize } from 'path';
+import { join, normalize, relative } from 'path';
 import type { AnyZodObject, TypeOf, z, ZodEffects } from 'zod';
 import { ZodError, ZodFirstPartyTypeKind } from 'zod';
 
@@ -409,10 +409,14 @@ export const pipeline: <Schema extends AnyZodObject | ZodEffects<AnyZodObject>>(
         clean: async (persistence: { location: string }) => {
             await clean(persistence, elements, deps);
 
-            if (state && state === getTransformState(persistence)) {
+            if (
+                state &&
+                state === getTransformState(persistence) &&
+                state.log.length > 0
+            ) {
                 deps.logger.info(
-                    `Here is the full log of the pipeline run:\n`,
-                    state.log
+                    `Full log of the run:\n`,
+                    state.log.map((line) => relative(process.cwd(), line))
                 );
             }
         },

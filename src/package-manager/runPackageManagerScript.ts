@@ -5,6 +5,7 @@ export async function runPackageManagerScript(opts: {
     script: string;
     args?: string[];
     location: string;
+    logOnError?: 'stdout' | 'stderr' | 'combined';
 }) {
     return await spawnResult(
         opts.packageManager,
@@ -12,7 +13,7 @@ export async function runPackageManagerScript(opts: {
         {
             cwd: opts.location,
             exitCodes: [0],
-            logOnError: 'combined',
+            logOnError: opts.logOnError ?? 'combined',
             env: {
                 ...process.env,
                 LOG_LEVEL: 'error',
