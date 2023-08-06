@@ -50,12 +50,9 @@ async function determineConfig(opts: {
     if (opts.id) {
         const repoRoot = await findRepositoryRoot();
 
-        const init = await fg(
-            `.refactor-bot/refactors/*/state/${opts.id}/*/*`,
-            {
-                cwd: repoRoot,
-            }
-        );
+        const init = await fg(`.refactor-bot/refactors/*/state/${opts.id}/*`, {
+            cwd: repoRoot,
+        });
 
         if (!hasOneElement(init)) {
             throw new Error(
@@ -63,7 +60,7 @@ async function determineConfig(opts: {
             );
         }
 
-        const name = basename(dirname(dirname(dirname(dirname(init[0])))));
+        const name = basename(dirname(dirname(dirname(init[0]))));
 
         const config = opts.configs.find((config) => config.name === name);
         if (!config) {

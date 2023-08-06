@@ -1,16 +1,42 @@
 import assert from 'assert';
-import { join, normalize, relative } from 'path';
-import type { AnyZodObject, TypeOf, z, ZodEffects } from 'zod';
-import { ZodError, ZodFirstPartyTypeKind } from 'zod';
+import { join, relative } from 'path';
+import type { AnyZodObject, TypeOf, ZodEffects, ZodRawShape } from 'zod';
+import { z, ZodFirstPartyTypeKind } from 'zod';
+import { ZodError } from 'zod';
 
-import { escapeRegExp } from '../utils/escapeRegExp';
+import { AbortError } from '../errors/abortError';
 import { handleExceptionsAsync } from '../utils/handleExceptions';
+import { hasOneElement } from '../utils/hasOne';
 import { isTruthy } from '../utils/isTruthy';
+import { retry, type RetryOpts } from '../utils/retry';
+import { UnreachableError } from '../utils/UnreachableError';
 import { defaultDeps } from './dependencies';
 import { loadResult, saveResult } from './persistence';
 import type { TransformState } from './state';
 import { getTransformState, initializeTransformState } from './state';
 import type { AnyPipelineElement, PipelineApi } from './types';
+
+const augmentHeadSchema = <T extends AnyZodObject | ZodEffects<AnyZodObject>>(
+    schema: T,
+    augmentation: ZodRawShape
+) => {
+    switch (schema._def.typeName) {
+        case ZodFirstPartyTypeKind.ZodObject:
+            return (schema as AnyZodObject).augment(augmentation);
+        case ZodFirstPartyTypeKind.ZodEffects: {
+            const typed = schema as ZodEffects<AnyZodObject>;
+            return z.ZodEffects.create(
+                typed.innerType().augment(augmentation),
+                typed._def.effect
+            );
+        }
+        default:
+            throw new UnreachableError(
+                schema._def,
+                'Cannot augment non-object schemas'
+            );
+    }
+};
 
 const clean = async (
     persistence: { location: string },
@@ -28,20 +54,12 @@ const clean = async (
 
     logger.info('Cleaning', persistence.location);
 
-    const regex = () =>
-        new RegExp(
-            `^${escapeRegExp(normalize(persistence.location + '/'))}`,
-            'g'
-        );
+    const patterns = elements.map(({ name }) => `${name}-*.yaml`);
 
-    const patterns = elements.map(({ name }) => `${name}/${name}-*.yaml`);
-
-    const ignore =
-        persistence.location !== './'
-            ? log
-                  .filter((entry) => regex().test(entry))
-                  .map((entry) => entry.replaceAll(regex(), ''))
-            : log;
+    /**
+     * Filter out sub-directory entries from the log
+     */
+    const ignore = log.map((entry) => relative(persistence.location, entry));
 
     const entries = await fg(patterns, {
         cwd: persistence.location,
@@ -125,7 +143,10 @@ async function transformElement(
     );
 
     const valueHash = hash(value);
-    const id = [name, valueHash].join('-');
+    const elementId = [name, valueHash].join('-');
+    const id = persistence?.location
+        ? join(persistence.location, elementId)
+        : elementId;
 
     const foundResult =
         results.get(id) ||
@@ -135,8 +156,8 @@ async function transformElement(
                     return undefined;
                 }
 
-                const entries = await fg([`${id}*.yaml`], {
-                    cwd: join(persistence.location, name),
+                const entries = await fg([`${elementId}*.yaml`], {
+                    cwd: persistence.location,
                     ignore: [],
                 });
 
@@ -147,7 +168,7 @@ async function transformElement(
 
                 return await loadResult(
                     {
-                        location: join(persistence.location, name, entry),
+                        location: join(persistence.location, entry),
                         schema: resultSchema,
                     },
                     deps
@@ -208,7 +229,7 @@ async function transformElement(
                       persistence?.location
                           ? ({
                                 ...persistence,
-                                location: join(persistence.location, name),
+                                location: join(persistence.location, elementId),
                             } as { location: string })
                           : undefined,
                   ].filter(isTruthy) as Parameters<typeof transform>)
@@ -219,8 +240,7 @@ async function transformElement(
     if (persistence?.location) {
         const location = join(
             persistence.location,
-            name,
-            [id, '.yaml'].join('')
+            [elementId, '.yaml'].join('')
         );
         try {
             await saveResult(
@@ -305,6 +325,175 @@ const transform = async <
 
 let abort = false;
 
+type PipelineOpts = {
+    initialInputSchema: AnyZodObject | ZodEffects<AnyZodObject>;
+    deps: typeof defaultDeps;
+    elements: Array<
+        AnyPipelineElement & {
+            combine?: typeof Object.assign;
+        }
+    >;
+    finalResultSchema: AnyZodObject;
+    combineAll: (first: unknown, second: unknown) => unknown;
+    retryOpts: RetryOpts;
+};
+
+const createPipeline = <
+    InputSchema extends AnyZodObject | ZodEffects<AnyZodObject>
+>(
+    optsRaw: Partial<PipelineOpts> & {
+        initialInputSchema: AnyZodObject | ZodEffects<AnyZodObject>;
+    }
+) => {
+    const {
+        retryOpts = {
+            maxAttempts: 1,
+        },
+        ...opts
+    } = {
+        deps: defaultDeps,
+        elements: [],
+        finalResultSchema:
+            'sourceType' in optsRaw.initialInputSchema
+                ? optsRaw.initialInputSchema.sourceType()
+                : optsRaw.initialInputSchema,
+        combineAll: (first: unknown, second: unknown) =>
+            Object.assign({}, first, second) as unknown,
+        ...optsRaw,
+    };
+
+    let state: TransformState | undefined;
+
+    const api: PipelineApi<
+        InputSchema,
+        TypeOf<InputSchema>,
+        TypeOf<InputSchema>
+    > = {
+        append: (element: AnyPipelineElement) => {
+            return createPipeline({
+                ...opts,
+                elements: [...opts.elements, element],
+                finalResultSchema: opts.finalResultSchema.merge(
+                    element.resultSchema
+                ),
+            });
+        },
+        combineLast: (
+            reducer: (previous: unknown, next: unknown) => unknown,
+            newResultSchema?: AnyZodObject
+        ) => {
+            const lastElement = opts.elements[opts.elements.length - 1];
+            if (!lastElement) {
+                throw new Error('No elements in pipeline to combine with');
+            }
+            return createPipeline({
+                ...opts,
+                elements: [
+                    ...opts.elements.slice(0, opts.elements.length - 1),
+                    {
+                        ...lastElement,
+                        combine: reducer,
+                        name: lastElement.name,
+                    },
+                ],
+                finalResultSchema: newResultSchema ?? opts.finalResultSchema,
+            });
+        },
+        combineAll: (
+            newCombineAll: (previous: unknown, next: unknown) => unknown,
+            newResultSchema?: AnyZodObject
+        ) => {
+            return createPipeline({
+                ...opts,
+                combineAll: newCombineAll,
+                finalResultSchema: newResultSchema ?? opts.finalResultSchema,
+            });
+        },
+        retry: (retryOpts: RetryOpts) => {
+            const initialInputSchema = augmentHeadSchema(
+                opts.initialInputSchema,
+                {
+                    attempt: z.number().int().positive().default(1),
+                }
+            );
+            return createPipeline({
+                ...opts,
+                elements: hasOneElement(opts.elements)
+                    ? [
+                          {
+                              ...opts.elements[0],
+                              inputSchema: initialInputSchema,
+                              name: opts.elements[0].name,
+                          },
+                          ...opts.elements.slice(1),
+                      ]
+                    : [],
+                initialInputSchema,
+                retryOpts,
+            });
+        },
+        transform: async (
+            input: z.input<InputSchema>,
+            persistence?: { location: string }
+        ) => {
+            if (!getTransformState(persistence)) {
+                state = initializeTransformState(persistence);
+            }
+            if (abort) {
+                throw new AbortError(`Pipeline has been aborted`);
+            }
+            return await retry((attempt) => {
+                const initialInput = {
+                    ...input,
+                    ...(attempt > 1 && {
+                        attempt,
+                    }),
+                };
+                return transform(
+                    {
+                        initialInput,
+                        persistence,
+                        ...opts,
+                    },
+                    opts.deps
+                );
+            }, retryOpts);
+        },
+        clean: async (persistence: { location: string }) => {
+            await clean(persistence, opts.elements, opts.deps);
+
+            if (
+                state &&
+                state === getTransformState(persistence) &&
+                state.log.length > 0
+            ) {
+                opts.deps.logger.info(
+                    `Full log of the run:\n`,
+                    state.log.map((line) => relative(process.cwd(), line))
+                );
+            }
+        },
+        abort: () => {
+            abort = true;
+        },
+        get log() {
+            return state?.log ?? [];
+        },
+        get inputSchema() {
+            return opts.initialInputSchema;
+        },
+        get resultSchema() {
+            return opts.finalResultSchema;
+        },
+    } as unknown as PipelineApi<
+        InputSchema,
+        TypeOf<InputSchema>,
+        TypeOf<InputSchema>
+    >;
+
+    return api;
+};
+
 /**
  * Allows you to build a pipeline of functions that can be executed
  * sequentially. With input of one function being a combination of the
@@ -322,118 +511,12 @@ let abort = false;
 export const pipeline: <Schema extends AnyZodObject | ZodEffects<AnyZodObject>>(
     inputSchema: Schema,
     deps?: typeof defaultDeps
-) => PipelineApi<Schema, TypeOf<Schema>, TypeOf<Schema>> = <
-    InputSchema extends AnyZodObject | ZodEffects<AnyZodObject>
->(
-    initialInputSchema: InputSchema,
+) => PipelineApi<Schema, TypeOf<Schema>, TypeOf<Schema>> = (
+    inputSchema,
     deps = defaultDeps
 ) => {
-    const elements: Array<
-        AnyPipelineElement & {
-            combine?: typeof Object.assign;
-        }
-    > = [];
-    let finalResultSchema: AnyZodObject =
-        'sourceType' in initialInputSchema
-            ? initialInputSchema.sourceType()
-            : initialInputSchema;
-    let combineAll = (first: unknown, second: unknown) =>
-        Object.assign({}, first, second) as unknown;
-    let state: TransformState | undefined;
-
-    const api: PipelineApi<
-        InputSchema,
-        TypeOf<InputSchema>,
-        TypeOf<InputSchema>
-    > = {
-        append: (element: AnyPipelineElement) => {
-            elements.push(element);
-            if (
-                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-                element.resultSchema._def.typeName ===
-                ZodFirstPartyTypeKind.ZodObject
-            ) {
-                finalResultSchema = finalResultSchema.merge(
-                    element.resultSchema
-                );
-            } else {
-                throw new Error(`Cannot merge non-object schemas`);
-            }
-
-            return api;
-        },
-        combineLast: (
-            reducer: (previous: unknown, next: unknown) => unknown,
-            newResultSchema?: AnyZodObject
-        ) => {
-            const lastElement = elements[elements.length - 1];
-            if (lastElement) {
-                lastElement.combine = reducer;
-            }
-            if (newResultSchema) {
-                finalResultSchema = newResultSchema;
-            }
-            return api;
-        },
-        combineAll: (
-            reducer: (previous: unknown, next: unknown) => unknown,
-            newResultSchema?: AnyZodObject
-        ) => {
-            combineAll = reducer;
-            if (newResultSchema) {
-                finalResultSchema = newResultSchema;
-            }
-            return api;
-        },
-        transform: async (
-            input: z.input<InputSchema>,
-            persistence: { location: string }
-        ) => {
-            if (!getTransformState(persistence)) {
-                state = initializeTransformState(persistence);
-            }
-            if (abort) {
-                throw new Error(`Pipeline has been aborted`);
-            }
-            return await transform(
-                {
-                    elements,
-                    combineAll,
-                    finalResultSchema,
-                    persistence,
-                    initialInput: input,
-                },
-                deps
-            );
-        },
-        clean: async (persistence: { location: string }) => {
-            await clean(persistence, elements, deps);
-
-            if (
-                state &&
-                state === getTransformState(persistence) &&
-                state.log.length > 0
-            ) {
-                deps.logger.info(
-                    `Full log of the run:\n`,
-                    state.log.map((line) => relative(process.cwd(), line))
-                );
-            }
-        },
-        abort: () => {
-            abort = true;
-        },
-        get inputSchema() {
-            return initialInputSchema;
-        },
-        get resultSchema() {
-            return finalResultSchema;
-        },
-    } as unknown as PipelineApi<
-        InputSchema,
-        TypeOf<InputSchema>,
-        TypeOf<InputSchema>
-    >;
-
-    return api;
+    return createPipeline({
+        initialInputSchema: inputSchema,
+        deps,
+    });
 };

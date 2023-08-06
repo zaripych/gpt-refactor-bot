@@ -1,8 +1,9 @@
 import type { AnyZodObject, z, ZodEffects, ZodObject, ZodTypeAny } from 'zod';
 
+import type { RetryOpts } from '../utils/retry';
+
 type PipelineElement<Input, ReturnType> = {
     name: string;
-    load?: (opts: { location: string }) => Promise<void>;
     transform: (
         input: Input,
         persistence?: {
@@ -59,6 +60,16 @@ export type PipelineApi<
         resultSchema?: AnyZodObject
     ): PipelineApi<InputSchema, CombinedType, AllResults>;
 
+    /**
+     * Sets retry options for the pipeline, this also modifies the input
+     * schema to include a `attempt` field, which is used to track the
+     * number of retries and automatically discard the persistence for the
+     * current attempt.
+     */
+    retry: (
+        retryOpts: RetryOpts
+    ) => PipelineApi<InputSchema, Result, AllResults>;
+
     // using the pipeline:
 
     transform: (
@@ -67,6 +78,8 @@ export type PipelineApi<
             location: string;
         }
     ) => Promise<Result>;
+
+    log: () => string[];
 
     clean: (persistence: { location: string }) => Promise<void>;
 

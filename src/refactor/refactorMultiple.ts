@@ -1,9 +1,14 @@
 import { writeFile } from 'fs/promises';
+import hash from 'object-hash';
 import { join } from 'path';
 import { z } from 'zod';
 
 import { gitAdd } from '../git/gitAdd';
 import { gitCommit } from '../git/gitCommit';
+import { gitResetHard } from '../git/gitResetHard';
+import { gitRevParse } from '../git/gitRevParse';
+import { gitStatus } from '../git/gitStatus';
+import { logger } from '../logger/logger';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { executeFileTask } from './executeFileTask';
 import { planTasks } from './planTasks';
@@ -20,11 +25,10 @@ export const refactorMultipleInputSchema = refactorConfigSchema
         plannedFiles: z.array(z.string()),
         defaultBranch: z.string(),
         sandboxDirectoryPath: z.string(),
+        startCommit: z.string(),
     });
 
-export const refactorMultipleResultSchema = z.object({
-    spentCents: z.number(),
-});
+export const refactorMultipleResultSchema = z.object({});
 
 export type RefactorMultipleResponse = z.infer<
     typeof refactorMultipleResultSchema
@@ -35,13 +39,39 @@ export const refactorMultiple = makePipelineFunction({
     inputSchema: refactorMultipleInputSchema,
     resultSchema: refactorMultipleResultSchema,
     transform: async (input, persistence) => {
-        const { plannedFiles } = input;
+        const { plannedFiles, sandboxDirectoryPath } = input;
 
-        let spentCents = 0;
+        const currentCommit = await gitRevParse({
+            location: sandboxDirectoryPath,
+            ref: 'HEAD',
+        });
+        const status = await gitStatus({
+            location: sandboxDirectoryPath,
+        });
 
-        const planTasksWithPersistence = planTasks.withPersistence();
-        const executeFileTaskWithPersistence =
-            executeFileTask.withPersistence();
+        if (
+            currentCommit !== input.startCommit ||
+            Object.values(status).length > 0
+        ) {
+            /**
+             * @note we get here when the refactor is run again after a failure
+             * or when the user made changes to the sandbox directory
+             */
+            logger.info('Resetting to start commit', input.startCommit);
+            await gitResetHard({
+                location: sandboxDirectoryPath,
+                ref: input.startCommit,
+            });
+        }
+
+        const planTasksWithPersistence = planTasks.withPersistence().retry({
+            maxAttempts: 3,
+        });
+        const executeFileTaskWithPersistence = executeFileTask
+            .withPersistence()
+            .retry({
+                maxAttempts: 3,
+            });
 
         try {
             for (const filePath of plannedFiles) {
@@ -54,63 +84,64 @@ export const refactorMultiple = makePipelineFunction({
                     },
                     persistence
                 );
-                spentCents += state.spentCents;
 
                 const completedTasks: string[] = [];
-                const failedTasks: {
-                    task: string;
-                    message: string;
-                }[] = [];
 
                 for (const task of state.tasks) {
-                    try {
-                        const result =
-                            await executeFileTaskWithPersistence.transform(
-                                {
-                                    task,
-                                    filePath,
-                                    completedTasks,
-                                    defaultBranch: input.defaultBranch,
-                                    sandboxDirectoryPath:
-                                        input.sandboxDirectoryPath,
-                                    enrichedObjective: input.enrichedObjective,
-                                    lintScripts: input.lintScripts,
-                                    testScripts: input.testScripts,
-                                    budgetCents: input.budgetCents,
-                                },
-                                persistence
-                            );
-
-                        spentCents += result.spentCents;
-
-                        if (result.fileContents) {
-                            await writeFile(
-                                join(input.sandboxDirectoryPath, filePath),
-                                result.fileContents
-                            );
-                            await gitAdd({
-                                location: input.sandboxDirectoryPath,
-                                filePath,
-                            });
-                            await gitCommit({
-                                location: input.sandboxDirectoryPath,
-                                message: `refactor(${filePath}): ${task}`,
-                            });
-                        }
-
-                        completedTasks.push(task);
-                    } catch (err) {
-                        if (err instanceof Error) {
-                            failedTasks.push({
+                    const result =
+                        await executeFileTaskWithPersistence.transform(
+                            {
                                 task,
-                                message: err.message,
-                            });
-                        }
-                    }
-                }
+                                filePath,
+                                completedTasks,
+                                defaultBranch: input.defaultBranch,
+                                sandboxDirectoryPath:
+                                    input.sandboxDirectoryPath,
+                                enrichedObjective: input.enrichedObjective,
+                                lintScripts: input.lintScripts,
+                                testScripts: input.testScripts,
+                                budgetCents: input.budgetCents,
+                            },
+                            persistence
+                        );
 
-                if (failedTasks.length > 0) {
-                    throw new Error('Aborting because some refactoring failed');
+                    if (result.fileContents) {
+                        logger.info('Last commit', [
+                            await gitRevParse({
+                                location: input.sandboxDirectoryPath,
+                                ref: 'HEAD',
+                            }),
+                        ]);
+                        logger.info(
+                            'Writing to file at',
+                            [filePath],
+                            ', with contents hash',
+                            [hash(result.fileContents)]
+                        );
+
+                        await writeFile(
+                            join(input.sandboxDirectoryPath, filePath),
+                            result.fileContents
+                        );
+
+                        await gitAdd({
+                            location: input.sandboxDirectoryPath,
+                            filePath,
+                        });
+
+                        await gitCommit({
+                            location: input.sandboxDirectoryPath,
+                            message: `refactor(${filePath}): ${task}`,
+                        });
+                        logger.info('Committed', [
+                            await gitRevParse({
+                                location: input.sandboxDirectoryPath,
+                                ref: 'HEAD',
+                            }),
+                        ]);
+                    }
+
+                    completedTasks.push(task);
                 }
             }
         } finally {
@@ -120,8 +151,6 @@ export const refactorMultiple = makePipelineFunction({
             }
         }
 
-        return {
-            spentCents,
-        };
+        return {};
     },
 });

@@ -39,8 +39,9 @@ export const promptWithFunctionsInputSchema = z.object({
 
 export const promptWithFunctionsResultSchema = z.object({
     messages: z.array(messageSchema),
-    spentCents: z.number(),
 });
+
+let totalSpend = 0;
 
 export const promptWithFunctions = makePipelineFunction({
     name: 'prompt-with-functions',
@@ -51,12 +52,10 @@ export const promptWithFunctions = makePipelineFunction({
 
         const initialStateSchema = z.object({
             messages: z.array(messageSchema),
-            spentCents: z.number(),
         });
 
         const resultSchema = z.object({
             response: responseSchema,
-            spentCents: z.number(),
         });
 
         const pipe = pipeline(initialStateSchema)
@@ -75,8 +74,9 @@ export const promptWithFunctions = makePipelineFunction({
                         model: opts.model,
                     });
 
+                    totalSpend += spentCents;
+
                     return {
-                        spentCents,
                         response,
                     };
                 },
@@ -85,10 +85,9 @@ export const promptWithFunctions = makePipelineFunction({
                 }),
                 resultSchema,
             })
-            .combineLast((state, { response, spentCents }) => ({
+            .combineLast((state, { response }) => ({
                 messages: [...state.messages, response.choices[0].message],
                 response,
-                spentCents: state.spentCents + spentCents,
             }));
 
         const initialState = (): InitialState => {
@@ -105,14 +104,13 @@ export const promptWithFunctions = makePipelineFunction({
 
             return {
                 messages,
-                spentCents: 0,
             };
         };
 
         let state = initialState();
 
         try {
-            while (state.spentCents < opts.budgetCents) {
+            while (totalSpend < opts.budgetCents) {
                 const next = await pipe.transform(state, persistence);
 
                 if ('functionCall' in next.response.choices[0].message) {
@@ -197,7 +195,6 @@ export const promptWithFunctions = makePipelineFunction({
 
         return {
             messages: state.messages,
-            spentCents: state.spentCents,
         };
     },
 });

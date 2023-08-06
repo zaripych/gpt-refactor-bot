@@ -1,18 +1,10 @@
 import assert from 'assert';
 import type { AnyZodObject, TypeOf, z, ZodEffects } from 'zod';
 
+import { lowerCamelCaseToKebabCase } from '../utils/lowerCamelCaseToKebabCase';
 import { defaultDeps } from './dependencies';
 import { pipeline } from './pipeline';
 import type { PipelineApi } from './types';
-
-export function lowerCamelCaseToKebabCase(str?: string) {
-    if (!str) {
-        throw new Error(
-            `Cannot determine function name, please provide one as "name" option`
-        );
-    }
-    return str.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
-}
 
 export function makePipelineFunction<
     InputSchema extends AnyZodObject | ZodEffects<AnyZodObject>,
@@ -49,26 +41,45 @@ export function makePipelineFunction<
     withPersistence: () => PipelineApi<InputSchema, TypeOf<OutputSchema>>;
 } {
     const name = lowerCamelCaseToKebabCase(opts.name ?? opts.transform.name);
+
+    /**
+     * @note give name to the function to make it easier to debug
+     */
     const obj = {
         [name]: async (
             input: z.input<InputSchema>,
             persistence?: { location: string }
         ) => {
+            /**
+             * @note add validation here when the function is called directly
+             * without the pipeline
+             */
             return opts.transform(
                 await opts.inputSchema.parseAsync(input),
                 persistence
             );
         },
     };
+    const transform = obj[name];
+    assert(transform);
 
-    const target = obj[name];
-    assert(target);
-    const fn = Object.assign(target, {
+    const element = {
         inputSchema: opts.inputSchema,
         resultSchema: opts.resultSchema,
-        transform: target,
+    };
+
+    const fn = Object.assign(transform, {
+        ...element,
+        transform,
         withPersistence: (): PipelineApi<InputSchema, TypeOf<OutputSchema>> => {
-            return pipeline(opts.inputSchema, deps).append(fn);
+            return pipeline(opts.inputSchema, deps).append({
+                ...element,
+                /**
+                 * @note do not add validation here, it will be done by the pipeline
+                 */
+                transform: opts.transform,
+                name,
+            });
         },
     });
 

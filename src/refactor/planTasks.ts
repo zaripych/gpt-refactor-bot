@@ -23,7 +23,6 @@ export const planTasksResultSchema = z.object({
      * List of tasks to take to refactor the file.
      */
     tasks: z.array(z.string()),
-    spentCents: z.number(),
 });
 
 export type PlanTasksResponse = z.infer<typeof planTasksResultSchema>;
@@ -89,7 +88,7 @@ export const planTasks = makePipelineFunction({
             filePath: input.filePath,
         });
 
-        const { messages, spentCents } = await promptWithFunctions(
+        const { messages } = await promptWithFunctions(
             {
                 preface: systemPrompt,
                 prompt: userPrompt,
@@ -133,7 +132,6 @@ export const planTasks = makePipelineFunction({
         }
 
         return {
-            spentCents,
             tasks,
         };
     },

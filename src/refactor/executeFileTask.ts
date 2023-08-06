@@ -3,8 +3,6 @@ import { join } from 'path';
 import { z } from 'zod';
 
 import { gitDiffFile } from '../git/gitDiffFile';
-import { gitRevParse } from '../git/gitRevParse';
-import { logger } from '../logger/logger';
 import { markdown } from '../markdown/markdown';
 import { determinePackageManager } from '../package-manager/determinePackageManager';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
@@ -28,21 +26,11 @@ export const executeFileTaskInputSchema = refactorConfigSchema
         task: z.string(),
         completedTasks: z.array(z.string()),
         sandboxDirectoryPath: z.string(),
-    })
-    .transform(async (input) => {
-        return {
-            ...input,
-            commitBeforeChanges: await gitRevParse({
-                location: input.sandboxDirectoryPath,
-                ref: 'HEAD',
-            }),
-        };
     });
 
 export const executeFileTaskResultSchema = z.object({
     status: z.enum(['success', 'no-changes-required']),
     fileContents: z.string().optional(),
-    spentCents: z.number(),
 });
 
 export type ExecuteTaskResponse = z.infer<typeof executeFileTaskResultSchema>;
@@ -148,7 +136,7 @@ export const executeFileTask = makePipelineFunction({
             }),
         });
 
-        const { messages, spentCents } = await promptWithFunctions(
+        const { messages } = await promptWithFunctions(
             {
                 preface,
                 prompt,
@@ -194,7 +182,6 @@ export const executeFileTask = makePipelineFunction({
         if (noChangesRequired) {
             return {
                 status: 'no-changes-required',
-                spentCents,
             };
         }
 
@@ -209,8 +196,6 @@ export const executeFileTask = makePipelineFunction({
             throw new Error(`Expected a non-empty code chunk in response`);
         }
 
-        logger.info(`Writing code chunk to file`, input.filePath);
-
         const codeChunk = codeChunks[0];
 
         const formattedCodeChunk = await prettierTypescript(codeChunk);
@@ -218,7 +203,6 @@ export const executeFileTask = makePipelineFunction({
         return {
             fileContents: formattedCodeChunk,
             status: 'success',
-            spentCents,
         };
     },
 });

@@ -1,3 +1,4 @@
+import { relative } from 'path';
 import type { Project } from 'ts-morph';
 
 import type { FunctionsConfig } from '../../functions/makeFunction';
@@ -14,7 +15,7 @@ export async function nodeBuiltinReferences(
         alreadyFoundFiles: Map<string, FileReferences>;
     }
 ) {
-    const imports = findSourceFilePathsWhereModuleIsImported(project, {
+    const imports = findSourceFilePathsWhereModuleIsImported(project, config, {
         module: args.module,
     });
 

@@ -1,12 +1,5 @@
 import fg from 'fast-glob';
-import {
-    mkdir,
-    readdir,
-    readFile,
-    rename,
-    unlink,
-    writeFile,
-} from 'fs/promises';
+import { mkdir, readFile, rename, unlink, writeFile } from 'fs/promises';
 import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import hash from 'object-hash';
 
@@ -20,7 +13,6 @@ export const defaultDeps = {
     readFile,
     mkdir,
     hash: (value: unknown) => hash(value as object).substring(0, 4),
-    readdir,
     fg: (
         patterns: string[],
         opts: {

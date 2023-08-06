@@ -1,3 +1,5 @@
+import { realpath } from 'fs/promises';
+
 import { makeDependencies } from './dependencies';
 import type { FunctionsConfig } from './makeFunction';
 import type { functions } from './registry';
@@ -29,10 +31,16 @@ export const executeFunction = async <Name extends string>(
 
     const { findRepositoryRoot } = dependencies();
 
+    const repositoryRoot = opts.repositoryRoot ?? (await findRepositoryRoot());
+
+    const realRepositoryRoot = await realpath(repositoryRoot).catch(
+        () => repositoryRoot
+    );
+
     try {
         return await fn(opts.arguments as never, {
             strict: opts.strict ?? true,
-            repositoryRoot: opts.repositoryRoot ?? (await findRepositoryRoot()),
+            repositoryRoot: realRepositoryRoot,
             dependencies: opts.dependencies ?? makeDependencies,
         });
     } catch (err: unknown) {
@@ -47,3 +55,16 @@ export const executeFunction = async <Name extends string>(
         throw err;
     }
 };
+
+console.log(
+    // 2
+    await executeFunction({
+        name: 'references',
+        arguments: {
+            identifier: 'readFile',
+            initialFilePath: 'src/file-system/findPackageName.ts',
+        },
+        repositoryRoot:
+            '/var/folders/kk/cj4kd1wx1rg16xq_jhdw75kc0000gn/T/.refactor-bot/sandboxes/replace-read-file-sync-unr87ijk',
+    })
+);

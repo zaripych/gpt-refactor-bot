@@ -14,19 +14,7 @@ const createPipe = () => {
         .append(checkoutSandbox)
         .append(enrichObjective)
         .append(planFiles)
-        .append(refactorMultiple)
-        .combineAll((state, result) =>
-            'spentCents' in result && 'spentCents' in state
-                ? {
-                      ...state,
-                      ...result,
-                      spentCents: state.spentCents + result.spentCents,
-                  }
-                : {
-                      ...state,
-                      ...result,
-                  }
-        );
+        .append(refactorMultiple);
 
     return pipe;
 };

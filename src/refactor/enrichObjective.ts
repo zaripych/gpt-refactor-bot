@@ -21,7 +21,6 @@ export const enrichObjectiveResultSchema = z.object({
      * against the repository at the time before refactoring started.
      */
     enrichedObjective: z.string(),
-    spentCents: z.number(),
 });
 
 export type EnrichObjectiveResponse = z.infer<
@@ -58,7 +57,7 @@ export const enrichObjective = makePipelineFunction({
 
         const userPrompt = enrichPromptText(input.objective);
 
-        const { messages, spentCents } = await promptWithFunctions(
+        const { messages } = await promptWithFunctions(
             {
                 preface: systemPrompt,
                 prompt: userPrompt,
@@ -85,7 +84,6 @@ export const enrichObjective = makePipelineFunction({
         }
 
         return {
-            spentCents,
             enrichedObjective: [
                 input.objective.trim(),
                 lastMessage.content.trim(),

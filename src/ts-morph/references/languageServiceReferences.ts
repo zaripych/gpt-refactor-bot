@@ -1,5 +1,6 @@
+import { realpath } from 'fs/promises';
 import { orderBy } from 'lodash-es';
-import { join, relative } from 'path';
+import { join, normalize, relative } from 'path';
 import type { Node, Project, ts } from 'ts-morph';
 import { SyntaxKind } from 'ts-morph';
 
@@ -72,9 +73,8 @@ export async function languageServiceReferences(
             const refNode = ref.getNode();
             const refSourceFile = refNode.getSourceFile();
 
-            const filePath = relative(
-                config.repositoryRoot,
-                refSourceFile.getFilePath()
+            const filePath = normalize(
+                relative(config.repositoryRoot, refSourceFile.getFilePath())
             );
 
             if (

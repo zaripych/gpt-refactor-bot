@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
+import { isTruthy } from '../utils/isTruthy';
 import { makeDependencies } from './dependencies';
 import { promptWithFunctions } from './promptWithFunctions';
 import { refactorConfigSchema } from './types';
@@ -20,7 +21,6 @@ export const planFilesResultSchema = z.object({
      * List of files that need refactoring to focus on one file at a time.
      */
     plannedFiles: z.array(z.string()),
-    spentCents: z.number(),
 });
 
 export type PlanFilesResponse = z.infer<typeof planFilesResultSchema>;
@@ -54,7 +54,7 @@ export const planFiles = makePipelineFunction({
 
         const userPrompt = planFilesPromptText(input.enrichedObjective);
 
-        const { messages, spentCents } = await promptWithFunctions(
+        const { messages } = await promptWithFunctions(
             {
                 preface: systemPrompt,
                 prompt: userPrompt,
@@ -80,26 +80,12 @@ export const planFiles = makePipelineFunction({
             throw new Error(`Expected last message to not be a function-call`);
         }
 
-        const plannedFiles: string[] = [];
-
         const filePathRegex = /^\s*\d+\.\s*[`]([^`]+)[`]\s*/gm;
 
-        let result = filePathRegex.exec(lastMessage.content);
-
-        while (result) {
-            const filePath = result[1];
-            if (!filePath) {
-                continue;
-            }
-
-            plannedFiles.push(filePath);
-
-            result = filePathRegex.exec(lastMessage.content);
-        }
-
         return {
-            spentCents,
-            plannedFiles,
+            plannedFiles: [...lastMessage.content.matchAll(filePathRegex)]
+                .map(([, filePath]) => filePath)
+                .filter(isTruthy),
         };
     },
 });
