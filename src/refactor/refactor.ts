@@ -5,16 +5,14 @@ import { randomText } from '../utils/randomText';
 import { checkoutSandbox } from './checkoutSandbox';
 import { makeDependencies } from './dependencies';
 import { enrichObjective } from './enrichObjective';
-import { planFiles } from './planFiles';
-import { refactorMultiple } from './refactorMultiple';
+import { refactorGoal } from './refactorGoal';
 import { type RefactorConfig, refactorConfigSchema } from './types';
 
 const createPipe = () => {
     const pipe = pipeline(refactorConfigSchema)
         .append(checkoutSandbox)
         .append(enrichObjective)
-        .append(planFiles)
-        .append(refactorMultiple);
+        .append(refactorGoal);
 
     return pipe;
 };

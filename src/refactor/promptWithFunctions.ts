@@ -9,6 +9,7 @@ import {
     modelsSchema,
     responseSchema,
 } from '../chat-gpt/api';
+import { AbortError } from '../errors/abortError';
 import { makeDependencies } from '../functions/dependencies';
 import { executeFunction } from '../functions/executeFunction';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
@@ -186,6 +187,14 @@ export const promptWithFunctions = makePipelineFunction({
                 }
 
                 state = next;
+            }
+
+            if (totalSpend >= opts.budgetCents) {
+                throw new AbortError(
+                    `Budget exceeded: ${totalSpend.toFixed(
+                        0
+                    )} >= ${opts.budgetCents.toFixed(0)}`
+                );
             }
         } finally {
             if (persistence) {

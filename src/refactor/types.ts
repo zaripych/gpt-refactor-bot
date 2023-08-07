@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+export const scriptSchema = z.object({
+    args: z.array(z.string()).nonempty(),
+    parse: z.enum(['stdout', 'stderr'] as const),
+    supportsFileFiltering: z.boolean(),
+});
+
 export const refactorConfigSchema = z.object({
     /**
      * Short name of the refactoring

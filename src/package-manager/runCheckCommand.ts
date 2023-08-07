@@ -1,10 +1,10 @@
 import { basename, normalize, sep } from 'path';
 
 import { logger } from '../logger/logger';
-import { runPackageManagerScript } from '../package-manager/runPackageManagerScript';
 import { escapeRegExp } from '../utils/escapeRegExp';
 import { ensureHasOneElement } from '../utils/hasOne';
 import { UnreachableError } from '../utils/UnreachableError';
+import { runPackageManagerScript } from './runPackageManagerScript';
 
 export function eslintUnixOutputParser(output: string) {
     return output
@@ -149,25 +149,4 @@ export async function runCheckCommand(opts: {
         script,
         outputParser: parser,
     });
-}
-
-export async function runAllCheckCommands(opts: {
-    packageManager: 'npm' | 'yarn' | 'pnpm';
-    scripts: Array<{
-        args: [string, ...string[]];
-        parse: 'stdout' | 'stderr';
-        supportsFileFiltering: boolean;
-    }>;
-    filePaths?: string[];
-    location: string;
-}) {
-    const results = await Promise.all(
-        opts.scripts.map((script) =>
-            runCheckCommand({
-                ...opts,
-                script,
-            })
-        )
-    );
-    return results.reduce((acc, result) => acc.concat(result), []);
 }

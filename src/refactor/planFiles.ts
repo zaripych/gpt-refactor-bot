@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { diffHash } from '../git/diffHash';
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { isTruthy } from '../utils/isTruthy';
@@ -12,9 +13,21 @@ export const planFilesInputSchema = refactorConfigSchema
         budgetCents: true,
     })
     .augment({
-        enrichedObjective: z.string(),
+        objective: z.string(),
         sandboxDirectoryPath: z.string(),
-    });
+        startCommit: z.string().optional(),
+    })
+    .transform(async (input) => ({
+        ...input,
+        /**
+         * @note result of this task depends on the source code state
+         */
+        ...(input.startCommit &&
+            (await diffHash({
+                location: input.sandboxDirectoryPath,
+                ref: input.startCommit,
+            }))),
+    }));
 
 export const planFilesResultSchema = z.object({
     /**
@@ -52,7 +65,7 @@ export const planFiles = makePipelineFunction({
     ): Promise<PlanFilesResponse> => {
         const { includeFunctions } = getDeps();
 
-        const userPrompt = planFilesPromptText(input.enrichedObjective);
+        const userPrompt = planFilesPromptText(input.objective);
 
         const { messages } = await promptWithFunctions(
             {

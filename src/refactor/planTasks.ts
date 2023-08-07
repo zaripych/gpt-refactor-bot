@@ -2,8 +2,10 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { z } from 'zod';
 
+import { gitFilesDiff } from '../git/gitFilesDiff';
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
+import { isTruthy } from '../utils/isTruthy';
 import { makeDependencies } from './dependencies';
 import { promptWithFunctions } from './promptWithFunctions';
 import { refactorConfigSchema } from './types';
@@ -16,7 +18,21 @@ export const planTasksInputSchema = refactorConfigSchema
         enrichedObjective: z.string(),
         filePath: z.string(),
         sandboxDirectoryPath: z.string(),
-    });
+        startCommit: z.string(),
+    })
+    .transform(async (input) => ({
+        ...input,
+        /**
+         * @note result of this task depends on the source code state
+         */
+        ...(input.startCommit && {
+            fileDiff: await gitFilesDiff({
+                location: input.sandboxDirectoryPath,
+                filePaths: [input.filePath],
+                ref: input.startCommit,
+            }),
+        }),
+    }));
 
 export const planTasksResultSchema = z.object({
     /**
@@ -39,7 +55,7 @@ const planTasksPromptText = (opts: {
     markdown`
 ${opts.objective}
 
-We are now starting the process of refactoring one file at a time. Strictly focus only on a single file given below.
+We are now starting the process of refactoring one file at a time. Strictly focus only on the file given below.
 
 Given the contents of the file: \`${opts.filePath}\`:
 
@@ -47,7 +63,7 @@ Given the contents of the file: \`${opts.filePath}\`:
 ${opts.fileContents}
 \`\`\`
 
-Please produce the task list to accomplish the objective for the given file. Return one task per line in your response. Each task should be focused only on a single file mentioned.
+Please produce the task list to accomplish the objective for the given file. Return one task per line in your response. Each task should be focused only on the single file mentioned.
 
 The response must be a numbered list in the format:
 
@@ -66,6 +82,7 @@ Strictly only list tasks that would result in code changes to the file, do not i
 4. Commit and push to remote repository.
 5. Open a pull request with the changes.
 6. Request a review from the repository owners.
+7. Save the changes to the file.
     `;
 
 export const planTasks = makePipelineFunction({
@@ -114,25 +131,12 @@ export const planTasks = makePipelineFunction({
             throw new Error(`Expected last message to not be a function-call`);
         }
 
-        const tasks: string[] = [];
-
-        const regex = /^\s*\d+\.\s*([^\n]+)\s*/gm;
-
-        let result = regex.exec(lastMessage.content);
-
-        while (result) {
-            const task = result[1];
-            if (!task) {
-                continue;
-            }
-
-            tasks.push(task);
-
-            result = regex.exec(lastMessage.content);
-        }
+        const tasksRegex = /^\s*\d+\.\s*([^\n]+)\s*/gm;
 
         return {
-            tasks,
+            tasks: [...lastMessage.content.matchAll(tasksRegex)]
+                .map(([, task]) => task)
+                .filter(isTruthy),
         };
     },
 });

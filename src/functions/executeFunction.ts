@@ -55,16 +55,3 @@ export const executeFunction = async <Name extends string>(
         throw err;
     }
 };
-
-console.log(
-    // 2
-    await executeFunction({
-        name: 'references',
-        arguments: {
-            identifier: 'readFile',
-            initialFilePath: 'src/file-system/findPackageName.ts',
-        },
-        repositoryRoot:
-            '/var/folders/kk/cj4kd1wx1rg16xq_jhdw75kc0000gn/T/.refactor-bot/sandboxes/replace-read-file-sync-unr87ijk',
-    })
-);

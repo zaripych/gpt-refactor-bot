@@ -1,9 +1,7 @@
-import { readFile } from 'fs/promises';
-import hash from 'object-hash';
-import { join } from 'path';
 import { z } from 'zod';
 
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
+import { changedFilesHash } from '../git/changedFilesHash';
 import { gitAddAll } from '../git/gitAddAll';
 import { gitClone } from '../git/gitClone';
 import { gitCommit } from '../git/gitCommit';
@@ -32,39 +30,12 @@ export const checkoutSandboxInputSchema = refactorConfigSchema
     .transform(async (input) => {
         if (!input.repository && !input.ref) {
             const root = await findRepositoryRoot();
-            const status = await gitStatus({
-                location: root,
-            });
-            const allFiles = Object.values(status).flat();
-
-            if (allFiles.length > 0) {
-                const contents = new Map(
-                    await Promise.all(
-                        allFiles.map((file) =>
-                            readFile(join(root, file), 'utf-8')
-                                .then((data) => [file, data] as const)
-                                .catch((err: unknown) => {
-                                    if (
-                                        err &&
-                                        typeof err === 'object' &&
-                                        'code' in err &&
-                                        err.code === 'ENOENT'
-                                    ) {
-                                        return [file, ''] as const;
-                                    }
-                                    throw err;
-                                })
-                        )
-                    )
-                );
-
-                const changedFilesHash = hash(contents);
-
-                return {
-                    ...input,
-                    changedFilesHash,
-                };
-            }
+            return {
+                ...input,
+                ...(await changedFilesHash({
+                    location: root,
+                })),
+            };
         }
 
         return {

@@ -2,15 +2,12 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { z } from 'zod';
 
-import { gitDiffFile } from '../git/gitDiffFile';
 import { markdown } from '../markdown/markdown';
-import { determinePackageManager } from '../package-manager/determinePackageManager';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { prettierTypescript } from '../prettier/prettier';
 import { isTruthy } from '../utils/isTruthy';
 import { makeDependencies } from './dependencies';
 import { promptWithFunctions } from './promptWithFunctions';
-import { runAllCheckCommands } from './runCheckCommand';
 import { refactorConfigSchema } from './types';
 
 export const executeFileTaskInputSchema = refactorConfigSchema
@@ -22,7 +19,8 @@ export const executeFileTaskInputSchema = refactorConfigSchema
     .augment({
         enrichedObjective: z.string(),
         filePath: z.string(),
-        defaultBranch: z.string(),
+        fileDiff: z.string(),
+        issues: z.array(z.string()),
         task: z.string(),
         completedTasks: z.array(z.string()),
         sandboxDirectoryPath: z.string(),
@@ -36,7 +34,7 @@ export const executeFileTaskResultSchema = z.object({
 export type ExecuteTaskResponse = z.infer<typeof executeFileTaskResultSchema>;
 
 const preface = markdown`
-Think step by step. Be concise and to the point. Do not make assumptions other than what was given in the instructions.
+Think step by step. Be concise. Do not make assumptions other than what was given in the instructions. Produce minimal changes in the code to accomplish the task.
 `;
 
 const executeFileTaskPromptText = (opts: {
@@ -45,7 +43,7 @@ const executeFileTaskPromptText = (opts: {
     fileContents: string;
     task: string;
     completedTasks: string[];
-    diff?: string;
+    fileDiff?: string;
     issues: string[];
     language: string;
 }) =>
@@ -62,22 +60,22 @@ ${opts.fileContents}
 
 ${
     opts.completedTasks.length > 0
-        ? `We have completed the following tasks:
+        ? `You already have completed the following tasks:
 
 ${opts.completedTasks.map((task, index) => `${index + 1}. ${task}`).join('\n')}
 `
         : ''
 }${
-        opts.diff
-            ? `The changes have produced the following diff:
+        opts.fileDiff
+            ? `The changes have produced the following diff so far:
 \`\`\`diff
-${opts.diff}
+${opts.fileDiff}
 \`\`\`
 `
             : ''
     }${
         opts.issues.length > 0
-            ? `The following issues were found after linting and testing:
+            ? `The following issues were found after linting and testing of your changes:
 
 ${opts.issues.map((issue, index) => `${index + 1}. ${issue}`).join('\n')}
 `
@@ -90,15 +88,30 @@ Please perform the following task:
 
 ${opts.completedTasks.length + 1}. ${opts.task}
 
-As a result - produce modified contents of the file \`${
+As a result - produce modified contents of the entire file \`${
         opts.filePath
-    }\` with the task performed. Modified code must be surrounded with markdown code fences (ie "\`\`\`").
-    
-When modifications are not required - do not include any code in the response and respond simply with "No changes required" without any reasoning. 
+    }\` with the task performed. Modified code must be surrounded with markdown code fences (ie "\`\`\`"). The modified code should represent the entire file contents.
 
-Do not include any headers before the modified contents or follow the modified contents with any other output. 
+It is also possible that as a result of the task - no changes are required. In that case - respond with "No changes required" without any reasoning.
 
-    `;
+Do not respond with any other text other than the modified code or "No changes required".
+
+Do not include any code blocks when responding with "No changes required".
+
+Do not include unmodified code when responding with "No changes required".
+
+Do not include "No changes required" when responding with modified code.
+
+Example response #1:
+
+\`\`\`TypeScript
+/* entire contents of the file omitted in the example */
+\`\`\`
+
+Example response #2:
+
+No changes required.
+`;
 
 export const executeFileTask = makePipelineFunction({
     name: 'execute-file-task',
@@ -121,19 +134,8 @@ export const executeFileTask = makePipelineFunction({
             ),
             completedTasks: input.completedTasks,
             language: 'TypeScript',
-            diff: await gitDiffFile({
-                filePath: input.filePath,
-                location: input.sandboxDirectoryPath,
-                ref: input.defaultBranch,
-            }),
-            issues: await runAllCheckCommands({
-                packageManager: await determinePackageManager({
-                    directory: input.sandboxDirectoryPath,
-                }),
-                location: input.sandboxDirectoryPath,
-                filePaths: [input.filePath],
-                scripts: [...input.lintScripts, ...input.testScripts],
-            }),
+            fileDiff: input.fileDiff,
+            issues: input.issues,
         });
 
         const { messages } = await promptWithFunctions(
