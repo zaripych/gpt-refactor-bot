@@ -74,7 +74,7 @@ The goal now is to fix all the issues you have introduced preferably without int
 `;
 
 export const fixIssues = makePipelineFunction({
-    name: 'fix-issues',
+    name: 'issues',
     inputSchema: fixIssuesInputSchema,
     resultSchema: fixIssuesResultSchema,
     transform: async (input, persistence) => {

@@ -31,15 +31,13 @@ export type RefactorObjectiveResponse = z.infer<
 >;
 
 export const refactorObjective = makePipelineFunction({
-    name: 'refactor-objective',
+    name: 'objective',
     inputSchema: refactorObjectiveInputSchema,
     resultSchema: refactorObjectiveResultSchema,
     transform: async (input, persistence) => {
         const planFilesWithPersistence = planFiles.withPersistence().retry({
             maxAttempts: 3,
         });
-        const refactorMultipleWithPersistence =
-            refactorMultipleFiles.withPersistence();
         const files: Record<
             string,
             Array<TypeOf<typeof refactorTaskResultSchema>>
@@ -56,7 +54,7 @@ export const refactorObjective = makePipelineFunction({
             );
 
             while (plannedFiles.length > 0) {
-                const result = await refactorMultipleWithPersistence.transform(
+                const result = await refactorMultipleFiles.transform(
                     {
                         objective: input.objective,
                         plannedFiles,

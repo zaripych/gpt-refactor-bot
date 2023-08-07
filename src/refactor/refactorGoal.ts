@@ -32,7 +32,7 @@ export const refactorGoalResultSchema = z.object({
 export type RefactorGoalResponse = z.infer<typeof refactorGoalResultSchema>;
 
 export const refactorGoal = makePipelineFunction({
-    name: 'refactor-goal',
+    name: 'goal',
     inputSchema: refactorGoalInputSchema,
     resultSchema: refactorGoalResultSchema,
     transform: async (input, persistence) => {

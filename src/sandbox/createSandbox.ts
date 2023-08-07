@@ -28,6 +28,8 @@ type Opts = {
      * .git directory and node_modules when present
      */
     source: string;
+
+    exclude?: string[];
 };
 
 export function sandboxLocation(
@@ -52,9 +54,14 @@ export async function createSandbox(opts: Opts) {
 
     await mkdir(sandboxDirectoryPath, { recursive: true });
 
+    const excludeOpts = (opts.exclude ?? ['.vscode']).flatMap((exclude) => [
+        '--exclude',
+        exclude,
+    ]);
+
     await spawnResult(
         'rsync',
-        ['-a', opts.source + '/', sandboxDirectoryPath],
+        ['-a', ...excludeOpts, opts.source + '/', sandboxDirectoryPath],
         {
             exitCodes: [0],
         }

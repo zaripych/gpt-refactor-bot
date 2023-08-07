@@ -35,7 +35,7 @@ export const promptWithFunctionsInputSchema = z.object({
         .function()
         .transform((value) => value as (messages: Message[]) => true | Message)
         .optional(),
-    model: modelsSchema.optional().default('gpt-3.5-turbo'),
+    model: modelsSchema.optional().default('gpt-4'),
 });
 
 export const promptWithFunctionsResultSchema = z.object({
@@ -61,7 +61,7 @@ export const promptWithFunctions = makePipelineFunction({
 
         const pipe = pipeline(initialStateSchema)
             .append({
-                name: 'chat-completions',
+                name: 'chat',
                 transform: async (state) => {
                     const response = await chatCompletions({
                         model: opts.model,

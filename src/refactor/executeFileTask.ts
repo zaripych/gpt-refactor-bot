@@ -114,7 +114,7 @@ No changes required.
 `;
 
 export const executeFileTask = makePipelineFunction({
-    name: 'execute-file-task',
+    name: 'execute',
     inputSchema: executeFileTaskInputSchema,
     resultSchema: executeFileTaskResultSchema,
     transform: async (

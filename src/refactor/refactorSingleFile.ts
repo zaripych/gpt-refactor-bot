@@ -59,7 +59,7 @@ export type RefactorSingleFileResponse = z.infer<
 >;
 
 export const refactorSingleFile = makePipelineFunction({
-    name: 'refactor-single-file',
+    name: 'file',
     inputSchema: refactorSingleFileInputSchema,
     resultSchema: refactorSingleFileResultSchema,
     transform: async (input, persistence) => {

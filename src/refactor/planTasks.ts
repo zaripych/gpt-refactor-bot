@@ -86,7 +86,7 @@ Strictly only list tasks that would result in code changes to the file, do not i
     `;
 
 export const planTasks = makePipelineFunction({
-    name: 'plan-tasks',
+    name: 'tasks',
     inputSchema: planTasksInputSchema,
     resultSchema: planTasksResultSchema,
     transform: async (

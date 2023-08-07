@@ -55,7 +55,7 @@ The number of each entry must be followed by a period. If the list of files is e
     `;
 
 export const planFiles = makePipelineFunction({
-    name: 'plan-files',
+    name: 'files',
     inputSchema: planFilesInputSchema,
     resultSchema: planFilesResultSchema,
     transform: async (
