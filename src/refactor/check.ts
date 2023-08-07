@@ -63,3 +63,20 @@ export const check = makePipelineFunction({
         };
     },
 });
+
+console.log(
+    await check({
+        location:
+            '/var/folders/kk/cj4kd1wx1rg16xq_jhdw75kc0000gn/T/.refactor-bot/sandboxes/replace-read-file-sync-unr87ijk',
+        packageManager: 'pnpm',
+        scripts: [
+            {
+                args: ['eslint'],
+                parse: 'stdout',
+                supportsFileFiltering: true,
+            },
+        ],
+        filePaths: ['src/file-system/findPackageName.ts'],
+        startCommit: '9cc1d4e0e5e661f7f49873f337320724a29f2345',
+    })
+);

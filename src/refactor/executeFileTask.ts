@@ -126,14 +126,16 @@ export const executeFileTask = makePipelineFunction({
     ): Promise<ExecuteTaskResponse> => {
         const { includeFunctions } = getDeps();
 
+        const originalFileContents = await readFile(
+            join(input.sandboxDirectoryPath, input.filePath),
+            'utf-8'
+        );
+
         const prompt = executeFileTaskPromptText({
             objective: input.enrichedObjective,
             task: input.task,
             filePath: input.filePath,
-            fileContents: await readFile(
-                join(input.sandboxDirectoryPath, input.filePath),
-                'utf-8'
-            ),
+            fileContents: originalFileContents,
             completedTasks: input.completedTasks,
             language: 'TypeScript',
             fileDiff: input.fileDiff,
@@ -203,6 +205,12 @@ export const executeFileTask = makePipelineFunction({
         const codeChunk = codeChunks[0];
 
         const formattedCodeChunk = await prettierTypescript(codeChunk);
+
+        if (formattedCodeChunk === originalFileContents) {
+            return {
+                status: 'no-changes-required',
+            };
+        }
 
         return {
             fileContentsHash: hash(formattedCodeChunk),

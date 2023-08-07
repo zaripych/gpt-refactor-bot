@@ -3,6 +3,7 @@ import { basename, normalize, sep } from 'path';
 import { logger } from '../logger/logger';
 import { escapeRegExp } from '../utils/escapeRegExp';
 import { ensureHasOneElement } from '../utils/hasOne';
+import { isTruthy } from '../utils/isTruthy';
 import { UnreachableError } from '../utils/UnreachableError';
 import { runPackageManagerScript } from './runPackageManagerScript';
 
@@ -16,11 +17,23 @@ export function eslintUnixOutputParser(output: string) {
 }
 
 export function tscNonPrettyOutputParser(output: string) {
-    return output
-        .trim()
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean);
+    const fileRegex = /^[^)(\n]+\(\d+,\d+\):/gm;
+    const allIssueStarters = [...output.matchAll(fileRegex)];
+    const issues = allIssueStarters.flatMap((match, i) =>
+        typeof match.index === 'number'
+            ? [
+                  output
+                      .substring(
+                          match.index,
+                          i < allIssueStarters.length - 1
+                              ? allIssueStarters[i + 1]?.index
+                              : undefined
+                      )
+                      .trim(),
+              ]
+            : []
+    );
+    return issues;
 }
 
 export function jestJsonStdoutParser(stdout: string) {
