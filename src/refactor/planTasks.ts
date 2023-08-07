@@ -72,7 +72,7 @@ The number of each entry must be followed by a period. If the list of tasks is e
 
 Unless your list is empty, do not include any headers before your numbered list or follow your numbered list with any other output.
 
-Strictly only list tasks that would result in code changes to the file, do not include any other tasks similar to below:
+Strictly only list tasks that would result in code changes to the file, do not include any other tasks similar or exactly same as below:
 
 1. Execute build and lint scripts to check for errors.
 2. Execute tests for all changed files.
