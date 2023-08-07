@@ -15,18 +15,17 @@ export const planFilesInputSchema = refactorConfigSchema
     .augment({
         objective: z.string(),
         sandboxDirectoryPath: z.string(),
-        startCommit: z.string().optional(),
+        startCommit: z.string(),
     })
     .transform(async (input) => ({
         ...input,
         /**
          * @note result of this task depends on the source code state
          */
-        ...(input.startCommit &&
-            (await diffHash({
-                location: input.sandboxDirectoryPath,
-                ref: input.startCommit,
-            }))),
+        ...(await diffHash({
+            location: input.sandboxDirectoryPath,
+            ref: input.startCommit,
+        })),
     }));
 
 export const planFilesResultSchema = z.object({

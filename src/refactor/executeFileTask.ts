@@ -1,4 +1,5 @@
 import { readFile } from 'fs/promises';
+import hash from 'object-hash';
 import { join } from 'path';
 import { z } from 'zod';
 
@@ -28,6 +29,7 @@ export const executeFileTaskInputSchema = refactorConfigSchema
 
 export const executeFileTaskResultSchema = z.object({
     status: z.enum(['success', 'no-changes-required']),
+    fileContentsHash: z.string().optional(),
     fileContents: z.string().optional(),
 });
 
@@ -203,6 +205,7 @@ export const executeFileTask = makePipelineFunction({
         const formattedCodeChunk = await prettierTypescript(codeChunk);
 
         return {
+            fileContentsHash: hash(formattedCodeChunk),
             fileContents: formattedCodeChunk,
             status: 'success',
         };

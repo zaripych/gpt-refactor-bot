@@ -25,12 +25,10 @@ export const planTasksInputSchema = refactorConfigSchema
         /**
          * @note result of this task depends on the source code state
          */
-        ...(input.startCommit && {
-            fileDiff: await gitFilesDiff({
-                location: input.sandboxDirectoryPath,
-                filePaths: [input.filePath],
-                ref: input.startCommit,
-            }),
+        fileDiff: await gitFilesDiff({
+            location: input.sandboxDirectoryPath,
+            filePaths: [input.filePath],
+            ref: input.startCommit,
         }),
     }));
 

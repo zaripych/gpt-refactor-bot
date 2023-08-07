@@ -1,4 +1,3 @@
-import { realpath } from 'fs/promises';
 import { orderBy } from 'lodash-es';
 import { join, normalize, relative } from 'path';
 import type { Node, Project, ts } from 'ts-morph';

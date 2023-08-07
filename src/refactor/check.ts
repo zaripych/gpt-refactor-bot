@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { diffHash } from '../git/diffHash';
 import { filesDiffHash } from '../git/filesDiffHash';
+import { gitRevParse } from '../git/gitRevParse';
 import { runCheckCommand } from '../package-manager/runCheckCommand';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { scriptSchema } from './types';
@@ -19,7 +20,7 @@ const checkInputSchema = z
         /**
          * @note result of this task depends on the source code state
          */
-        ...(input.startCommit && input.filePaths
+        ...(input.filePaths
             ? await filesDiffHash({
                   location: input.location,
                   ref: input.startCommit,
@@ -32,6 +33,8 @@ const checkInputSchema = z
     }));
 
 const checkResultSchema = z.object({
+    commit: z.string(),
+    diffHash: z.string(),
     issues: z.array(z.string()),
 });
 
@@ -40,6 +43,10 @@ export const check = makePipelineFunction({
     inputSchema: checkInputSchema,
     resultSchema: checkResultSchema,
     transform: async (opts) => {
+        const commit = await gitRevParse({
+            location: opts.location,
+            ref: 'HEAD',
+        });
         const results = await Promise.all(
             opts.scripts.map((script) =>
                 runCheckCommand({
@@ -49,6 +56,9 @@ export const check = makePipelineFunction({
             )
         );
         return {
+            commit,
+            diffHash:
+                'filesDiffHash' in opts ? opts.filesDiffHash : opts.diffHash,
             issues: results.reduce((acc, result) => acc.concat(result), []),
         };
     },

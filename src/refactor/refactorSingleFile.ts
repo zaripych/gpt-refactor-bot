@@ -1,5 +1,4 @@
 import { writeFile } from 'fs/promises';
-import hash from 'object-hash';
 import { basename, join } from 'path';
 import type { TypeOf } from 'zod';
 import { z } from 'zod';
@@ -34,12 +33,10 @@ export const refactorSingleFileInputSchema = refactorConfigSchema
         /**
          * @note result of this task depends on the source code state
          */
-        ...(input.startCommit && {
-            fileDiff: await gitFilesDiff({
-                location: input.sandboxDirectoryPath,
-                filePaths: [input.filePath],
-                ref: input.startCommit,
-            }),
+        fileDiff: await gitFilesDiff({
+            location: input.sandboxDirectoryPath,
+            filePaths: [input.filePath],
+            ref: input.startCommit,
         }),
     }));
 
@@ -81,9 +78,6 @@ export const refactorSingleFile = makePipelineFunction({
         const packageManager = await determinePackageManager({
             directory: input.sandboxDirectoryPath,
         });
-
-        const noChangesTasks: string[] = [];
-        const completedTasks: string[] = [];
 
         const tasksInfo = new Array<TypeOf<typeof refactorTaskResultSchema>>();
 
@@ -133,7 +127,11 @@ export const refactorSingleFile = makePipelineFunction({
                                 filePath,
                                 fileDiff,
                                 issues,
-                                completedTasks,
+                                completedTasks: tasksInfo
+                                    .filter(
+                                        (task) => task.status === 'completed'
+                                    )
+                                    .map(({ task }) => task),
                                 sandboxDirectoryPath:
                                     input.sandboxDirectoryPath,
                                 enrichedObjective: input.objective,
@@ -147,7 +145,7 @@ export const refactorSingleFile = makePipelineFunction({
                             'Writing to file at',
                             [filePath],
                             ', with contents hash',
-                            [hash(result.fileContents)]
+                            [result.fileContentsHash]
                         );
 
                         await writeFile(
@@ -179,7 +177,10 @@ export const refactorSingleFile = makePipelineFunction({
                             commit,
                         });
                     } else {
-                        noChangesTasks.push(task);
+                        tasksInfo.push({
+                            status: 'no-changes',
+                            task,
+                        });
                     }
                 }
 

@@ -29,7 +29,7 @@ export const fixIssuesInputSchema = refactorConfigSchema
         /**
          * @note result of this task depends on the source code state
          */
-        ...(input.startCommit && input.changedFiles
+        ...(input.changedFiles
             ? await filesDiffHash({
                   location: input.sandboxDirectoryPath,
                   ref: input.startCommit,

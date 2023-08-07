@@ -49,6 +49,7 @@ export const refactorObjective = makePipelineFunction({
                     objective: input.objective,
                     sandboxDirectoryPath: input.sandboxDirectoryPath,
                     budgetCents: input.budgetCents,
+                    startCommit: input.startCommit,
                 },
                 persistence
             );
@@ -78,6 +79,7 @@ export const refactorObjective = makePipelineFunction({
                             objective: input.objective,
                             sandboxDirectoryPath: input.sandboxDirectoryPath,
                             budgetCents: input.budgetCents,
+                            startCommit: input.startCommit,
                         },
                         persistence
                     );
@@ -91,7 +93,6 @@ export const refactorObjective = makePipelineFunction({
         } finally {
             if (persistence) {
                 await planFilesWithPersistence.clean(persistence);
-                await refactorMultipleWithPersistence.clean(persistence);
             }
         }
 
