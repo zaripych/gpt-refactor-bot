@@ -25,4 +25,12 @@ export const defaultDeps = {
     unlink,
     rename,
     saveInput: true,
+    /**
+     * @note I was testing whether the non-determinism of the models
+     * can be used to break out of infinite loops and found it to be
+     * not reliable at all. The models are not random enough. But need
+     * to test this more with different temperatures and try make it
+     * work with "choices".
+     */
+    temporary_flag_abortOnCycles: true,
 };

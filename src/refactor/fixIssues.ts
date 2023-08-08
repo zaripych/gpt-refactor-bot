@@ -148,7 +148,7 @@ export const fixIssues = makePipelineFunction({
                     persistence
                 );
 
-                issues.splice(0, issues.length - 1, ...finalCheck.issues);
+                issues.splice(0, issues.length, ...finalCheck.issues);
             }
         } finally {
             if (persistence) {

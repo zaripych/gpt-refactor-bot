@@ -36,7 +36,7 @@ export const executeFileTaskResultSchema = z.object({
 export type ExecuteTaskResponse = z.infer<typeof executeFileTaskResultSchema>;
 
 const preface = markdown`
-Think step by step. Be concise. Do not make assumptions other than what was given in the instructions. Produce minimal changes in the code to accomplish the task.
+Think step by step. Be concise. Do not make assumptions other than what was given in the instructions. Produce minimal changes in the code to accomplish the task. Attempt to make changes to the code that are backward compatible with the rest of the code base.
 `;
 
 const executeFileTaskPromptText = (opts: {
@@ -137,16 +137,16 @@ export const executeFileTask = makePipelineFunction({
             filePath: input.filePath,
             fileContents: originalFileContents,
             completedTasks: input.completedTasks,
-            language: 'TypeScript',
             fileDiff: input.fileDiff,
             issues: input.issues,
+            language: 'TypeScript',
         });
 
         const { messages } = await promptWithFunctions(
             {
                 preface,
                 prompt,
-                temperature: 0,
+                temperature: 1,
                 functions: await includeFunctions(),
                 budgetCents: input.budgetCents,
                 functionsConfig: {
@@ -177,15 +177,7 @@ export const executeFileTask = makePipelineFunction({
 
         const noChangesRequired = noChangesRegex.test(lastMessage.content);
 
-        if (noChangesRequired && codeChunks.length > 0) {
-            throw new Error(
-                `Expected no modified code chunks when response ` +
-                    `contains "No changes required", but found ` +
-                    `${codeChunks.length}.`
-            );
-        }
-
-        if (noChangesRequired) {
+        if (noChangesRequired && codeChunks.length === 0) {
             return {
                 status: 'no-changes-required',
             };

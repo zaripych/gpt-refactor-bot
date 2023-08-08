@@ -14,9 +14,14 @@ import { defaultDeps } from './dependencies';
 import { loadResult, saveResult } from './persistence';
 import type { TransformState } from './state';
 import { getTransformState, initializeTransformState } from './state';
-import type { AnyPipelineElement, PipelineApi } from './types';
+import type {
+    AnyPipelineElement,
+    PipelineApi,
+    SupportedZodSchemas,
+    UnknownZodObject,
+} from './types';
 
-const augmentHeadSchema = <T extends AnyZodObject | ZodEffects<AnyZodObject>>(
+const augmentHeadSchema = <T extends SupportedZodSchemas>(
     schema: T,
     augmentation: ZodRawShape
 ) => {
@@ -34,6 +39,55 @@ const augmentHeadSchema = <T extends AnyZodObject | ZodEffects<AnyZodObject>>(
             throw new UnreachableError(
                 schema._def,
                 'Cannot augment non-object schemas'
+            );
+    }
+};
+
+const mergeTailSchema = <T extends SupportedZodSchemas>(
+    schema: T,
+    mergeWith: SupportedZodSchemas
+): UnknownZodObject => {
+    switch (schema._def.typeName) {
+        case ZodFirstPartyTypeKind.ZodObject: {
+            const target = schema as UnknownZodObject;
+            switch (mergeWith._def.typeName) {
+                case ZodFirstPartyTypeKind.ZodObject: {
+                    const tail = mergeWith as UnknownZodObject;
+                    return target.merge(tail);
+                }
+                case ZodFirstPartyTypeKind.ZodEffects: {
+                    const typed = mergeWith as ZodEffects<UnknownZodObject>;
+                    return target.merge(typed.innerType());
+                }
+                default:
+                    throw new UnreachableError(
+                        mergeWith._def,
+                        'Cannot merge non-object schemas'
+                    );
+            }
+        }
+        case ZodFirstPartyTypeKind.ZodEffects: {
+            const target = schema as ZodEffects<AnyZodObject>;
+            switch (mergeWith._def.typeName) {
+                case ZodFirstPartyTypeKind.ZodObject: {
+                    const tail = mergeWith as AnyZodObject;
+                    return target.innerType().merge(tail);
+                }
+                case ZodFirstPartyTypeKind.ZodEffects: {
+                    const typed = mergeWith as ZodEffects<AnyZodObject>;
+                    return target.innerType().merge(typed.innerType());
+                }
+                default:
+                    throw new UnreachableError(
+                        mergeWith._def,
+                        'Cannot merge non-object schemas'
+                    );
+            }
+        }
+        default:
+            throw new UnreachableError(
+                schema._def,
+                'Cannot merge non-object schemas'
             );
     }
 };
@@ -73,6 +127,125 @@ const clean = async (
     }
 };
 
+async function validateInitialInput(opts: {
+    input: unknown;
+    inputSchema: SupportedZodSchemas;
+    name: string;
+    previousName?: string;
+}): Promise<unknown> {
+    const { input, inputSchema, previousName, name } = opts;
+    return await handleExceptionsAsync(
+        () => inputSchema.parseAsync(input),
+        (err: unknown) => {
+            if (err instanceof ZodError) {
+                if (!previousName) {
+                    throw new Error(
+                        `Initial input doesn't pass the schema validation for step "${name}"`,
+                        {
+                            cause: err,
+                        }
+                    );
+                } else {
+                    throw new Error(
+                        `Result of the call to "${previousName}" doesn't pass schema validation for step "${name}"`,
+                        {
+                            cause: err,
+                        }
+                    );
+                }
+            }
+            throw err;
+        }
+    );
+}
+
+async function determineId(
+    opts: {
+        input: unknown;
+        inputSchema: SupportedZodSchemas;
+        name: string;
+        previousName?: string;
+        type?: 'deterministic' | 'non-deterministic';
+        persistence?: { location: string };
+        log: Array<string>;
+        discardedValueHashes?: string[];
+        seed?: number;
+    },
+    deps = defaultDeps
+): Promise<{
+    value: unknown;
+    valueHash: string;
+    elementId: string;
+    id: string;
+    discardedValueHashes: string[];
+}> {
+    const { type, name, persistence, log } = opts;
+
+    const value = await validateInitialInput({
+        ...opts,
+        inputSchema: opts.inputSchema.transform((input) => ({
+            ...input,
+            ...(opts.seed && {
+                seed: opts.seed,
+            }),
+        })) as SupportedZodSchemas,
+    });
+
+    const valueHash = deps.hash(value);
+    const elementId = [name, valueHash].join('-');
+    const id = persistence?.location
+        ? join(persistence.location, elementId)
+        : elementId;
+
+    if (opts.discardedValueHashes?.includes(valueHash)) {
+        throw new Error(
+            `Invalid input schema for step "${name}" doesn't allow "seed" property to be merged with it's input schema`
+        );
+    }
+
+    const count =
+        (type ?? 'non-deterministic') === 'non-deterministic'
+            ? log.reduce(
+                  (acc, entry) => acc + (entry === id + '.yaml' ? 1 : 0),
+                  0
+              )
+            : 0;
+
+    if (count === 0) {
+        return {
+            value,
+            valueHash,
+            elementId,
+            id,
+            discardedValueHashes: opts.discardedValueHashes ?? [],
+        };
+    } else {
+        if (deps.temporary_flag_abortOnCycles) {
+            throw new AbortError(`Cycle detected for step "${name}"`);
+        }
+
+        /**
+         * @note this is cycle prevention logic - when result of a non-deterministic
+         * function is cached and that leads to that function being called second
+         * time with the same input, we should discard the cached result and run
+         * the function again - otherwise we'll end up with an infinite loop
+         *
+         * @note this doesn't actually work as I expected - model is actually
+         * much more deterministic than I thought
+         */
+        return await determineId(
+            {
+                ...opts,
+                discardedValueHashes: (opts.discardedValueHashes ?? []).concat(
+                    valueHash
+                ),
+                seed: (opts.seed ?? 0) + 1,
+            },
+            deps
+        );
+    }
+}
+
 async function transformElement(
     params: {
         element: AnyPipelineElement & {
@@ -84,7 +257,7 @@ async function transformElement(
         elementIndex: number;
         input: unknown;
         persistence: { location: string } | undefined;
-        finalResultSchema: AnyZodObject;
+        finalResultSchema: SupportedZodSchemas;
         combineAll: (value: unknown, previousValue: unknown) => unknown;
     },
     deps = defaultDeps
@@ -98,9 +271,10 @@ async function transformElement(
         finalResultSchema,
         combineAll,
     } = params;
-    const { logger, fg, hash } = deps;
+    const { logger, fg } = deps;
 
-    const { transform, name, combine, inputSchema, resultSchema } = element;
+    const { transform, name, combine, inputSchema, resultSchema, type } =
+        element;
 
     const { results, log } = initializeTransformState(persistence);
 
@@ -118,35 +292,19 @@ async function transformElement(
 
     assert(nextElement);
 
-    const value = await handleExceptionsAsync(
-        () => inputSchema.parseAsync(input),
-        (err: unknown) => {
-            if (err instanceof ZodError) {
-                if (!previousElement) {
-                    throw new Error(
-                        `Initial input doesn't pass the schema validation for step "${name}"`,
-                        {
-                            cause: err,
-                        }
-                    );
-                } else {
-                    throw new Error(
-                        `Result of the call to "${previousElement.name}" doesn't pass schema validation for step "${name}"`,
-                        {
-                            cause: err,
-                        }
-                    );
-                }
-            }
-            throw err;
-        }
-    );
-
-    const valueHash = hash(value);
-    const elementId = [name, valueHash].join('-');
-    const id = persistence?.location
-        ? join(persistence.location, elementId)
-        : elementId;
+    const { value, valueHash, id, elementId, discardedValueHashes } =
+        await determineId(
+            {
+                input,
+                inputSchema,
+                name,
+                previousName: previousElement?.name,
+                type,
+                persistence,
+                log,
+            },
+            deps
+        );
 
     const foundResult =
         results.get(id) ||
@@ -191,7 +349,7 @@ async function transformElement(
         ));
 
     const foundValidResult =
-        foundResult &&
+        Boolean(foundResult) &&
         nextElement.inputSchema.safeParse(
             (nextElement.combine ?? combineAll)(input as object, foundResult)
         );
@@ -202,9 +360,17 @@ async function transformElement(
         );
     } else {
         if (!foundValidResult) {
-            logger.info(
-                `Starting step "${name}" with input hash "${valueHash}" ...`
-            );
+            if (discardedValueHashes.length === 0) {
+                logger.info(
+                    `Starting step "${name}" with input hash "${valueHash}" ...`
+                );
+            } else {
+                logger.info(
+                    `Starting step "${name}" with input hash "${valueHash}" ... (discarded hashes: ${discardedValueHashes.join(
+                        ', '
+                    )} to prevent infinite loop)`
+                );
+            }
         } else if (nextElement.name) {
             logger.info(
                 `Starting step "${name}" with input hash "${valueHash}" because currently persisted result is not compatible with next step "${String(
@@ -274,9 +440,7 @@ async function transformElement(
     return nextCombinedValue;
 }
 
-const transform = async <
-    InputSchema extends AnyZodObject | ZodEffects<AnyZodObject>
->(
+const transform = async <InputSchema extends SupportedZodSchemas>(
     params: {
         elements: Array<
             AnyPipelineElement & {
@@ -284,7 +448,7 @@ const transform = async <
             }
         >;
         combineAll: (value: unknown, previousValue: unknown) => unknown;
-        finalResultSchema: AnyZodObject;
+        finalResultSchema: SupportedZodSchemas;
         initialInput: z.input<InputSchema>;
         persistence?: {
             location: string;
@@ -326,23 +490,21 @@ const transform = async <
 let abort = false;
 
 type PipelineOpts = {
-    initialInputSchema: AnyZodObject | ZodEffects<AnyZodObject>;
+    initialInputSchema: SupportedZodSchemas;
     deps: typeof defaultDeps;
     elements: Array<
         AnyPipelineElement & {
             combine?: typeof Object.assign;
         }
     >;
-    finalResultSchema: AnyZodObject;
+    finalResultSchema: SupportedZodSchemas;
     combineAll: (first: unknown, second: unknown) => unknown;
     retryOpts: RetryOpts;
 };
 
-const createPipeline = <
-    InputSchema extends AnyZodObject | ZodEffects<AnyZodObject>
->(
+const createPipeline = <InputSchema extends SupportedZodSchemas>(
     optsRaw: Partial<PipelineOpts> & {
-        initialInputSchema: AnyZodObject | ZodEffects<AnyZodObject>;
+        initialInputSchema: SupportedZodSchemas;
     }
 ) => {
     const {
@@ -373,7 +535,8 @@ const createPipeline = <
             return createPipeline({
                 ...opts,
                 elements: [...opts.elements, element],
-                finalResultSchema: opts.finalResultSchema.merge(
+                finalResultSchema: mergeTailSchema(
+                    opts.finalResultSchema,
                     element.resultSchema
                 ),
             });
@@ -508,7 +671,7 @@ const createPipeline = <
  * The `pipeline.transform` function returns the result of the last step
  * and can be called multiple times.
  */
-export const pipeline: <Schema extends AnyZodObject | ZodEffects<AnyZodObject>>(
+export const pipeline: <Schema extends SupportedZodSchemas>(
     inputSchema: Schema,
     deps?: typeof defaultDeps
 ) => PipelineApi<Schema, TypeOf<Schema>, TypeOf<Schema>> = (

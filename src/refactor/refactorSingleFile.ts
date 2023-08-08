@@ -47,9 +47,27 @@ export const refactorTaskResultSchema = z.object({
     commit: z.string().optional(),
 });
 
-export const refactorSingleFileResultSchema = z.object({
-    tasks: z.array(refactorTaskResultSchema),
-});
+const lastCommit = (tasks: TypeOf<typeof refactorTaskResultSchema>[]) => {
+    const completedTasks = tasks.filter((task) => task.status === 'completed');
+
+    return completedTasks[completedTasks.length - 1]?.commit;
+};
+
+export const refactorSingleFileResultSchema = z
+    .object({
+        /**
+         * @todo make this non-optional
+         */
+        issues: z.array(z.string()),
+        tasks: z.array(refactorTaskResultSchema),
+        lastCommit: z.string().optional(),
+    })
+    .transform((input) => ({
+        ...input,
+        ...(!input.lastCommit && {
+            lastCommit: lastCommit(input.tasks),
+        }),
+    }));
 
 export type RefactorSingleFileResponse = z.infer<
     typeof refactorSingleFileResultSchema
@@ -81,6 +99,8 @@ export const refactorSingleFile = makePipelineFunction({
 
         const tasksInfo = new Array<TypeOf<typeof refactorTaskResultSchema>>();
 
+        let issues: string[] = [];
+
         try {
             const fileStartCommit = await gitRevParse({
                 location: sandboxDirectoryPath,
@@ -94,6 +114,8 @@ export const refactorSingleFile = makePipelineFunction({
                     enrichedObjective: input.objective,
                     sandboxDirectoryPath: input.sandboxDirectoryPath,
                     startCommit: input.startCommit,
+                    completedTasks: [],
+                    issues: [],
                 },
                 persistence
             );
@@ -105,20 +127,6 @@ export const refactorSingleFile = makePipelineFunction({
                         location: input.sandboxDirectoryPath,
                         ref: fileStartCommit,
                     });
-
-                    const { issues } =
-                        scripts.length > 0
-                            ? await checkWithPersistence.transform(
-                                  {
-                                      packageManager,
-                                      location: input.sandboxDirectoryPath,
-                                      startCommit: input.startCommit,
-                                      filePaths: [filePath],
-                                      scripts,
-                                  },
-                                  persistence
-                              )
-                            : { issues: [] };
 
                     const result =
                         await executeFileTaskWithPersistence.transform(
@@ -164,10 +172,12 @@ export const refactorSingleFile = makePipelineFunction({
                                 basename(filePath, '.ts')
                             )}): ${task}`,
                         });
+
                         const commit = await gitRevParse({
                             location: input.sandboxDirectoryPath,
                             ref: 'HEAD',
                         });
+
                         logger.info('Committed', [commit]);
 
                         tasksInfo.push({
@@ -176,6 +186,21 @@ export const refactorSingleFile = makePipelineFunction({
                             fileContents: result.fileContents,
                             commit,
                         });
+
+                        const checkResult =
+                            scripts.length > 0
+                                ? await checkWithPersistence.transform(
+                                      {
+                                          packageManager,
+                                          location: input.sandboxDirectoryPath,
+                                          startCommit: input.startCommit,
+                                          filePaths: [filePath],
+                                          scripts,
+                                      },
+                                      persistence
+                                  )
+                                : { issues: [] };
+                        issues = checkResult.issues;
                     } else {
                         tasksInfo.push({
                             status: 'no-changes',
@@ -191,12 +216,31 @@ export const refactorSingleFile = makePipelineFunction({
                         enrichedObjective: input.objective,
                         sandboxDirectoryPath: input.sandboxDirectoryPath,
                         startCommit: input.startCommit,
+                        completedTasks: tasksInfo
+                            .filter((task) => task.status === 'completed')
+                            .map(({ task }) => task),
+                        issues,
                     },
                     persistence
                 );
 
-                tasks.splice(0, tasks.length - 1, ...newTasksResult.tasks);
+                tasks.splice(0, tasks.length, ...newTasksResult.tasks);
             }
+
+            const lastCheckResult =
+                scripts.length > 0
+                    ? await checkWithPersistence.transform(
+                          {
+                              packageManager,
+                              location: input.sandboxDirectoryPath,
+                              startCommit: input.startCommit,
+                              filePaths: [filePath],
+                              scripts,
+                          },
+                          persistence
+                      )
+                    : { issues: [] };
+            issues = lastCheckResult.issues;
         } finally {
             if (persistence) {
                 await planTasksWithPersistence.clean(persistence);
@@ -206,7 +250,9 @@ export const refactorSingleFile = makePipelineFunction({
         }
 
         return {
+            issues,
             tasks: tasksInfo,
+            lastCommit: lastCommit(tasksInfo),
         };
     },
 });

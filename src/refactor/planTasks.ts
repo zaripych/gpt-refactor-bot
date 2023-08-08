@@ -19,6 +19,8 @@ export const planTasksInputSchema = refactorConfigSchema
         filePath: z.string(),
         sandboxDirectoryPath: z.string(),
         startCommit: z.string(),
+        completedTasks: z.array(z.string()),
+        issues: z.array(z.string()),
     })
     .transform(async (input) => ({
         ...input,
@@ -49,19 +51,50 @@ const planTasksPromptText = (opts: {
     objective: string;
     filePath: string;
     fileContents: string;
+    fileDiff: string;
+    completedTasks: string[];
+    issues: string[];
 }) =>
     markdown`
 ${opts.objective}
 
 We are now starting the process of refactoring one file at a time. Strictly focus only on the file given below.
 
-Given the contents of the file: \`${opts.filePath}\`:
+Given current contents of the file: \`${opts.filePath}\`:
 
 \`\`\`TypeScript
 ${opts.fileContents}
 \`\`\`
 
-Please produce the task list to accomplish the objective for the given file. Return one task per line in your response. Each task should be focused only on the single file mentioned.
+${
+    opts.completedTasks.length > 0
+        ? `You already have completed the following tasks:
+
+${opts.completedTasks.map((task, index) => `${index + 1}. ${task}`).join('\n')}
+`
+        : ''
+}
+
+${
+    opts.fileDiff
+        ? `The changes have produced the following diff so far:
+\`\`\`diff
+${opts.fileDiff}
+\`\`\`
+`
+        : ''
+}
+
+${
+    opts.issues.length > 0
+        ? `The following issues were found after linting and testing of your changes:
+
+${opts.issues.map((issue, index) => `${index + 1}. ${issue}`).join('\n')}
+`
+        : ''
+}
+
+Please produce the task list to accomplish the objective for the given file taking into consideration already completed tasks. Return one task per line in your response. Each task should be focused only on the file mentioned. Try to minimize the total number of tasks. 
 
 The response must be a numbered list in the format:
 
@@ -74,13 +107,14 @@ Unless your list is empty, do not include any headers before your numbered list 
 
 Strictly only list tasks that would result in code changes to the file, do not include any other tasks similar or exactly same as below:
 
-1. Execute build and lint scripts to check for errors.
-2. Execute tests for all changed files.
-3. Verify if the objective is complete.
-4. Commit and push to remote repository.
-5. Open a pull request with the changes.
-6. Request a review from the repository owners.
-7. Save the changes to the file.
+1. Open the file.
+2. Execute build and lint scripts to check for errors.
+3. Execute tests for all changed files.
+4. Verify if the objective is complete.
+6. Commit and push to remote repository.
+7. Open a pull request with the changes.
+8. Request a review from the repository owners.
+9. Save the changes to the file.
     `;
 
 export const planTasks = makePipelineFunction({
@@ -101,13 +135,16 @@ export const planTasks = makePipelineFunction({
                 'utf-8'
             ),
             filePath: input.filePath,
+            completedTasks: input.completedTasks,
+            fileDiff: input.fileDiff,
+            issues: input.issues,
         });
 
         const { messages } = await promptWithFunctions(
             {
                 preface: systemPrompt,
                 prompt: userPrompt,
-                temperature: 0,
+                temperature: 1,
                 functions: await includeFunctions(),
                 budgetCents: input.budgetCents,
                 functionsConfig: {

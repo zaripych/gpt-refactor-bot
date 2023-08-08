@@ -1,6 +1,9 @@
 import type { TypeOf } from 'zod';
 import { z } from 'zod';
 
+import { gitResetHard } from '../git/gitResetHard';
+import { gitRevParse } from '../git/gitRevParse';
+import { logger } from '../logger/logger';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import {
     refactorSingleFile,
@@ -51,7 +54,7 @@ export const refactorMultipleFiles = makePipelineFunction({
 
         try {
             for (const filePath of plannedFiles) {
-                const { tasks } =
+                const { tasks, lastCommit } =
                     await refactorSingleFileWithPersistence.transform(
                         {
                             filePath,
@@ -64,6 +67,21 @@ export const refactorMultipleFiles = makePipelineFunction({
                         },
                         persistence
                     );
+
+                if (lastCommit) {
+                    const currentCommit = await gitRevParse({
+                        location: input.sandboxDirectoryPath,
+                        ref: 'HEAD',
+                    });
+
+                    if (currentCommit !== lastCommit) {
+                        logger.log('Resetting to', [lastCommit]);
+                        await gitResetHard({
+                            location: input.sandboxDirectoryPath,
+                            ref: lastCommit,
+                        });
+                    }
+                }
 
                 files[filePath] = tasks;
             }

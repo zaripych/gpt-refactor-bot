@@ -12,6 +12,7 @@ const setup = () => {
     const files = new Map<string, unknown>();
 
     const deps = looselyTypedMock<typeof defaultDeps>({
+        ...defaultDeps,
         logger: {
             logLevel: 'debug',
             debug: jest.fn(),
@@ -218,6 +219,85 @@ it('should work when has one element and transform called multiple times', async
     expect(add).toHaveBeenCalledWith({ value: 2 });
 
     expect(Object.fromEntries(files.entries())).toEqual({});
+});
+
+it('should work when has one element and transform called multiple times with exactly same input for non-deterministic function', async () => {
+    const { deps } = setup();
+
+    const add = jest.fn((_: { value: number }) =>
+        Promise.resolve({ value: Math.random() })
+    );
+
+    const pipe = pipeline(z.object({ value: z.number() }), deps).append({
+        name: 'add',
+        type: 'non-deterministic',
+        transform: add,
+        inputSchema: z.object({ value: z.number() }),
+        resultSchema: z.object({ value: z.number() }),
+    });
+
+    const persistence = { location: '.' };
+
+    expect(await pipe.transform({ value: 1 }, persistence)).toEqual({
+        value: expect.any(Number),
+    });
+    expect(await pipe.transform({ value: 1 }, persistence)).toEqual({
+        value: expect.any(Number),
+    });
+    expect(await pipe.transform({ value: 1 }, persistence)).toEqual({
+        value: expect.any(Number),
+    });
+
+    /**
+     * @note non-deterministic functions receive a new hash
+     * every time they are called again with same input
+     */
+    expect(add).toHaveBeenCalledTimes(3);
+
+    expect(pipe.log).toEqual([
+        'add-993e.yaml',
+        'add-cd8d.yaml',
+        'add-2207.yaml',
+    ]);
+});
+
+it('should work when has one element and transform called multiple times with exactly same input for non-deterministic function', async () => {
+    const { deps } = setup();
+
+    const add = jest.fn((_: { value: number }) =>
+        Promise.resolve({ value: Math.random() })
+    );
+
+    const pipe = pipeline(z.object({ value: z.number() }), deps).append({
+        name: 'add',
+        type: 'deterministic',
+        transform: add,
+        inputSchema: z.object({ value: z.number() }),
+        resultSchema: z.object({ value: z.number() }),
+    });
+
+    const persistence = { location: '.' };
+
+    expect(await pipe.transform({ value: 1 }, persistence)).toEqual({
+        value: expect.any(Number),
+    });
+    expect(await pipe.transform({ value: 1 }, persistence)).toEqual({
+        value: expect.any(Number),
+    });
+    expect(await pipe.transform({ value: 1 }, persistence)).toEqual({
+        value: expect.any(Number),
+    });
+
+    /**
+     * @note deterministic functions will have the same hash
+     */
+    expect(add).toHaveBeenCalledTimes(1);
+
+    expect(pipe.log).toEqual([
+        'add-993e.yaml',
+        'add-993e.yaml',
+        'add-993e.yaml',
+    ]);
 });
 
 it('should work when has two elements without persistence', async () => {

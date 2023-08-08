@@ -2,22 +2,38 @@ import type { AnyZodObject, z, ZodEffects, ZodObject, ZodTypeAny } from 'zod';
 
 import type { RetryOpts } from '../utils/retry';
 
+export type UnknownZodObject = AnyZodObject;
+
+export type SupportedZodSchemas =
+    | UnknownZodObject
+    | ZodEffects<UnknownZodObject>;
+
 type PipelineElement<Input, ReturnType> = {
     name: string;
+    /**
+     * Allows us to flag functions as deterministic or non-deterministic.
+     *
+     * Which affects whether we can discard the result of the function from
+     * cache when the input is the same but the function is called again.
+     *
+     * All functions otherwise are assumed to be non-deterministic, which
+     * seems reasonable given the purpose of this module.
+     */
+    type?: 'deterministic' | 'non-deterministic';
     transform: (
         input: Input,
         persistence?: {
             location: string;
         }
     ) => Promise<ReturnType>;
-    inputSchema: AnyZodObject | ZodEffects<AnyZodObject>;
-    resultSchema: AnyZodObject;
+    inputSchema: SupportedZodSchemas;
+    resultSchema: SupportedZodSchemas;
 };
 
 export type AnyPipelineElement = PipelineElement<unknown, unknown>;
 
 export type PipelineApi<
-    InputSchema extends AnyZodObject | ZodEffects<AnyZodObject>,
+    InputSchema extends SupportedZodSchemas,
     Result,
     AllResults = Result
 > = {

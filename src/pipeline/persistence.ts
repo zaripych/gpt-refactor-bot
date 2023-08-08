@@ -1,13 +1,8 @@
 import { dirname } from 'path';
-import {
-    type AnyZodObject,
-    type TypeOf,
-    z,
-    type ZodEffects,
-    type ZodType,
-} from 'zod';
+import { type TypeOf, z, type ZodType } from 'zod';
 
 import { defaultDeps } from './dependencies';
+import type { SupportedZodSchemas } from './types';
 
 const save = async <Schema extends ZodType<unknown>>(
     opts: {
@@ -46,9 +41,9 @@ export const saveResult = async (
     opts: {
         location: string;
         input: unknown;
-        inputSchema: AnyZodObject | ZodEffects<AnyZodObject>;
+        inputSchema: SupportedZodSchemas;
         result: unknown;
-        resultSchema: AnyZodObject | ZodEffects<AnyZodObject>;
+        resultSchema: SupportedZodSchemas;
     },
     deps = defaultDeps
 ) => {
@@ -86,7 +81,7 @@ export const saveResult = async (
 export const loadResult = async (
     opts: {
         location: string;
-        schema: AnyZodObject | ZodEffects<AnyZodObject>;
+        schema: SupportedZodSchemas;
     },
     deps = defaultDeps
 ) => {

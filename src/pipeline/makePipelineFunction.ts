@@ -1,17 +1,18 @@
 import assert from 'assert';
-import type { AnyZodObject, TypeOf, z, ZodEffects } from 'zod';
+import type { TypeOf, z } from 'zod';
 
 import { lowerCamelCaseToKebabCase } from '../utils/lowerCamelCaseToKebabCase';
 import { defaultDeps } from './dependencies';
 import { pipeline } from './pipeline';
-import type { PipelineApi } from './types';
+import type { PipelineApi, SupportedZodSchemas } from './types';
 
 export function makePipelineFunction<
-    InputSchema extends AnyZodObject | ZodEffects<AnyZodObject>,
-    OutputSchema extends AnyZodObject
+    InputSchema extends SupportedZodSchemas,
+    OutputSchema extends SupportedZodSchemas
 >(
     opts: {
         name?: string;
+        type?: 'deterministic' | 'non-deterministic';
         transform: (
             input: TypeOf<InputSchema>,
             persistence?: {

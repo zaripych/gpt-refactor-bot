@@ -61,7 +61,7 @@ export const enrichObjective = makePipelineFunction({
             {
                 preface: systemPrompt,
                 prompt: userPrompt,
-                temperature: 0,
+                temperature: 1,
                 budgetCents: input.budgetCents,
                 functions: await includeFunctions(),
                 functionsConfig: {

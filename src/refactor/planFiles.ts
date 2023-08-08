@@ -70,7 +70,7 @@ export const planFiles = makePipelineFunction({
             {
                 preface: systemPrompt,
                 prompt: userPrompt,
-                temperature: 0,
+                temperature: 1,
                 functions: await includeFunctions(),
                 budgetCents: input.budgetCents,
                 functionsConfig: {

@@ -40,6 +40,7 @@ const checkResultSchema = z.object({
 
 export const check = makePipelineFunction({
     name: 'check',
+    type: 'deterministic',
     inputSchema: checkInputSchema,
     resultSchema: checkResultSchema,
     transform: async (opts) => {

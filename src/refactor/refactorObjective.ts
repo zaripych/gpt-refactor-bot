@@ -86,7 +86,7 @@ export const refactorObjective = makePipelineFunction({
 
                 plannedFiles.splice(
                     0,
-                    planFiles.length - 1,
+                    planFiles.length,
                     ...repeatedPlanResult.plannedFiles
                 );
             }

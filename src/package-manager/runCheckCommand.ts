@@ -3,7 +3,6 @@ import { basename, normalize, sep } from 'path';
 import { logger } from '../logger/logger';
 import { escapeRegExp } from '../utils/escapeRegExp';
 import { ensureHasOneElement } from '../utils/hasOne';
-import { isTruthy } from '../utils/isTruthy';
 import { UnreachableError } from '../utils/UnreachableError';
 import { runPackageManagerScript } from './runPackageManagerScript';
 
