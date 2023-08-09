@@ -1,4 +1,5 @@
-import { basename, normalize, sep } from 'path';
+import assert from 'assert';
+import { basename, isAbsolute, normalize, relative, sep } from 'path';
 
 import { logger } from '../logger/logger';
 import { escapeRegExp } from '../utils/escapeRegExp';
@@ -6,32 +7,69 @@ import { ensureHasOneElement } from '../utils/hasOne';
 import { UnreachableError } from '../utils/UnreachableError';
 import { runPackageManagerScript } from './runPackageManagerScript';
 
+type Issue = {
+    command: string;
+    issue: string;
+    filePath: string;
+    code?: string;
+};
+
 export function eslintUnixOutputParser(output: string) {
     return output
         .trim()
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line.startsWith(sep))
-        .filter(Boolean);
+        .filter(Boolean)
+        .map((issue) => {
+            const [, filePath] = issue.match(/([^:]+):\d+:\d+:/) || [];
+            assert(filePath);
+
+            const [, code] =
+                issue.match(/\[(?:warning|error)\/([^\]]+)\]/i) || [];
+
+            return {
+                command: 'eslint',
+                filePath,
+                issue,
+                code,
+            };
+        });
 }
 
 export function tscNonPrettyOutputParser(output: string) {
-    const fileRegex = /^[^)(\n]+\(\d+,\d+\):/gm;
+    const fileRegex = /^([^)(\n]+)\(\d+,\d+\):/gm;
     const allIssueStarters = [...output.matchAll(fileRegex)];
-    const issues = allIssueStarters.flatMap((match, i) =>
-        typeof match.index === 'number'
-            ? [
-                  output
-                      .substring(
-                          match.index,
-                          i < allIssueStarters.length - 1
-                              ? allIssueStarters[i + 1]?.index
-                              : undefined
-                      )
-                      .trim(),
-              ]
-            : []
-    );
+    const issues = allIssueStarters.flatMap((match, i) => {
+        if (typeof match.index !== 'number') {
+            return [];
+        }
+
+        const issue = output
+            .substring(
+                match.index,
+                i < allIssueStarters.length - 1
+                    ? allIssueStarters[i + 1]?.index
+                    : undefined
+            )
+            .trim();
+
+        const filePath = match[1];
+
+        assert(filePath);
+
+        const [, code] = issue.match(/\s(TS\d+):\s/) || [];
+
+        return [
+            {
+                command: 'tsc',
+                filePath,
+                issue,
+                code,
+            },
+        ];
+    });
+
     return issues;
 }
 
@@ -63,9 +101,13 @@ export function jestJsonStdoutParser(stdout: string) {
 
         return data.testResults
             .filter((result) => result.status === 'failed')
-            .map((result) => result.message);
+            .map((result) => ({
+                command: 'jest',
+                issue: result.message,
+                filePath: result.name,
+            }));
     } catch (err) {
-        logger.error('Failed to parse jest output', err, stdout);
+        logger.error('Failed to parse jest output', err);
         throw new Error('Failed to parse jest output', { cause: err });
     }
 }
@@ -77,7 +119,7 @@ export async function runCheckCommandWithParser(opts: {
         parse: 'stdout' | 'stderr';
         supportsFileFiltering: boolean;
     };
-    outputParser: (output: string) => string[];
+    outputParser: (output: string) => Issue[];
     location: string;
 }) {
     const { stdout, stderr } = await runPackageManagerScript({
@@ -104,9 +146,16 @@ export async function runCheckCommandWithParser(opts: {
         'g'
     );
 
-    return opts
-        .outputParser(chooseOutput())
-        .map((data) => data.replaceAll(parentDirectoryRegex, './'));
+    return opts.outputParser(chooseOutput()).map((data) => {
+        const issue = data.issue.replaceAll(parentDirectoryRegex, '');
+        return {
+            ...data,
+            issue,
+            filePath: isAbsolute(data.filePath)
+                ? relative(opts.location, data.filePath)
+                : data.filePath,
+        };
+    });
 }
 
 export async function runCheckCommand(opts: {
@@ -117,7 +166,7 @@ export async function runCheckCommand(opts: {
         supportsFileFiltering: boolean;
     };
     filePaths?: string[];
-    outputParser?: (output: string) => string[];
+    outputParser?: (output: string) => Issue[];
     location: string;
 }) {
     const script = {
@@ -125,7 +174,7 @@ export async function runCheckCommand(opts: {
         args: ensureHasOneElement(opts.script.args.concat([])),
     };
 
-    let parser: ((output: string) => string[]) | undefined = undefined;
+    let parser: ((output: string) => Issue[]) | undefined = undefined;
 
     switch (script.args[0]) {
         case 'eslint':

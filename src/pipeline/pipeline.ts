@@ -5,6 +5,7 @@ import { z, ZodFirstPartyTypeKind } from 'zod';
 import { ZodError } from 'zod';
 
 import { AbortError } from '../errors/abortError';
+import { CycleDetectedError } from '../errors/cycleDetectedError';
 import { handleExceptionsAsync } from '../utils/handleExceptions';
 import { hasOneElement } from '../utils/hasOne';
 import { isTruthy } from '../utils/isTruthy';
@@ -211,39 +212,23 @@ async function determineId(
               )
             : 0;
 
-    if (count === 0) {
-        return {
-            value,
-            valueHash,
-            elementId,
-            id,
-            discardedValueHashes: opts.discardedValueHashes ?? [],
-        };
-    } else {
-        if (deps.temporary_flag_abortOnCycles) {
-            throw new AbortError(`Cycle detected for step "${name}"`);
-        }
-
+    if (count !== 0) {
         /**
-         * @note this is cycle prevention logic - when result of a non-deterministic
-         * function is cached and that leads to that function being called second
-         * time with the same input, we should discard the cached result and run
-         * the function again - otherwise we'll end up with an infinite loop
-         *
-         * @note this doesn't actually work as I expected - model is actually
-         * much more deterministic than I thought
+         * @note this is cycle prevention logic - when result of a
+         * non-deterministic function is cached and that leads to
+         * that function being called second time with the same input,
+         * we should do something to break out of the infinite loop.
          */
-        return await determineId(
-            {
-                ...opts,
-                discardedValueHashes: (opts.discardedValueHashes ?? []).concat(
-                    valueHash
-                ),
-                seed: (opts.seed ?? 0) + 1,
-            },
-            deps
-        );
+        throw new CycleDetectedError(`Cycle detected for step "${name}"`, id);
     }
+
+    return {
+        value,
+        valueHash,
+        elementId,
+        id,
+        discardedValueHashes: opts.discardedValueHashes ?? [],
+    };
 }
 
 async function transformElement(
@@ -292,19 +277,18 @@ async function transformElement(
 
     assert(nextElement);
 
-    const { value, valueHash, id, elementId, discardedValueHashes } =
-        await determineId(
-            {
-                input,
-                inputSchema,
-                name,
-                previousName: previousElement?.name,
-                type,
-                persistence,
-                log,
-            },
-            deps
-        );
+    const { value, valueHash, id, elementId } = await determineId(
+        {
+            input,
+            inputSchema,
+            name,
+            previousName: previousElement?.name,
+            type,
+            persistence,
+            log,
+        },
+        deps
+    );
 
     const foundResult =
         results.get(id) ||
@@ -360,17 +344,9 @@ async function transformElement(
         );
     } else {
         if (!foundValidResult) {
-            if (discardedValueHashes.length === 0) {
-                logger.info(
-                    `Starting step "${name}" with input hash "${valueHash}" ...`
-                );
-            } else {
-                logger.info(
-                    `Starting step "${name}" with input hash "${valueHash}" ... (discarded hashes: ${discardedValueHashes.join(
-                        ', '
-                    )} to prevent infinite loop)`
-                );
-            }
+            logger.info(
+                `Starting step "${name}" with input hash "${valueHash}" ...`
+            );
         } else if (nextElement.name) {
             logger.info(
                 `Starting step "${name}" with input hash "${valueHash}" because currently persisted result is not compatible with next step "${String(

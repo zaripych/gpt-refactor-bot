@@ -3,12 +3,12 @@ import { z } from 'zod';
 
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { planFiles } from './planFiles';
+import { refactorMultipleFiles } from './refactorMultipleFiles';
 import {
     mergeRefactorFilesResults,
-    refactorMultipleFiles,
-} from './refactorMultipleFiles';
-import { refactorTaskResultSchema } from './refactorSingleFile';
-import { refactorConfigSchema } from './types';
+    refactorConfigSchema,
+    refactorStepResultSchema,
+} from './types';
 
 export const refactorObjectiveInputSchema = refactorConfigSchema
     .pick({
@@ -23,7 +23,7 @@ export const refactorObjectiveInputSchema = refactorConfigSchema
     });
 
 export const refactorObjectiveResultSchema = z.object({
-    files: z.record(z.string(), z.array(refactorTaskResultSchema)),
+    files: z.record(z.string(), z.array(refactorStepResultSchema)),
 });
 
 export type RefactorObjectiveResponse = z.infer<
@@ -40,7 +40,7 @@ export const refactorObjective = makePipelineFunction({
         });
         const files: Record<
             string,
-            Array<TypeOf<typeof refactorTaskResultSchema>>
+            Array<TypeOf<typeof refactorStepResultSchema>>
         > = {};
 
         try {

@@ -5,11 +5,9 @@ import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
 import { logger } from '../logger/logger';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
-import {
-    refactorSingleFile,
-    refactorTaskResultSchema,
-} from './refactorSingleFile';
-import { refactorConfigSchema } from './types';
+import { refactorFileViaExecute } from './refactorFileViaExecute';
+import type { RefactorResult } from './types';
+import { refactorConfigSchema, refactorStepResultSchema } from './types';
 
 export const refactorMultipleFilesInputSchema = refactorConfigSchema
     .pick({
@@ -25,12 +23,12 @@ export const refactorMultipleFilesInputSchema = refactorConfigSchema
     });
 
 export const refactorMultipleFilesResultSchema = z.object({
-    files: z.record(z.string(), z.array(refactorTaskResultSchema)),
+    files: z.record(z.string(), z.array(refactorStepResultSchema)),
 });
 
 export type RefactorFilesResult = Record<
     string,
-    Array<TypeOf<typeof refactorTaskResultSchema>>
+    Array<TypeOf<typeof refactorStepResultSchema>>
 >;
 
 export type RefactorMultipleFilesResponse = z.infer<
@@ -44,29 +42,24 @@ export const refactorMultipleFiles = makePipelineFunction({
     transform: async (input, persistence) => {
         const { plannedFiles } = input;
 
-        const refactorSingleFileWithPersistence =
-            refactorSingleFile.withPersistence();
+        const refactorFile = refactorFileViaExecute.withPersistence();
 
-        const files: Record<
-            string,
-            Array<TypeOf<typeof refactorTaskResultSchema>>
-        > = {};
+        const files: RefactorResult['files'] = {};
 
         try {
             for (const filePath of plannedFiles) {
-                const { tasks, lastCommit } =
-                    await refactorSingleFileWithPersistence.transform(
-                        {
-                            filePath,
-                            startCommit: input.startCommit,
-                            objective: input.objective,
-                            sandboxDirectoryPath: input.sandboxDirectoryPath,
-                            budgetCents: input.budgetCents,
-                            lintScripts: input.lintScripts,
-                            testScripts: input.testScripts,
-                        },
-                        persistence
-                    );
+                const { tasks, lastCommit } = await refactorFile.transform(
+                    {
+                        filePath,
+                        startCommit: input.startCommit,
+                        objective: input.objective,
+                        sandboxDirectoryPath: input.sandboxDirectoryPath,
+                        budgetCents: input.budgetCents,
+                        lintScripts: input.lintScripts,
+                        testScripts: input.testScripts,
+                    },
+                    persistence
+                );
 
                 if (lastCommit) {
                     const currentCommit = await gitRevParse({
@@ -87,7 +80,7 @@ export const refactorMultipleFiles = makePipelineFunction({
             }
         } finally {
             if (persistence) {
-                await refactorSingleFileWithPersistence.clean(persistence);
+                await refactorFile.clean(persistence);
             }
         }
 
@@ -96,29 +89,3 @@ export const refactorMultipleFiles = makePipelineFunction({
         };
     },
 });
-
-export const mergeRefactorFilesResults = (opts: {
-    from: RefactorFilesResult;
-    into: RefactorFilesResult;
-}) => {
-    for (const [file, tasks] of Object.entries(opts.from)) {
-        const existing = opts.into[file];
-        if (existing) {
-            opts.into[file] = existing.concat(tasks);
-        } else {
-            opts.into[file] = tasks;
-        }
-    }
-};
-
-export const mergedRefactorFilesResults = (
-    a: RefactorFilesResult,
-    b: RefactorFilesResult
-) => {
-    const files: RefactorFilesResult = { ...a };
-    mergeRefactorFilesResults({
-        from: b,
-        into: files,
-    });
-    return files;
-};

@@ -65,6 +65,7 @@ export function makePipelineFunction<
     assert(transform);
 
     const element = {
+        type: opts.type,
         inputSchema: opts.inputSchema,
         resultSchema: opts.resultSchema,
     };

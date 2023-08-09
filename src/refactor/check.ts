@@ -5,7 +5,8 @@ import { filesDiffHash } from '../git/filesDiffHash';
 import { gitRevParse } from '../git/gitRevParse';
 import { runCheckCommand } from '../package-manager/runCheckCommand';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
-import { scriptSchema } from './types';
+import type { CheckIssuesResult, Issue } from './types';
+import { checkIssuesResultSchema, scriptSchema } from './types';
 
 const checkInputSchema = z
     .object({
@@ -32,17 +33,11 @@ const checkInputSchema = z
               })),
     }));
 
-const checkResultSchema = z.object({
-    commit: z.string(),
-    diffHash: z.string(),
-    issues: z.array(z.string()),
-});
-
 export const check = makePipelineFunction({
     name: 'check',
     type: 'deterministic',
     inputSchema: checkInputSchema,
-    resultSchema: checkResultSchema,
+    resultSchema: checkIssuesResultSchema,
     transform: async (opts) => {
         const commit = await gitRevParse({
             location: opts.location,
@@ -58,9 +53,50 @@ export const check = makePipelineFunction({
         );
         return {
             commit,
-            diffHash:
-                'filesDiffHash' in opts ? opts.filesDiffHash : opts.diffHash,
             issues: results.reduce((acc, result) => acc.concat(result), []),
+            checkedFiles: opts.filePaths,
         };
     },
 });
+
+export const analyzeCheckIssuesResults = (opts: {
+    issues: Issue[];
+    checkResult: CheckIssuesResult;
+}) => {
+    const newIssues: Issue[] = [];
+    const resolvedIssues: Issue[] = [];
+
+    const existingIssues = new Set(opts.issues.map((issue) => issue.issue));
+    const checkIssues = new Set(
+        opts.checkResult.issues.map((issue) => issue.issue)
+    );
+
+    for (const issue of opts.checkResult.issues) {
+        if (existingIssues.has(issue.issue)) {
+            continue;
+        }
+        newIssues.push({
+            ...issue,
+            commit: opts.checkResult.commit,
+        });
+    }
+
+    for (const issue of opts.issues) {
+        if (!checkIssues.has(issue.issue)) {
+            continue;
+        }
+        resolvedIssues.push({
+            ...issue,
+            commit: opts.checkResult.commit,
+        });
+    }
+
+    return {
+        issues: opts.checkResult.issues.map((issue) => ({
+            ...issue,
+            commit: opts.checkResult.commit,
+        })),
+        newIssues,
+        resolvedIssues,
+    };
+};

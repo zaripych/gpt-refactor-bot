@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { mergeDiscriminatedUnionOptions } from '../zod/mergeDiscriminatedUnionOptions';
+
 export const scriptSchema = z.object({
     args: z.array(z.string()).nonempty(),
     parse: z.enum(['stdout', 'stderr'] as const),
@@ -104,3 +106,105 @@ export const refactorConfigSchema = z.object({
 });
 
 export type RefactorConfig = z.input<typeof refactorConfigSchema>;
+
+export const refactorStepResultUnionSchema = z.discriminatedUnion('status', [
+    z.object({
+        task: z.string(),
+        status: z.literal('completed'),
+        fileContents: z.string(),
+        commit: z.string(),
+    }),
+    z.object({
+        task: z.string(),
+        status: z.literal('no-changes'),
+    }),
+]);
+
+export const refactorStepResultSchema = mergeDiscriminatedUnionOptions(
+    refactorStepResultUnionSchema
+);
+
+export type RefactorStepResult = z.infer<typeof refactorStepResultSchema>;
+
+export const isCompleted = (
+    step: RefactorStepResult
+): step is Extract<RefactorStepResult, { status: 'completed' }> =>
+    step.status === 'completed';
+
+export const issueSchema = z.object({
+    command: z.string(),
+    issue: z.string(),
+    filePath: z.string(),
+    commit: z.string(),
+    code: z.string().optional(),
+});
+
+export const refactorFileResultSchema = z.object({
+    filePath: z.string(),
+    issues: z.array(issueSchema),
+    tasks: z.array(refactorStepResultSchema),
+    lastCommit: z.string().optional(),
+});
+
+export type RefactorFileResultSchema = z.infer<typeof refactorFileResultSchema>;
+
+export const refactorFilesResultSchema = z.record(
+    z.string(),
+    z.array(refactorStepResultSchema)
+);
+
+export type RefactorFilesResult = z.infer<typeof refactorFilesResultSchema>;
+
+export const refactorResultSchema = z.object({
+    files: refactorFilesResultSchema,
+});
+
+export type RefactorResult = z.infer<typeof refactorResultSchema>;
+
+export const lastCommit = (steps: RefactorStepResult[]) => {
+    const completedTasks = steps.filter(isCompleted);
+    return completedTasks[completedTasks.length - 1]?.commit;
+};
+
+export const mergeRefactorFilesResults = (opts: {
+    from: RefactorFilesResult;
+    into: RefactorFilesResult;
+}) => {
+    for (const [file, tasks] of Object.entries(opts.from)) {
+        const existing = opts.into[file];
+        if (existing) {
+            opts.into[file] = existing.concat(tasks);
+        } else {
+            opts.into[file] = tasks;
+        }
+    }
+};
+
+export const mergedRefactorFilesResults = (
+    a: RefactorFilesResult,
+    b: RefactorFilesResult
+) => {
+    const files: RefactorFilesResult = { ...a };
+    mergeRefactorFilesResults({
+        from: b,
+        into: files,
+    });
+    return files;
+};
+
+export type Issue = z.infer<typeof issueSchema>;
+
+export const checkIssuesResultSchema = z.object({
+    checkedFiles: z.array(z.string()).optional(),
+    issues: z.array(
+        z.object({
+            command: z.string(),
+            issue: z.string(),
+            filePath: z.string(),
+            code: z.string().optional(),
+        })
+    ),
+    commit: z.string(),
+});
+
+export type CheckIssuesResult = z.infer<typeof checkIssuesResultSchema>;

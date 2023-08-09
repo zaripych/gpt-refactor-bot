@@ -35,7 +35,7 @@ export const promptWithFunctionsInputSchema = z.object({
         .function()
         .transform((value) => value as (messages: Message[]) => true | Message)
         .optional(),
-    model: modelsSchema.optional().default('gpt-4'),
+    model: modelsSchema.optional().default('gpt-3.5-turbo'),
 });
 
 export const promptWithFunctionsResultSchema = z.object({

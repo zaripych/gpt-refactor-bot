@@ -20,10 +20,10 @@ export const executeFileTaskInputSchema = refactorConfigSchema
     .augment({
         enrichedObjective: z.string(),
         filePath: z.string(),
-        fileDiff: z.string(),
-        issues: z.array(z.string()),
+        fileDiff: z.string().optional(),
+        issues: z.array(z.string()).optional(),
         task: z.string(),
-        completedTasks: z.array(z.string()),
+        completedTasks: z.array(z.string()).optional(),
         sandboxDirectoryPath: z.string(),
     });
 
@@ -84,8 +84,6 @@ ${opts.issues.map((issue, index) => `${index + 1}. ${issue}`).join('\n')}
             : ''
     }
 
-We are further focusing on a single task to eventually achieve the ultimate objective.
-
 Please perform the following task:
 
 ${opts.completedTasks.length + 1}. ${opts.task}
@@ -136,9 +134,9 @@ export const executeFileTask = makePipelineFunction({
             task: input.task,
             filePath: input.filePath,
             fileContents: originalFileContents,
-            completedTasks: input.completedTasks,
+            completedTasks: input.completedTasks ?? [],
             fileDiff: input.fileDiff,
-            issues: input.issues,
+            issues: input.issues ?? [],
             language: 'TypeScript',
         });
 
