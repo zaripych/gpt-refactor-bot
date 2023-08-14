@@ -5,7 +5,7 @@ import { gitRevParse } from '../git/gitRevParse';
 import { gitStatus } from '../git/gitStatus';
 import { logger } from '../logger/logger';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
-import type { RefactorFilesResult } from './refactorMultipleFiles';
+import type { RefactorFilesResult } from './refactorBatchAcceptAll';
 import { refactorObjective } from './refactorObjective';
 import {
     mergeRefactorFilesResults,
@@ -13,18 +13,11 @@ import {
     refactorStepResultSchema,
 } from './types';
 
-export const refactorGoalInputSchema = refactorConfigSchema
-    .pick({
-        budgetCents: true,
-        lintScripts: true,
-        testScripts: true,
-    })
-    .augment({
-        objective: z.string(),
-        enrichedObjective: z.string(),
-        sandboxDirectoryPath: z.string(),
-        startCommit: z.string(),
-    });
+export const refactorGoalInputSchema = refactorConfigSchema.augment({
+    objective: z.string(),
+    sandboxDirectoryPath: z.string(),
+    startCommit: z.string(),
+});
 
 export const refactorGoalResultSchema = z.object({
     files: z.record(z.string(), z.array(refactorStepResultSchema)),
@@ -70,14 +63,7 @@ export const refactorGoal = makePipelineFunction({
         try {
             const initialResult =
                 await refactorObjectiveWithPersistence.transform(
-                    {
-                        objective: input.enrichedObjective,
-                        startCommit: input.startCommit,
-                        sandboxDirectoryPath: input.sandboxDirectoryPath,
-                        budgetCents: input.budgetCents,
-                        lintScripts: input.lintScripts,
-                        testScripts: input.testScripts,
-                    },
+                    input,
                     persistence
                 );
 

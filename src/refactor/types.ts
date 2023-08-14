@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { mergeDiscriminatedUnionOptions } from '../zod/mergeDiscriminatedUnionOptions';
+import { modelsSchema } from '../chat-gpt/api';
 
 export const scriptSchema = z.object({
     args: z.array(z.string()).nonempty(),
@@ -55,6 +55,30 @@ export const refactorConfigSchema = z.object({
     bootstrapScripts: z.array(z.string()).optional(),
 
     /**
+     * The default model to use for the refactor
+     */
+    model: modelsSchema.optional().default('gpt-3.5-turbo'),
+
+    /**
+     * A map of step codes to models to use for that step
+     */
+    modelByStepCode: z.record(modelsSchema).optional().default({
+        '**/enrich*': 'gpt-4',
+        '**/plan*': 'gpt-4',
+    }),
+
+    /**
+     * Whether to use a more expensive model when a step fails due
+     * to the model not being able to generate a processable result.
+     */
+    useMoreExpensiveModelsOnRetry: z
+        .record(modelsSchema, modelsSchema)
+        .optional()
+        .default({
+            'gpt-3.5-turbo': 'gpt-4',
+        }),
+
+    /**
      * An optional list of package.json scripts to run after code
      * changes to lint and check the changed files for errors. Defaults
      * to ['tsc', 'eslint'].
@@ -107,29 +131,13 @@ export const refactorConfigSchema = z.object({
 
 export type RefactorConfig = z.input<typeof refactorConfigSchema>;
 
-export const refactorStepResultUnionSchema = z.discriminatedUnion('status', [
-    z.object({
-        task: z.string(),
-        status: z.literal('completed'),
-        fileContents: z.string(),
-        commit: z.string(),
-    }),
-    z.object({
-        task: z.string(),
-        status: z.literal('no-changes'),
-    }),
-]);
-
-export const refactorStepResultSchema = mergeDiscriminatedUnionOptions(
-    refactorStepResultUnionSchema
-);
+export const refactorStepResultSchema = z.object({
+    task: z.string(),
+    fileContents: z.string(),
+    commit: z.string(),
+});
 
 export type RefactorStepResult = z.infer<typeof refactorStepResultSchema>;
-
-export const isCompleted = (
-    step: RefactorStepResult
-): step is Extract<RefactorStepResult, { status: 'completed' }> =>
-    step.status === 'completed';
 
 export const issueSchema = z.object({
     command: z.string(),
@@ -140,9 +148,11 @@ export const issueSchema = z.object({
 });
 
 export const refactorFileResultSchema = z.object({
+    status: z.enum(['success', 'failure']),
+    failureDescription: z.string().optional(),
     filePath: z.string(),
     issues: z.array(issueSchema),
-    tasks: z.array(refactorStepResultSchema),
+    steps: z.array(refactorStepResultSchema),
     lastCommit: z.string().optional(),
 });
 
@@ -161,9 +171,8 @@ export const refactorResultSchema = z.object({
 
 export type RefactorResult = z.infer<typeof refactorResultSchema>;
 
-export const lastCommit = (steps: RefactorStepResult[]) => {
-    const completedTasks = steps.filter(isCompleted);
-    return completedTasks[completedTasks.length - 1]?.commit;
+export const lastCommit = <T extends { commit: string }>(steps: T[]) => {
+    return steps[steps.length - 1]?.commit;
 };
 
 export const mergeRefactorFilesResults = (opts: {

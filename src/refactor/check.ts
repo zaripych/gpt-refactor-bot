@@ -59,7 +59,7 @@ export const check = makePipelineFunction({
     },
 });
 
-export const analyzeCheckIssuesResults = (opts: {
+export const checksSummary = (opts: {
     issues: Issue[];
     checkResult: CheckIssuesResult;
 }) => {

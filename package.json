@@ -21,6 +21,8 @@
         "micromatch": "4.0.5",
         "object-hash": "3.0.0",
         "ora": "6.3.1",
+        "pino": "^8.15.0",
+        "pino-pretty": "^10.2.0",
         "prompts": "2.4.2",
         "strip-ansi": "7.1.0",
         "ts-morph": "19.0.0",

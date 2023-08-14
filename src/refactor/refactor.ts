@@ -12,6 +12,11 @@ const createPipe = () => {
     const pipe = pipeline(refactorConfigSchema)
         .append(checkoutSandbox)
         .append(enrichObjective)
+        .combineLast((input, result) => ({
+            ...input,
+            ...result,
+            objective: result.enrichedObjective,
+        }))
         .append(refactorGoal);
 
     return pipe;
@@ -68,7 +73,9 @@ export async function refactor(
 
     const { pipe, location, id } = await loadRefactorState(opts, getDeps);
 
-    logger.debug(`Starting refactor with id "${id}"`);
+    logger.info(
+        `Starting refactor with id "${id}", process id: "${process.pid}"`
+    );
 
     const persistence = {
         location,

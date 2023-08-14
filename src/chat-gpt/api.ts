@@ -112,7 +112,7 @@ export const responseSchema = z.object({
                 z.object({
                     index: z.number(),
                     message: regularAssistantMessageSchema,
-                    finishReason: z.literal('stop'),
+                    finishReason: z.enum(['stop', 'length']),
                 }),
             ])
         )

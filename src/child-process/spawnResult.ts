@@ -75,6 +75,10 @@ export async function spawnResult(
             default:
                 throw new UnreachableError(opts.logOnError);
         }
+
+        if (opts.exitCodes !== 'any') {
+            throw result.reason;
+        }
     }
 
     return {

@@ -1,3 +1,6 @@
+import { stat } from 'fs/promises';
+import { orderBy } from 'lodash-es';
+import { join } from 'path';
 import { z } from 'zod';
 
 import { diffHash } from '../git/diffHash';
@@ -5,12 +8,16 @@ import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { isTruthy } from '../utils/isTruthy';
 import { makeDependencies } from './dependencies';
+import { determineModelParameters } from './determineModelParameters';
 import { promptWithFunctions } from './promptWithFunctions';
 import { refactorConfigSchema } from './types';
 
 export const planFilesInputSchema = refactorConfigSchema
     .pick({
         budgetCents: true,
+        model: true,
+        modelByStepCode: true,
+        useMoreExpensiveModelsOnRetry: true,
     })
     .augment({
         objective: z.string(),
@@ -54,7 +61,7 @@ The number of each entry must be followed by a period. If the list of files is e
     `;
 
 export const planFiles = makePipelineFunction({
-    name: 'files',
+    name: 'plan',
     inputSchema: planFilesInputSchema,
     resultSchema: planFilesResultSchema,
     transform: async (
@@ -77,6 +84,7 @@ export const planFiles = makePipelineFunction({
                     repositoryRoot: input.sandboxDirectoryPath,
                     dependencies: getDeps,
                 },
+                ...determineModelParameters(input, persistence),
             },
             persistence
         );
@@ -94,10 +102,47 @@ export const planFiles = makePipelineFunction({
 
         const filePathRegex = /^\s*\d+\.\s*[`]([^`]+)[`]\s*/gm;
 
+        const filePaths = [
+            ...new Set(
+                [...lastMessage.content.matchAll(filePathRegex)]
+                    .map(([, filePath]) => filePath)
+                    .filter(isTruthy)
+            ),
+        ];
+
+        const filesInfos = await Promise.all(
+            filePaths.map(async (filePath) => {
+                const result = await stat(
+                    join(input.sandboxDirectoryPath, filePath)
+                ).catch((error: NodeJS.ErrnoException) => {
+                    if (error.code === 'ENOENT') {
+                        return null;
+                    }
+                    return Promise.reject(error);
+                });
+                return {
+                    filePath,
+                    size: result?.size,
+                };
+            })
+        );
+
+        const nonExistingFiles = filesInfos.filter(
+            (file) => typeof file.size !== 'number'
+        );
+
+        if (nonExistingFiles.length > 0) {
+            throw new Error(
+                `Files at the following paths do not exist: ${nonExistingFiles.join(
+                    ', '
+                )}. Please specify file paths relative to the repository root found via the tool box.`
+            );
+        }
+
+        const sorted = orderBy(filesInfos, ['size'], ['asc']);
+
         return {
-            plannedFiles: [...lastMessage.content.matchAll(filePathRegex)]
-                .map(([, filePath]) => filePath)
-                .filter(isTruthy),
+            plannedFiles: sorted.map((info) => info.filePath),
         };
     },
 });

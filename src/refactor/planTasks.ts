@@ -7,15 +7,19 @@ import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { isTruthy } from '../utils/isTruthy';
 import { makeDependencies } from './dependencies';
+import { determineModelParameters } from './determineModelParameters';
 import { promptWithFunctions } from './promptWithFunctions';
 import { refactorConfigSchema } from './types';
 
 export const planTasksInputSchema = refactorConfigSchema
     .pick({
         budgetCents: true,
+        model: true,
+        modelByStepCode: true,
+        useMoreExpensiveModelsOnRetry: true,
     })
     .augment({
-        enrichedObjective: z.string(),
+        objective: z.string(),
         filePath: z.string(),
         sandboxDirectoryPath: z.string(),
         startCommit: z.string(),
@@ -129,7 +133,7 @@ export const planTasks = makePipelineFunction({
         const { includeFunctions } = getDeps();
 
         const userPrompt = planTasksPromptText({
-            objective: input.enrichedObjective,
+            objective: input.objective,
             fileContents: await readFile(
                 join(input.sandboxDirectoryPath, input.filePath),
                 'utf-8'
@@ -151,6 +155,7 @@ export const planTasks = makePipelineFunction({
                     repositoryRoot: input.sandboxDirectoryPath,
                     dependencies: getDeps,
                 },
+                ...determineModelParameters(input, persistence),
             },
             persistence
         );

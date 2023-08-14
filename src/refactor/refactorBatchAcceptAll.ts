@@ -1,19 +1,23 @@
 import type { TypeOf } from 'zod';
 import { z } from 'zod';
 
+import { AbortError } from '../errors/abortError';
 import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
 import { logger } from '../logger/logger';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
-import { refactorFileViaExecute } from './refactorFileViaExecute';
+import { refactorFileUntilChecksPass } from './refactorFileUntilChecksPass';
 import type { RefactorResult } from './types';
 import { refactorConfigSchema, refactorStepResultSchema } from './types';
 
-export const refactorMultipleFilesInputSchema = refactorConfigSchema
+export const refactorBatchInputSchema = refactorConfigSchema
     .pick({
         budgetCents: true,
         lintScripts: true,
         testScripts: true,
+        model: true,
+        modelByStepCode: true,
+        useMoreExpensiveModelsOnRetry: true,
     })
     .augment({
         objective: z.string(),
@@ -22,7 +26,7 @@ export const refactorMultipleFilesInputSchema = refactorConfigSchema
         sandboxDirectoryPath: z.string(),
     });
 
-export const refactorMultipleFilesResultSchema = z.object({
+export const refactorBatchResultSchema = z.object({
     files: z.record(z.string(), z.array(refactorStepResultSchema)),
 });
 
@@ -32,31 +36,30 @@ export type RefactorFilesResult = Record<
 >;
 
 export type RefactorMultipleFilesResponse = z.infer<
-    typeof refactorMultipleFilesResultSchema
+    typeof refactorBatchResultSchema
 >;
 
-export const refactorMultipleFiles = makePipelineFunction({
-    name: 'refactor-multiple-files',
-    inputSchema: refactorMultipleFilesInputSchema,
-    resultSchema: refactorMultipleFilesResultSchema,
+export const refactorBatchAcceptAll = makePipelineFunction({
+    name: 'accept-all',
+    inputSchema: refactorBatchInputSchema,
+    resultSchema: refactorBatchResultSchema,
     transform: async (input, persistence) => {
         const { plannedFiles } = input;
 
-        const refactorFile = refactorFileViaExecute.withPersistence();
+        const refactorFile = refactorFileUntilChecksPass
+            .withPersistence()
+            .retry({
+                maxAttempts: 3,
+            });
 
         const files: RefactorResult['files'] = {};
 
         try {
             for (const filePath of plannedFiles) {
-                const { tasks, lastCommit } = await refactorFile.transform(
+                const { steps, lastCommit } = await refactorFile.transform(
                     {
                         filePath,
-                        startCommit: input.startCommit,
-                        objective: input.objective,
-                        sandboxDirectoryPath: input.sandboxDirectoryPath,
-                        budgetCents: input.budgetCents,
-                        lintScripts: input.lintScripts,
-                        testScripts: input.testScripts,
+                        ...input,
                     },
                     persistence
                 );
@@ -76,7 +79,9 @@ export const refactorMultipleFiles = makePipelineFunction({
                     }
                 }
 
-                files[filePath] = tasks;
+                files[filePath] = steps;
+
+                throw new AbortError('Stop for now');
             }
         } finally {
             if (persistence) {

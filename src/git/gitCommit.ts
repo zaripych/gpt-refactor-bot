@@ -11,7 +11,7 @@ export async function gitCommit(opts: { location: string; message: string }) {
         {
             cwd: opts.location,
             exitCodes: [0],
-            logOnError: 'stderr',
+            logOnError: 'combined',
         }
     );
 }

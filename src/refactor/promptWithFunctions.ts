@@ -10,6 +10,7 @@ import {
     responseSchema,
 } from '../chat-gpt/api';
 import { AbortError } from '../errors/abortError';
+import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
 import { makeDependencies } from '../functions/dependencies';
 import { executeFunction } from '../functions/executeFunction';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
@@ -184,6 +185,8 @@ export const promptWithFunctions = makePipelineFunction({
                     } else {
                         next.messages.push(shouldStopResult);
                     }
+                } else if (next.response.choices[0].finishReason === 'length') {
+                    throw new OutOfContextBoundsError('Out of context bounds');
                 }
 
                 state = next;

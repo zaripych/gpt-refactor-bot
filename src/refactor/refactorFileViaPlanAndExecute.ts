@@ -1,4 +1,4 @@
-import { writeFile } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 import { basename, join } from 'path';
 import { z } from 'zod';
 
@@ -10,9 +10,10 @@ import { logger } from '../logger/logger';
 import { determinePackageManager } from '../package-manager/determinePackageManager';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { lowerCamelCaseToKebabCase } from '../utils/lowerCamelCaseToKebabCase';
-import { analyzeCheckIssuesResults, check } from './check';
-import { executeFileTask } from './executeFileTask';
+import { check, checksSummary } from './check';
+import { editFilePrompt } from './editFile';
 import { planTasks } from './planTasks';
+import { executeFileTaskPromptText } from './prompts/executeFileTaskPromptText';
 import type { Issue, RefactorStepResult } from './types';
 import {
     lastCommit,
@@ -20,7 +21,7 @@ import {
     refactorFileResultSchema,
 } from './types';
 
-export const refactorSingleFileInputSchema = refactorConfigSchema
+export const refactorFileInputSchema = refactorConfigSchema
     .pick({
         budgetCents: true,
         lintScripts: true,
@@ -46,7 +47,7 @@ export const refactorSingleFileInputSchema = refactorConfigSchema
 
 export const refactorFileViaPlanAndExecute = makePipelineFunction({
     name: 'file-pae',
-    inputSchema: refactorSingleFileInputSchema,
+    inputSchema: refactorFileInputSchema,
     resultSchema: refactorFileResultSchema,
     transform: async (input, persistence) => {
         const { filePath, sandboxDirectoryPath } = input;
@@ -54,7 +55,7 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
         const planTasksWithPersistence = planTasks.withPersistence().retry({
             maxAttempts: 3,
         });
-        const executeFileTaskWithPersistence = executeFileTask
+        const executeFileTaskWithPersistence = editFilePrompt
             .withPersistence()
             .retry({
                 maxAttempts: 3,
@@ -82,7 +83,7 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
                 {
                     filePath,
                     budgetCents: input.budgetCents,
-                    enrichedObjective: input.objective,
+                    objective: input.objective,
                     sandboxDirectoryPath: input.sandboxDirectoryPath,
                     startCommit: input.startCommit,
                     completedTasks: [],
@@ -99,21 +100,30 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
                         ref: fileStartCommit,
                     });
 
+                    const fileContents = await readFile(
+                        join(input.sandboxDirectoryPath, filePath),
+                        'utf-8'
+                    );
+
                     const result =
                         await executeFileTaskWithPersistence.transform(
                             {
-                                task,
+                                objective: executeFileTaskPromptText({
+                                    objective: input.objective,
+                                    filePath,
+                                    fileContents,
+                                    task,
+                                    completedTasks: steps.map(
+                                        ({ task }) => task
+                                    ),
+                                    issues: issues.map((issue) => issue.issue),
+                                    language: 'TypeScript',
+                                    fileDiff,
+                                }),
                                 filePath,
-                                fileDiff,
-                                issues: issues.map((issue) => issue.issue),
-                                completedTasks: steps
-                                    .filter(
-                                        (task) => task.status === 'completed'
-                                    )
-                                    .map(({ task }) => task),
                                 sandboxDirectoryPath:
                                     input.sandboxDirectoryPath,
-                                enrichedObjective: input.objective,
+                                fileContents,
                                 budgetCents: input.budgetCents,
                             },
                             persistence
@@ -152,7 +162,6 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
                         logger.info('Committed', [commit]);
 
                         steps.push({
-                            status: 'completed',
                             task,
                             fileContents: result.fileContents,
                             commit,
@@ -171,18 +180,13 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
                                     persistence
                                 );
 
-                            const result = analyzeCheckIssuesResults({
+                            const result = checksSummary({
                                 issues,
                                 checkResult,
                             });
 
                             issues = result.issues;
                         }
-                    } else {
-                        steps.push({
-                            status: 'no-changes',
-                            task,
-                        });
                     }
                 }
 
@@ -190,12 +194,10 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
                     {
                         filePath,
                         budgetCents: input.budgetCents,
-                        enrichedObjective: input.objective,
+                        objective: input.objective,
                         sandboxDirectoryPath: input.sandboxDirectoryPath,
                         startCommit: input.startCommit,
-                        completedTasks: steps
-                            .filter((task) => task.status === 'completed')
-                            .map(({ task }) => task),
+                        completedTasks: steps.map(({ task }) => task),
                         issues: issues.map((issue) => issue.issue),
                     },
                     persistence
@@ -216,7 +218,7 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
                     persistence
                 );
 
-                const result = analyzeCheckIssuesResults({
+                const result = checksSummary({
                     issues,
                     checkResult,
                 });
@@ -232,9 +234,10 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
         }
 
         return {
+            status: 'success' as const,
             filePath,
             issues,
-            tasks: steps,
+            steps,
             lastCommit: lastCommit(steps),
         };
     },

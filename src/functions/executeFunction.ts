@@ -4,21 +4,50 @@ import { makeDependencies } from './dependencies';
 import type { FunctionsConfig } from './makeFunction';
 import type { functions } from './registry';
 
-type ArgumentsOf<Name extends string> = Parameters<
-    Extract<(typeof functions)[number], { name: Name }>
->[0];
+type FunctionNames = (typeof functions)[number]['name'];
 
-export const executeFunction = async <Name extends string>(
-    opts:
-        | ({
-              name: Name;
-              arguments: ArgumentsOf<Name>;
-          } & Partial<FunctionsConfig>)
-        | ({
-              name: string;
-              arguments: never;
-          } & Partial<FunctionsConfig>)
-) => {
+type ResultOf<Name extends FunctionNames> = Awaited<
+    ReturnType<Extract<(typeof functions)[number], { name: Name }>>
+>;
+
+export async function executeFunction<
+    Opts extends { name: FunctionNames; arguments: unknown }
+>(
+    opts: Opts & Partial<FunctionsConfig>
+): Promise<
+    | ResultOf<Opts['name']>
+    | {
+          error?: {
+              message: string;
+          };
+      }
+>;
+export async function executeFunction(
+    opts: {
+        name: string;
+        arguments: unknown;
+    } & Partial<FunctionsConfig>
+): Promise<
+    | unknown
+    | {
+          error?: {
+              message: string;
+          };
+      }
+>;
+export async function executeFunction(
+    opts: {
+        name: string;
+        arguments: unknown;
+    } & Partial<FunctionsConfig>
+): Promise<
+    | unknown
+    | {
+          error?: {
+              message: string;
+          };
+      }
+> {
     const { functions } = await import('./registry');
 
     const fn = functions.find((candidate) => candidate.name === opts.name);
@@ -54,4 +83,4 @@ export const executeFunction = async <Name extends string>(
         }
         throw err;
     }
-};
+}

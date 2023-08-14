@@ -3,6 +3,7 @@ import mm from 'micromatch';
 import { relative } from 'path';
 import { z } from 'zod';
 
+import { CycleDetectedError } from '../errors/cycleDetectedError';
 import { looselyTypedMock } from '../utils/createMock';
 import { defaultDeps } from './dependencies';
 import { makePipelineFunction } from './makePipelineFunction';
@@ -14,14 +15,15 @@ const setup = () => {
     const deps = looselyTypedMock<typeof defaultDeps>({
         ...defaultDeps,
         logger: {
-            logLevel: 'debug',
+            level: 'debug',
             debug: jest.fn(),
             log: jest.fn(),
             info: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
-            tip: jest.fn(),
+            trace: jest.fn(),
             fatal: jest.fn(),
+            silent: jest.fn(),
         },
         dumpYaml: jest.fn((value) => value),
         loadYaml: jest.fn((value) => value),
@@ -221,7 +223,7 @@ it('should work when has one element and transform called multiple times', async
     expect(Object.fromEntries(files.entries())).toEqual({});
 });
 
-it('should work when has one element and transform called multiple times with exactly same input for non-deterministic function', async () => {
+it('should throw when transform called multiple times with exactly same input for non-deterministic function', async () => {
     const { deps } = setup();
 
     const add = jest.fn((_: { value: number }) =>
@@ -241,24 +243,18 @@ it('should work when has one element and transform called multiple times with ex
     expect(await pipe.transform({ value: 1 }, persistence)).toEqual({
         value: expect.any(Number),
     });
-    expect(await pipe.transform({ value: 1 }, persistence)).toEqual({
-        value: expect.any(Number),
+    await expect(
+        pipe.transform({ value: 1 }, persistence)
+    ).rejects.toMatchObject({
+        key: 'add-993e',
     });
-    expect(await pipe.transform({ value: 1 }, persistence)).toEqual({
-        value: expect.any(Number),
-    });
+    await expect(
+        pipe.transform({ value: 1 }, persistence)
+    ).rejects.toBeInstanceOf(CycleDetectedError);
 
-    /**
-     * @note non-deterministic functions receive a new hash
-     * every time they are called again with same input
-     */
-    expect(add).toHaveBeenCalledTimes(3);
+    expect(add).toHaveBeenCalledTimes(1);
 
-    expect(pipe.log).toEqual([
-        'add-993e.yaml',
-        'add-cd8d.yaml',
-        'add-2207.yaml',
-    ]);
+    expect(pipe.log).toEqual(['add-993e.yaml']);
 });
 
 it('should work when has one element and transform called multiple times with exactly same input for non-deterministic function', async () => {

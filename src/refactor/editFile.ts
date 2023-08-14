@@ -1,6 +1,4 @@
-import { readFile } from 'fs/promises';
 import hash from 'object-hash';
-import { join } from 'path';
 import { z } from 'zod';
 
 import { markdown } from '../markdown/markdown';
@@ -8,91 +6,43 @@ import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { prettierTypescript } from '../prettier/prettier';
 import { isTruthy } from '../utils/isTruthy';
 import { makeDependencies } from './dependencies';
+import { determineModelParameters } from './determineModelParameters';
 import { promptWithFunctions } from './promptWithFunctions';
 import { refactorConfigSchema } from './types';
 
-export const executeFileTaskInputSchema = refactorConfigSchema
+export const editFileInputSchema = refactorConfigSchema
     .pick({
         budgetCents: true,
-        lintScripts: true,
-        testScripts: true,
+        model: true,
+        modelByStepCode: true,
+        useMoreExpensiveModelsOnRetry: true,
     })
     .augment({
-        enrichedObjective: z.string(),
+        objective: z.string(),
         filePath: z.string(),
-        fileDiff: z.string().optional(),
-        issues: z.array(z.string()).optional(),
-        task: z.string(),
-        completedTasks: z.array(z.string()).optional(),
+        fileContents: z.string(),
         sandboxDirectoryPath: z.string(),
     });
 
-export const executeFileTaskResultSchema = z.object({
+export const editFileResultSchema = z.object({
     status: z.enum(['success', 'no-changes-required']),
+    key: z.string().optional(),
     fileContentsHash: z.string().optional(),
     fileContents: z.string().optional(),
 });
 
-export type ExecuteTaskResponse = z.infer<typeof executeFileTaskResultSchema>;
+export type EditFileResponse = z.infer<typeof editFileResultSchema>;
 
 const preface = markdown`
-Think step by step. Be concise. Do not make assumptions other than what was given in the instructions. Produce minimal changes in the code to accomplish the task. Attempt to make changes to the code that are backward compatible with the rest of the code base.
+Think step by step. Do not make assumptions other than what was given in the instructions. Produce minimal changes in the code to accomplish the task. Attempt to make changes to the code that are backward compatible with the rest of the code base.
 `;
 
-const executeFileTaskPromptText = (opts: {
-    objective: string;
-    filePath: string;
-    fileContents: string;
-    task: string;
-    completedTasks: string[];
-    fileDiff?: string;
-    issues: string[];
-    language: string;
-}) =>
-    markdown`
-${opts.objective}
+const promptText = (opts: { objective: string; filePath: string }) =>
+    markdown`${opts.objective}
 
-We are now starting the process of refactoring one file at a time. Strictly focus only on a single file given below.
+As a result - produce modified contents of the entire file \`${opts.filePath}\` with the task performed. Modified code must be surrounded with markdown code fences (ie "\`\`\`"). The modified code should represent the entire file contents.
 
-Given the contents of the file: \`${opts.filePath}\`:
-
-\`\`\`${opts.language}
-${opts.fileContents}
-\`\`\`
-
-${
-    opts.completedTasks.length > 0
-        ? `You already have completed the following tasks:
-
-${opts.completedTasks.map((task, index) => `${index + 1}. ${task}`).join('\n')}
-`
-        : ''
-}${
-        opts.fileDiff
-            ? `The changes have produced the following diff so far:
-\`\`\`diff
-${opts.fileDiff}
-\`\`\`
-`
-            : ''
-    }${
-        opts.issues.length > 0
-            ? `The following issues were found after linting and testing of your changes:
-
-${opts.issues.map((issue, index) => `${index + 1}. ${issue}`).join('\n')}
-`
-            : ''
-    }
-
-Please perform the following task:
-
-${opts.completedTasks.length + 1}. ${opts.task}
-
-As a result - produce modified contents of the entire file \`${
-        opts.filePath
-    }\` with the task performed. Modified code must be surrounded with markdown code fences (ie "\`\`\`"). The modified code should represent the entire file contents.
-
-It is also possible that as a result of the task - no changes are required. In that case - respond with "No changes required" without any reasoning.
+If no modifications required - respond with "No changes required" without any reasoning.
 
 Do not respond with any other text other than the modified code or "No changes required".
 
@@ -110,34 +60,22 @@ Example response #1:
 
 Example response #2:
 
-No changes required.
-`;
+No changes required.`;
 
-export const executeFileTask = makePipelineFunction({
-    name: 'execute',
-    inputSchema: executeFileTaskInputSchema,
-    resultSchema: executeFileTaskResultSchema,
+export const editFilePrompt = makePipelineFunction({
+    name: 'edit',
+    inputSchema: editFileInputSchema,
+    resultSchema: editFileResultSchema,
     transform: async (
         input,
         persistence,
         getDeps = makeDependencies
-    ): Promise<ExecuteTaskResponse> => {
+    ): Promise<EditFileResponse> => {
         const { includeFunctions } = getDeps();
 
-        const originalFileContents = await readFile(
-            join(input.sandboxDirectoryPath, input.filePath),
-            'utf-8'
-        );
-
-        const prompt = executeFileTaskPromptText({
-            objective: input.enrichedObjective,
-            task: input.task,
+        const prompt = promptText({
+            objective: input.objective,
             filePath: input.filePath,
-            fileContents: originalFileContents,
-            completedTasks: input.completedTasks ?? [],
-            fileDiff: input.fileDiff,
-            issues: input.issues ?? [],
-            language: 'TypeScript',
         });
 
         const { messages } = await promptWithFunctions(
@@ -151,6 +89,7 @@ export const executeFileTask = makePipelineFunction({
                     repositoryRoot: input.sandboxDirectoryPath,
                     dependencies: getDeps,
                 },
+                ...determineModelParameters(input, persistence),
             },
             persistence
         );
@@ -177,7 +116,9 @@ export const executeFileTask = makePipelineFunction({
 
         if (noChangesRequired && codeChunks.length === 0) {
             return {
+                key: persistence?.location,
                 status: 'no-changes-required',
+                fileContents: undefined,
             };
         }
 
@@ -196,13 +137,16 @@ export const executeFileTask = makePipelineFunction({
 
         const formattedCodeChunk = await prettierTypescript(codeChunk);
 
-        if (formattedCodeChunk === originalFileContents) {
+        if (formattedCodeChunk === input.fileContents) {
             return {
+                key: persistence?.location,
                 status: 'no-changes-required',
+                fileContents: undefined,
             };
         }
 
         return {
+            key: persistence?.location,
             fileContentsHash: hash(formattedCodeChunk),
             fileContents: formattedCodeChunk,
             status: 'success',

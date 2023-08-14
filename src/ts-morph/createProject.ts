@@ -67,6 +67,6 @@ export async function createProject(opts: {
 
     return {
         project,
-        repoRoot: repositoryRoot,
+        repositoryRoot,
     };
 }

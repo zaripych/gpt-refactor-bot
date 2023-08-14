@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { makeDependencies } from './dependencies';
+import { determineModelParameters } from './determineModelParameters';
 import { promptWithFunctions } from './promptWithFunctions';
 import { refactorConfigSchema } from './types';
 
@@ -10,6 +11,9 @@ export const enrichObjectiveInputSchema = refactorConfigSchema
     .pick({
         objective: true,
         budgetCents: true,
+        model: true,
+        modelByStepCode: true,
+        useMoreExpensiveModelsOnRetry: true,
     })
     .augment({
         sandboxDirectoryPath: z.string(),
@@ -68,6 +72,7 @@ export const enrichObjective = makePipelineFunction({
                     repositoryRoot: input.sandboxDirectoryPath,
                     dependencies: getDeps,
                 },
+                ...determineModelParameters(input, persistence),
             },
             persistence
         );

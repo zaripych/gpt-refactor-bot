@@ -68,12 +68,12 @@ export type ResponseShape = {
         {
             index: number;
             message: ResponseMessageShape;
-            finish_reason: 'stop' | 'function_call';
+            finish_reason: 'stop' | 'function_call' | 'length';
         },
         ...{
             index: number;
             message: ResponseMessageShape;
-            finish_reason: 'stop' | 'function_call';
+            finish_reason: 'stop' | 'function_call' | 'length';
         }[]
     ];
     usage: {

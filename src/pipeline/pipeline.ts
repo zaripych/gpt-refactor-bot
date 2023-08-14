@@ -160,7 +160,7 @@ async function validateInitialInput(opts: {
     );
 }
 
-async function determineId(
+async function determineKey(
     opts: {
         input: unknown;
         inputSchema: SupportedZodSchemas;
@@ -169,45 +169,31 @@ async function determineId(
         type?: 'deterministic' | 'non-deterministic';
         persistence?: { location: string };
         log: Array<string>;
-        discardedValueHashes?: string[];
-        seed?: number;
     },
     deps = defaultDeps
 ): Promise<{
     value: unknown;
     valueHash: string;
-    elementId: string;
-    id: string;
-    discardedValueHashes: string[];
+    elementKey: string;
+    key: string;
 }> {
     const { type, name, persistence, log } = opts;
 
     const value = await validateInitialInput({
         ...opts,
-        inputSchema: opts.inputSchema.transform((input) => ({
-            ...input,
-            ...(opts.seed && {
-                seed: opts.seed,
-            }),
-        })) as SupportedZodSchemas,
+        inputSchema: opts.inputSchema,
     });
 
     const valueHash = deps.hash(value);
-    const elementId = [name, valueHash].join('-');
-    const id = persistence?.location
-        ? join(persistence.location, elementId)
-        : elementId;
-
-    if (opts.discardedValueHashes?.includes(valueHash)) {
-        throw new Error(
-            `Invalid input schema for step "${name}" doesn't allow "seed" property to be merged with it's input schema`
-        );
-    }
+    const elementKey = [name, valueHash].join('-');
+    const key = persistence?.location
+        ? join(persistence.location, elementKey)
+        : elementKey;
 
     const count =
         (type ?? 'non-deterministic') === 'non-deterministic'
             ? log.reduce(
-                  (acc, entry) => acc + (entry === id + '.yaml' ? 1 : 0),
+                  (acc, entry) => acc + (entry === key + '.yaml' ? 1 : 0),
                   0
               )
             : 0;
@@ -219,15 +205,14 @@ async function determineId(
          * that function being called second time with the same input,
          * we should do something to break out of the infinite loop.
          */
-        throw new CycleDetectedError(`Cycle detected for step "${name}"`, id);
+        throw new CycleDetectedError(`Cycle detected for step "${name}"`, key);
     }
 
     return {
         value,
         valueHash,
-        elementId,
-        id,
-        discardedValueHashes: opts.discardedValueHashes ?? [],
+        elementKey,
+        key,
     };
 }
 
@@ -277,7 +262,7 @@ async function transformElement(
 
     assert(nextElement);
 
-    const { value, valueHash, id, elementId } = await determineId(
+    const { value, valueHash, key, elementKey } = await determineKey(
         {
             input,
             inputSchema,
@@ -291,14 +276,14 @@ async function transformElement(
     );
 
     const foundResult =
-        results.get(id) ||
+        results.get(key) ||
         (await handleExceptionsAsync(
             async () => {
                 if (!persistence) {
                     return undefined;
                 }
 
-                const entries = await fg([`${elementId}*.yaml`], {
+                const entries = await fg([`${elementKey}*.yaml`], {
                     cwd: persistence.location,
                     ignore: [],
                 });
@@ -335,7 +320,7 @@ async function transformElement(
     const foundValidResult =
         Boolean(foundResult) &&
         nextElement.inputSchema.safeParse(
-            (nextElement.combine ?? combineAll)(input as object, foundResult)
+            (combine ?? combineAll)(input as object, foundResult)
         );
 
     if (foundValidResult && foundValidResult.success) {
@@ -371,19 +356,16 @@ async function transformElement(
                       persistence?.location
                           ? ({
                                 ...persistence,
-                                location: join(persistence.location, elementId),
+                                location: key,
                             } as { location: string })
                           : undefined,
                   ].filter(isTruthy) as Parameters<typeof transform>)
               );
 
-    results.set(id, result);
+    results.set(key, result);
 
     if (persistence?.location) {
-        const location = join(
-            persistence.location,
-            [elementId, '.yaml'].join('')
-        );
+        const location = [key, '.yaml'].join('');
         try {
             await saveResult(
                 {
@@ -398,7 +380,7 @@ async function transformElement(
             log.push(location);
         } catch (err) {
             if (err instanceof ZodError) {
-                throw new Error(
+                throw new AbortError(
                     `Result of the call to "${name}" doesn't pass its own schema validation`,
                     {
                         cause: err,

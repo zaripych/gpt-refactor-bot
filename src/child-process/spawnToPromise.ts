@@ -3,6 +3,8 @@ import { ChildProcess, spawn } from 'child_process';
 import type { Assign } from 'utility-types';
 
 import { logger } from '../logger/logger';
+import { captureStackTrace } from '../utils/captureStackTrace';
+import { firstLineOf } from '../utils/firstLineOf';
 
 export type SpawnToPromiseOpts = {
     /**
@@ -72,9 +74,11 @@ export async function spawnToPromise(
 
     const cwd = opts.cwd ? opts.cwd.toString() : undefined;
 
-    const cmd = () => [command, ...args].join(' ');
+    const cmd = () => firstLineOf([command, ...args].join(' '), '...');
 
     logger.debug(['>', cmd()].join(' '), ...(cwd ? [`in ${cwd}`] : []));
+
+    const stack = captureStackTrace();
 
     await new Promise<void>((res, rej) => {
         child
@@ -86,8 +90,10 @@ export async function spawnToPromise(
                         !exitCodes.includes(code)
                     ) {
                         rej(
-                            new Error(
-                                `Command "${cmd()}" has failed with code ${code}`
+                            stack.prepareForRethrow(
+                                new Error(
+                                    `Command "${cmd()}" has failed with code ${code}`
+                                )
                             )
                         );
                     } else {
@@ -95,8 +101,10 @@ export async function spawnToPromise(
                     }
                 } else if (signal) {
                     rej(
-                        new Error(
-                            `Failed to execute command "${cmd()}" - ${signal}`
+                        stack.prepareForRethrow(
+                            new Error(
+                                `Failed to execute command "${cmd()}" - ${signal}`
+                            )
                         )
                     );
                 } else {
@@ -104,7 +112,7 @@ export async function spawnToPromise(
                 }
             })
             .on('error', (err) => {
-                rej(err);
+                rej(stack.prepareForRethrow(err));
             });
     });
     // inherit exit code

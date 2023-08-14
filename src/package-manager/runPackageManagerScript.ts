@@ -12,7 +12,7 @@ export async function runPackageManagerScript(opts: {
         [opts.script, ...(opts.args || [])],
         {
             cwd: opts.location,
-            exitCodes: [0],
+            exitCodes: 'any',
             logOnError: opts.logOnError ?? 'combined',
             env: {
                 ...process.env,

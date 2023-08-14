@@ -14,7 +14,9 @@ export function makePipelineFunction<
         name?: string;
         type?: 'deterministic' | 'non-deterministic';
         transform: (
-            input: TypeOf<InputSchema>,
+            input: TypeOf<InputSchema> & {
+                attempt?: number;
+            },
             persistence?: {
                 location: string;
             }
@@ -25,7 +27,9 @@ export function makePipelineFunction<
     deps = defaultDeps
 ): {
     (
-        input: z.input<InputSchema>,
+        input: z.input<InputSchema> & {
+            attempt?: number;
+        },
         persistence?: {
             location: string;
         }
@@ -34,7 +38,9 @@ export function makePipelineFunction<
     inputSchema: InputSchema;
     resultSchema: OutputSchema;
     transform: (
-        input: z.input<InputSchema>,
+        input: z.input<InputSchema> & {
+            attempt?: number;
+        },
         persistence?: {
             location: string;
         }
