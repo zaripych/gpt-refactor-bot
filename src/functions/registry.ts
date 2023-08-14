@@ -1,9 +1,12 @@
 import { moduleImportsFunction } from '../ts-morph/moduleImports';
 import { referencesFunction } from '../ts-morph/references';
-import { typeDeclarationFunction } from '../ts-morph/typeDeclaration';
+// import { typeDeclarationFunction } from '../ts-morph/typeDeclaration';
 
 export const functions = [
     referencesFunction,
     moduleImportsFunction,
-    typeDeclarationFunction,
+    /**
+     * @todo this function is not yet tested
+     */
+    //typeDeclarationFunction,
 ];
