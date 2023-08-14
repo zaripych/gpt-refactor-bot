@@ -15,7 +15,7 @@ const setup = () => {
     const deps = looselyTypedMock<typeof defaultDeps>({
         ...defaultDeps,
         logger: {
-            level: 'debug',
+            logLevel: 'debug',
             debug: jest.fn(),
             log: jest.fn(),
             info: jest.fn(),
