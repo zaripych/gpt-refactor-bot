@@ -161,14 +161,6 @@ function property(
     }
     const isOptional = prop.hasFlags(SymbolFlags.Optional);
 
-    if (prop.getName() === 'name') {
-        console.log(type.getText(), type.isTypeParameter());
-        console.log(type.isTypeParameter() && type.getConstraint());
-    }
-    if (prop.getName() === 'arguments') {
-        console.log(type.getText(), type.isTypeParameter());
-    }
-
     return [
         prop.getName(),
         isOptional ? '?' : '',
@@ -316,14 +308,6 @@ function nodeTypeFootprintRecursive(params: {
             const sigs = type.getCallSignatures();
             const numIndex = type.getNumberIndexType();
             const stringIndex = type.getStringIndexType();
-
-            const propsSet = new Set(props.map((prop) => prop.getName()));
-            if (propsSet.has('name') && propsSet.has('arguments')) {
-                console.log(
-                    'props',
-                    props.map((prop) => prop.getName())
-                );
-            }
 
             if (
                 props.length === 0 &&
