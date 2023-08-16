@@ -9,4 +9,14 @@ await yargs(process.argv.slice(2))
     .command(refactorCommand)
     .demandCommand(1, 'You need at least one command before moving on')
     .completion()
-    .parseAsync();
+    .parseAsync()
+    .catch((err) => {
+        console.error(err);
+    });
+
+process.on('uncaughtException', (err) => {
+    console.error(err);
+});
+process.on('unhandledRejection', (err) => {
+    console.error(err);
+});
