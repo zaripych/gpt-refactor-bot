@@ -18,6 +18,7 @@ export type SpawnToPromiseOpts = {
      * the process code manually afterwards)
      */
     exitCodes: number[] | 'inherit' | 'any';
+    disableLogs?: boolean;
 };
 
 type SharedOpts = Pick<SpawnOptions, 'cwd'>;
@@ -76,7 +77,9 @@ export async function spawnToPromise(
 
     const cmd = () => firstLineOf([command, ...args].join(' '), '...');
 
-    logger.debug(['>', cmd()].join(' '), ...(cwd ? [`in ${cwd}`] : []));
+    if (!opts.disableLogs) {
+        logger.debug(['>', cmd()].join(' '), ...(cwd ? [`in ${cwd}`] : []));
+    }
 
     const stack = captureStackTrace();
 
