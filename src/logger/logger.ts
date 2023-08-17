@@ -1,39 +1,55 @@
-import { once } from '../utils/once';
+import type { ForegroundColorName } from 'chalk';
+import chalk from 'chalk';
+import { once as onEvent } from 'events';
+import type { Writable } from 'stream';
+import { pipeline, Transform } from 'stream';
 
-const levels = ['debug', 'info', 'warn', 'error', 'fatal'] as const;
+import { glowFormat } from '../markdown/glowFormat';
+import { once } from '../utils/once';
+import { AsyncFormatter } from './asyncFormatter';
+import { extractLogEntry } from './extractLogEntry';
+import { formatObject } from './formatObject';
+
+/**
+ * @note this list is ordered
+ */
+const levels = [
+    'fatal',
+    'error',
+    'warn',
+    'info',
+    'log',
+    'debug',
+    'trace',
+    'silly',
+] as const;
+
+const colors: { [level in LogLevel]: ForegroundColorName } = {
+    fatal: 'redBright',
+    error: 'red',
+    warn: 'yellow',
+    info: 'blue',
+    log: 'blue',
+    debug: 'green',
+    trace: 'white',
+    silly: 'grey',
+};
 
 type LogLevel = (typeof levels)[number];
 
-type Params = Parameters<typeof console.log>;
-
-export type Logger = {
-    logLevel: LogLevel;
-    debug(...params: Params): void;
-    info(...params: Params): void;
-    // alias for info
-    log(...params: Params): void;
-    // special treatment, disabled on CI/TTY
-    tip(...params: Params): void;
-    warn(...params: Params): void;
-    error(...params: Params): void;
-    fatal(...params: Params): void;
+type LogMethod = {
+    (message: string, ...args: unknown[]): void;
+    (obj: unknown, ...args: unknown[]): void;
 };
 
-const enabledLevelsAfter = (level: LogLevel | 'off') => {
-    if (level === 'off') {
-        return [];
-    }
-    const index = levels.findIndex((item) => item === level);
-    if (index === -1) {
-        throw new Error('Invalid level');
-    }
-    return levels.slice(index);
+export type Logger = {
+    [key in LogLevel]: LogMethod;
 };
 
 const isLevel = (level?: string): level is LogLevel =>
     levels.includes(level as LogLevel);
 
-const verbosityFromProcessArgs = (
+const logLevelFromProcessArgs = (
     args = process.argv
 ): LogLevel | 'off' | undefined => {
     const index = args.findIndex((value) => value === '--log-level');
@@ -50,7 +66,7 @@ const verbosityFromProcessArgs = (
     return level;
 };
 
-const verbosityFromEnv = (): LogLevel | 'off' | undefined => {
+const logLevelFromEnv = (): LogLevel | 'off' | undefined => {
     const level = process.env['LOG_LEVEL'];
     if (level === 'silent' || level === 'off') {
         return 'off';
@@ -61,109 +77,128 @@ const verbosityFromEnv = (): LogLevel | 'off' | undefined => {
     return level;
 };
 
-const getVerbosityConfig = () => {
-    const argsLevel = verbosityFromProcessArgs();
-    const envLevel = verbosityFromEnv();
+const levelSymbol = Symbol('level');
+const messageSymbol = Symbol('message');
+
+const getLogLevel = once(() => {
+    const argsLevel = logLevelFromProcessArgs();
+    const envLevel = logLevelFromEnv();
     return argsLevel ?? envLevel ?? 'info';
-};
+});
 
-const noop = (..._args: Params) => {
-    // noop
-};
-
-const log = (...args: Params) => {
-    console.log(...args);
-};
-
-const error = (...args: Params) => {
-    console.error(...args);
-};
-
-const shouldEnableTip = () => !process.env['CI'] && !process.stdout.isTTY;
-
-export const createLogger = (
-    deps = { getVerbosityConfig, log, error, shouldEnableTip }
-) => {
-    const logLevel = deps.getVerbosityConfig();
-    const enabled = enabledLevelsAfter(logLevel);
-    return levels.reduce(
-        (acc, lvl) => ({
-            ...acc,
-            [lvl]: enabled.includes(lvl)
-                ? ['fatal', 'error'].includes(lvl)
-                    ? deps.error
-                    : deps.log
-                : noop,
-        }),
-        {
-            logLevel,
-            log: enabled.includes('info') ? deps.log : noop,
-            tip:
-                enabled.includes('info') && deps.shouldEnableTip()
-                    ? deps.log
-                    : noop,
-        } as Logger
-    );
-};
-
-const createDelegatingLogger = (opts: { parent: Logger }): Logger =>
-    Object.freeze({
-        get logLevel() {
-            return opts.parent.logLevel;
-        },
-        debug(...params: Params): void {
-            opts.parent.debug(...params);
-        },
-        info(...params: Params): void {
-            opts.parent.info(...params);
-        },
-        log(...params: Params): void {
-            opts.parent.log(...params);
-        },
-        tip(...params: Params): void {
-            opts.parent.tip(...params);
-        },
-        warn(...params: Params): void {
-            opts.parent.warn(...params);
-        },
-        error(...params: Params): void {
-            opts.parent.error(...params);
-        },
-        fatal(...params: Params): void {
-            opts.parent.fatal(...params);
+const destination = once(() => {
+    const formatter = new AsyncFormatter({
+        formatters: {
+            objective: (input) =>
+                typeof input === 'string' ? glowFormat({ input }) : input,
+            err: (input) =>
+                typeof input === 'object' && input !== null
+                    ? formatObject(input)
+                    : input,
         },
     });
+    const stringifier = new Transform({
+        objectMode: true,
+        autoDestroy: true,
+        transform: (
+            chunk: {
+                [levelSymbol]: string;
+                [messageSymbol]: string;
+            },
+            _encoding,
+            callback
+        ) => {
+            const {
+                [levelSymbol]: level = 'info',
+                [messageSymbol]: message = '',
+                ...rest
+            } = chunk;
 
-let defaultLoggerFactory: (() => Logger) | null;
+            const prettyMessage =
+                Object.keys(rest).length > 0
+                    ? '\n' + formatObject(rest)
+                    : undefined;
 
-export const configureDefaultLogger = (factory: () => Logger) => {
-    if (defaultLoggerFactory) {
-        const err = {
-            stack: '',
-        };
-        Error.captureStackTrace(err);
-        logger.debug(
-            'Cannot override default logger multiple times',
-            err.stack
-        );
-        return;
+            const colorName = colors[level as LogLevel];
+
+            const result = [
+                chalk[colorName](level),
+                ': ',
+                message,
+                prettyMessage,
+                '\n',
+                '\n',
+            ]
+                .filter(Boolean)
+                .join('');
+
+            callback(undefined, result);
+        },
+    });
+    pipeline(formatter, stringifier, process.stdout, (err) => {
+        if (err) {
+            console.error('Logging disabled due to', err);
+        }
+    });
+    return formatter;
+});
+
+const convertParams = (params: unknown[]): [string, ...unknown[]] => {
+    const [first, ...rest] = params;
+    if (typeof first === 'string') {
+        return [first, ...rest];
     }
-    defaultLoggerFactory = factory;
+    return ['', ...params];
 };
 
-const defaultLogger = once(() => {
-    let factory = defaultLoggerFactory;
-    if (!factory) {
-        factory = () => createLogger();
-    }
-    return factory();
+const noop = () => {
+    //
+};
+
+const createLogger = (opts: {
+    level: LogLevel | 'off';
+    destination: Writable;
+}) => {
+    const enabledIndex = opts.level === 'off' ? -1 : levels.indexOf(opts.level);
+    const enabledLevels = new Set(
+        levels.filter((_, index) => index <= enabledIndex)
+    );
+
+    const log = (level: LogLevel, ...params: [string, ...unknown[]]) => {
+        const entry = extractLogEntry(level, params);
+        const logEntry = {
+            ...entry.data,
+            [levelSymbol]: entry.level,
+            [messageSymbol]: entry.message,
+        };
+        opts.destination.write(logEntry);
+    };
+
+    const result = levels.reduce((acc, level) => {
+        if (enabledLevels.has(level)) {
+            return {
+                ...acc,
+                [level]: (...params: unknown[]) => {
+                    log(level, ...convertParams(params));
+                },
+            };
+        }
+        return {
+            ...acc,
+            [level]: noop,
+        };
+    }, {} as Logger);
+
+    return result;
+};
+
+export const logger: Logger = createLogger({
+    level: getLogLevel(),
+    destination: destination(),
 });
 
-/**
- * Default logger instance can be configured once at startup
- */
-export const logger: Logger = createDelegatingLogger({
-    get parent() {
-        return defaultLogger();
-    },
-});
+export const flush = async () => {
+    const stream = destination();
+    stream.end();
+    await onEvent(stream, 'finish');
+};
