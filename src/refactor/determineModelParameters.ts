@@ -44,7 +44,7 @@ export function determineModelParameters(
                   model,
               };
 
-    logger.debug('Model parameters', result, {
+    logger.trace('Model parameters', result, {
         location: persistence?.location,
     });
 

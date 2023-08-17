@@ -15,15 +15,14 @@ const setup = () => {
     const deps = looselyTypedMock<typeof defaultDeps>({
         ...defaultDeps,
         logger: {
-            logLevel: 'debug',
             debug: jest.fn(),
             log: jest.fn(),
             info: jest.fn(),
             warn: jest.fn(),
             error: jest.fn(),
             trace: jest.fn(),
+            silly: jest.fn(),
             fatal: jest.fn(),
-            silent: jest.fn(),
         },
         dumpYaml: jest.fn((value) => value),
         loadYaml: jest.fn((value) => value),

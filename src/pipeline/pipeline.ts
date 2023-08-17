@@ -107,7 +107,7 @@ const clean = async (
 
     const { log } = state;
 
-    logger.info('Cleaning', persistence.location);
+    logger.trace('Cleaning', relative(process.cwd(), persistence.location));
 
     const patterns = elements.map(({ name }) => `${name}-*.yaml`);
 
@@ -122,7 +122,10 @@ const clean = async (
     });
 
     for (const entry of entries) {
-        logger.info(`Deleting "${join(persistence.location, entry)}"`);
+        logger.trace(
+            `Deleting`,
+            relative(process.cwd(), join(persistence.location, entry))
+        );
 
         await unlink(join(persistence.location, entry));
     }
@@ -324,23 +327,23 @@ async function transformElement(
         );
 
     if (foundValidResult && foundValidResult.success) {
-        logger.info(
+        logger.debug(
             `Step "${name}" with the same input hash "${valueHash}" has already been run ...`
         );
     } else {
         if (!foundValidResult) {
-            logger.info(
+            logger.debug(
                 `Starting step "${name}" with input hash "${valueHash}" ...`
             );
         } else if (nextElement.name) {
-            logger.info(
+            logger.debug(
                 `Starting step "${name}" with input hash "${valueHash}" because currently persisted result is not compatible with next step "${String(
                     nextElement.name
                 )}" ...`,
                 foundValidResult.error
             );
         } else {
-            logger.info(
+            logger.debug(
                 `Starting step "${name}" with input hash "${valueHash}" because currently persisted result is not compatible with result schema ...`,
                 foundValidResult.error
             );
@@ -393,7 +396,7 @@ async function transformElement(
 
     const nextCombinedValue = (combine ?? combineAll)(input as object, result);
 
-    logger.debug(`Current state`, nextCombinedValue);
+    logger.trace(`Current state`, nextCombinedValue);
 
     return nextCombinedValue;
 }
@@ -468,6 +471,7 @@ const createPipeline = <InputSchema extends SupportedZodSchemas>(
     const {
         retryOpts = {
             maxAttempts: 1,
+            logger: optsRaw.deps?.logger ?? defaultDeps.logger,
         },
         ...opts
     } = {
@@ -530,7 +534,7 @@ const createPipeline = <InputSchema extends SupportedZodSchemas>(
                 finalResultSchema: newResultSchema ?? opts.finalResultSchema,
             });
         },
-        retry: (retryOpts: RetryOpts) => {
+        retry: (newRetryOpts: RetryOpts) => {
             const initialInputSchema = augmentHeadSchema(
                 opts.initialInputSchema,
                 {
@@ -550,7 +554,10 @@ const createPipeline = <InputSchema extends SupportedZodSchemas>(
                       ]
                     : [],
                 initialInputSchema,
-                retryOpts,
+                retryOpts: {
+                    ...retryOpts,
+                    ...newRetryOpts,
+                },
             });
         },
         transform: async (
@@ -588,8 +595,8 @@ const createPipeline = <InputSchema extends SupportedZodSchemas>(
                 state === getTransformState(persistence) &&
                 state.log.length > 0
             ) {
-                opts.deps.logger.info(
-                    `Full log of the run:\n`,
+                opts.deps.logger.debug(
+                    `Full log of the run:`,
                     state.log.map((line) => relative(process.cwd(), line))
                 );
             }

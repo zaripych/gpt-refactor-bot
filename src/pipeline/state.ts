@@ -1,3 +1,5 @@
+import { relative } from 'path';
+
 import { defaultDeps } from './dependencies';
 
 export type TransformState = {
@@ -21,7 +23,9 @@ export const initializeTransformState = (
     let state = withSymbol?.[transformState];
 
     if (!state) {
-        logger.info('Initializing new pipeline cache map', persistence);
+        logger.debug('Initializing new pipeline cache map', {
+            location: relative(process.cwd(), persistence?.location || '.'),
+        });
 
         state = {
             results: new Map<string, unknown>(),

@@ -1,4 +1,5 @@
 import type { Message } from '../chat-gpt/api';
+import { logger } from '../logger/logger';
 import { print } from '../markdown/markdown';
 import { UnreachableError } from '../utils/UnreachableError';
 
@@ -33,8 +34,9 @@ export const formatMessage = (message: Message, prefixDivider?: boolean) => {
             try {
                 return prefix + json(JSON.parse(message.content));
             } catch (err) {
-                console.log(err);
-                console.log(`Cannot parse as JSON: \n${message.content}`);
+                logger.error('Cannot parse as JSON', err, {
+                    content: message.content,
+                });
                 throw err;
             }
         default:

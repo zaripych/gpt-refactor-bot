@@ -130,11 +130,11 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
                         );
 
                     if (result.fileContents) {
-                        logger.info(
+                        logger.debug(
                             'Writing to file at',
-                            [filePath],
+                            filePath,
                             ', with contents hash',
-                            [result.fileContentsHash]
+                            result.fileContentsHash
                         );
 
                         await writeFile(
@@ -159,7 +159,7 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
                             ref: 'HEAD',
                         });
 
-                        logger.info('Committed', [commit]);
+                        logger.debug('Committed', { commit });
 
                         steps.push({
                             task,

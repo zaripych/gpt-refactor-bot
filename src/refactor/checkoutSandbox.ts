@@ -67,7 +67,7 @@ export const checkoutSandbox = makePipelineFunction({
         });
 
         if (config.repository) {
-            logger.debug(`Cloning "${config.repository}"`);
+            logger.trace(`Cloning "${config.repository}"`);
 
             await gitClone({
                 repository: config.repository,
@@ -75,7 +75,7 @@ export const checkoutSandbox = makePipelineFunction({
                 ref: config.ref,
             });
         } else {
-            logger.debug(`Creating sandbox from "${root}"`);
+            logger.trace(`Creating sandbox from "${root}"`);
 
             /**
              * @todo: this might copy some files that might be

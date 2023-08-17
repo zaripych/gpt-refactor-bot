@@ -1,4 +1,4 @@
-import { dirname } from 'path';
+import { dirname, relative } from 'path';
 import { type TypeOf, z, type ZodType } from 'zod';
 
 import { defaultDeps } from './dependencies';
@@ -49,7 +49,7 @@ export const saveResult = async (
 ) => {
     const { saveInput, logger } = deps;
 
-    logger.info(`Saving data to "${opts.location}"`);
+    logger.trace(`Saving data to "${relative(process.cwd(), opts.location)}"`);
 
     if (saveInput) {
         await save(
@@ -87,7 +87,9 @@ export const loadResult = async (
 ) => {
     const { logger } = deps;
 
-    logger.info(`Loading data from "${opts.location}"`);
+    logger.trace(
+        `Loading data from "${relative(process.cwd(), opts.location)}"`
+    );
 
     return await load(
         {

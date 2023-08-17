@@ -1,5 +1,6 @@
 import { join } from 'path';
 
+import { flush } from '../logger/logger';
 import { pipeline } from '../pipeline/pipeline';
 import { randomText } from '../utils/randomText';
 import { checkoutSandbox } from './checkoutSandbox';
@@ -73,7 +74,7 @@ export async function refactor(
 
     const { pipe, location, id } = await loadRefactorState(opts, getDeps);
 
-    logger.info(
+    logger.debug(
         `Starting refactor with id "${id}", process id: "${process.pid}"`
     );
 
@@ -84,8 +85,17 @@ export async function refactor(
         process.on('SIGINT', () => {
             pipe.abort();
         });
+        process.on('uncaughtException', (error) => {
+            logger.error('Uncaught exception', error);
+        });
+        process.on('unhandledRejection', (error) => {
+            logger.error('Unhandled rejection', error);
+        });
         await pipe.transform(opts.config, persistence);
+    } catch (exc) {
+        logger.error(exc);
     } finally {
         await pipe.clean(persistence);
+        await flush();
     }
 }

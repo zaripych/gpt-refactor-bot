@@ -78,7 +78,7 @@ export async function spawnToPromise(
     const cmd = () => firstLineOf([command, ...args].join(' '), '...');
 
     if (!opts.disableLogs) {
-        logger.debug(['>', cmd()].join(' '), ...(cwd ? [`in ${cwd}`] : []));
+        logger.trace(['>', cmd()].join(' '), ...(cwd ? [`in ${cwd}`] : []));
     }
 
     const stack = captureStackTrace();
