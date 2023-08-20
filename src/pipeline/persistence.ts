@@ -105,3 +105,17 @@ export const loadResult = async (
         deps
     );
 };
+
+export const loadInput = async <Schema extends ZodType<unknown>>(opts: {
+    location: string;
+    inputSchema: Schema;
+}) => {
+    return await load({
+        location: opts.location,
+        schema: z
+            .object({
+                input: opts.inputSchema,
+            })
+            .transform((value) => value.input),
+    });
+};

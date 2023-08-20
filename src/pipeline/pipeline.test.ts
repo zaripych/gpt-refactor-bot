@@ -4,6 +4,7 @@ import { relative } from 'path';
 import { z } from 'zod';
 
 import { CycleDetectedError } from '../errors/cycleDetectedError';
+import { ancestorDirectories } from '../utils/ancestorDirectories';
 import { looselyTypedMock } from '../utils/createMock';
 import { defaultDeps } from './dependencies';
 import { makePipelineFunction } from './makePipelineFunction';
@@ -37,7 +38,10 @@ const setup = () => {
         }),
         writeFile: jest.fn((path: string, value) => files.set(path, value)),
         fg: jest.fn(
-            (patterns: string[], opts: { cwd: string; ignore: string[] }) => {
+            (
+                patterns: string[],
+                opts: { cwd: string; ignore: string[]; onlyFiles?: boolean }
+            ) => {
                 const result = [];
                 for (const [key] of files) {
                     const relativeKeyPath = relative(opts.cwd, key);
@@ -45,9 +49,29 @@ const setup = () => {
                         result.push(relativeKeyPath);
                     }
                 }
+                if (opts.onlyFiles === false) {
+                    const dirs = new Set(
+                        [...files.entries()].flatMap(([key]) => {
+                            return ancestorDirectories(relative(opts.cwd, key));
+                        })
+                    );
+                    for (const dir of dirs) {
+                        if (mm.isMatch(dir, patterns, opts)) {
+                            result.push(dir);
+                        }
+                    }
+                }
                 return Promise.resolve(result);
             }
         ),
+        rm: jest.fn((path: string) => {
+            const keys = [...files.keys()];
+            for (const key of keys) {
+                if (key.startsWith(path)) {
+                    files.delete(key);
+                }
+            }
+        }),
         unlink: jest.fn((path: string) => {
             files.delete(path);
         }),
@@ -109,6 +133,35 @@ it('fg mock is reasonable', async () => {
             ignore: ['sub-dir/sub-file.yaml'],
         })
     ).resolves.toEqual(['file.yaml']);
+
+    await expect(
+        deps.fg(['*'], {
+            cwd: '.',
+            ignore: [],
+            onlyFiles: false,
+        })
+    ).resolves.toEqual([
+        'file.yaml',
+        'another.yaml',
+        'different-type.txt',
+        'sub-dir',
+    ]);
+
+    await expect(
+        deps.fg(['sub-*'], {
+            cwd: '.',
+            ignore: [],
+            onlyFiles: false,
+        })
+    ).resolves.toEqual(['sub-dir']);
+
+    await expect(
+        deps.fg(['*'], {
+            cwd: 'sub-dir',
+            ignore: [],
+            onlyFiles: false,
+        })
+    ).resolves.toEqual(['file.yaml', 'sub-dir']);
 });
 
 it('should work when empty without persistence', async () => {
@@ -1102,6 +1155,10 @@ it('should clean only on executed levels', async () => {
         'sub-pipe-51ea/multiply-b956.yaml': { value: 10 },
         'sub-pipe-51ea/multiply-xxyy.yaml': { value: 5 },
         'sub-pipe-51ea.yaml': { value: 10 },
+        'sub-pipe-xxxx/add-51ea.yaml': { value: 5 },
+        'sub-pipe-xxxx/add-xxyy.yaml': { value: 5 },
+        'sub-pipe-xxxx/multiply-b956.yaml': { value: 10 },
+        'sub-pipe-xxxx/multiply-xxyy.yaml': { value: 5 },
         'sub-pipe-xxxx.yaml': { value: 15 },
         'multiply-26e7.yaml': { value: 20 },
         'multiply-xxxx.yaml': { value: 30 },
@@ -1180,11 +1237,11 @@ it('should clean only on executed levels', async () => {
      * @note note that files with xxxx hash deleted but not files with xxyy hash
      */
     expect(Object.fromEntries(files.entries())).toEqual({
-        'sub-pipe-51ea/add-51ea.yaml': { value: 5 },
-        'sub-pipe-51ea/multiply-b956.yaml': { value: 10 },
-        'sub-pipe-51ea.yaml': { value: 10 },
         'multiply-26e7.yaml': { value: 20 },
+        'sub-pipe-51ea.yaml': { value: 10 },
+        'sub-pipe-51ea/add-51ea.yaml': { value: 5 },
         'sub-pipe-51ea/add-xxyy.yaml': { value: 5 },
+        'sub-pipe-51ea/multiply-b956.yaml': { value: 10 },
         'sub-pipe-51ea/multiply-xxyy.yaml': { value: 5 },
     });
 

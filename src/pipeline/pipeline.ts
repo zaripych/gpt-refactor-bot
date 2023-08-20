@@ -6,6 +6,7 @@ import { ZodError } from 'zod';
 
 import { AbortError } from '../errors/abortError';
 import { CycleDetectedError } from '../errors/cycleDetectedError';
+import { ancestorDirectories } from '../utils/ancestorDirectories';
 import { handleExceptionsAsync } from '../utils/handleExceptions';
 import { hasOneElement } from '../utils/hasOne';
 import { isTruthy } from '../utils/isTruthy';
@@ -98,7 +99,7 @@ const clean = async (
     elements: Array<AnyPipelineElement>,
     deps = defaultDeps
 ) => {
-    const { logger, unlink, fg } = deps;
+    const { logger, unlink, rm, fg } = deps;
 
     const state = getTransformState(persistence);
     if (!state || state.results.size === 0) {
@@ -109,25 +110,48 @@ const clean = async (
 
     logger.trace('Cleaning', relative(process.cwd(), persistence.location));
 
-    const patterns = elements.map(({ name }) => `${name}-*.yaml`);
+    const fileAndDirPatterns = elements.flatMap(({ name }) => [
+        `${name}-*.yaml`,
+        `${name}-*`,
+    ]);
 
     /**
-     * Filter out sub-directory entries from the log
+     * Filter out any directory or file that appears in the log
      */
-    const ignore = log.map((entry) => relative(persistence.location, entry));
+    const ignore = [
+        ...new Set(
+            log.flatMap((entry) => {
+                const entryPattern = relative(
+                    persistence.location,
+                    entry.replaceAll(/\.yaml/g, '') + '*'
+                );
+                return [
+                    entryPattern,
+                    ...ancestorDirectories(entryPattern).map(
+                        (dir) => dir + '*'
+                    ),
+                ];
+            })
+        ),
+    ];
 
-    const entries = await fg(patterns, {
+    const filesAndDirs = await fg(fileAndDirPatterns, {
         cwd: persistence.location,
         ignore,
+        onlyFiles: false,
     });
 
-    for (const entry of entries) {
+    for (const entry of filesAndDirs) {
         logger.trace(
             `Deleting`,
             relative(process.cwd(), join(persistence.location, entry))
         );
 
-        await unlink(join(persistence.location, entry));
+        if (entry.endsWith('.yaml')) {
+            await unlink(join(persistence.location, entry));
+        } else {
+            await rm(join(persistence.location, entry), { recursive: true });
+        }
     }
 };
 
@@ -596,7 +620,7 @@ const createPipeline = <InputSchema extends SupportedZodSchemas>(
                 state.log.length > 0
             ) {
                 opts.deps.logger.debug(
-                    `Full log of the run:`,
+                    `Full log of the run`,
                     state.log.map((line) => relative(process.cwd(), line))
                 );
             }
