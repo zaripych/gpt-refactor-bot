@@ -85,7 +85,7 @@ export async function spawnToPromise(
 
     await new Promise<void>((res, rej) => {
         child
-            .on('close', (code, signal) => {
+            .once('close', (code, signal) => {
                 if (typeof code === 'number') {
                     if (
                         exitCodes !== 'inherit' &&
@@ -114,7 +114,7 @@ export async function spawnToPromise(
                     throw new Error('Expected signal or error code');
                 }
             })
-            .on('error', (err) => {
+            .once('error', (err) => {
                 rej(stack.prepareForRethrow(err));
             });
     });
