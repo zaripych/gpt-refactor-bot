@@ -135,7 +135,15 @@ const destination = once(() => {
             callback(undefined, result);
         },
     });
-    pipeline(formatter, stringifier, process.stdout, (err) => {
+    // prevent process.stdout from participating in the "close"
+    // event handling of the pipeline
+    const consoleOutput = new Transform({
+        autoDestroy: true,
+        transform: (chunk: string, _encoding, callback) => {
+            process.stdout.write(chunk, callback);
+        },
+    });
+    pipeline(formatter, stringifier, consoleOutput, (err) => {
         if (err) {
             console.error('Logging disabled due to', err);
         }
