@@ -58,6 +58,8 @@ export type BodyShape = {
     max_tokens?: number;
     // between zero to two, defaults to one
     temperature?: number;
+    // How many chat completion choices to generate for each input message
+    n?: number;
 };
 
 export type ResponseShape = {

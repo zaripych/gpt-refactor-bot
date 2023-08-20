@@ -24,6 +24,11 @@ export type Models = z.infer<typeof modelsSchema>;
 
 export const messageRoleSchema = z.enum(['user', 'system', 'assistant']);
 
+export const systemMessageSchema = z.object({
+    role: z.literal('system'),
+    content: z.string(),
+});
+
 export const regularMessageSchema = z.object({
     role: messageRoleSchema,
     content: z.string(),
@@ -95,6 +100,8 @@ export type Opts = {
     maxTokens?: number;
     // between zero to two, defaults to one
     temperature: number;
+    choices?: number;
+    abortSignal?: AbortSignal;
 };
 
 export const responseSchema = z.object({
@@ -266,7 +273,11 @@ export async function chatCompletions(opts: Opts): Promise<Response> {
             ...(opts.temperature && {
                 temperature: opts.temperature,
             }),
+            ...(opts.choices && {
+                n: opts.choices,
+            }),
         } satisfies BodyShape),
+        signal: opts.abortSignal,
     });
 
     if (!response.ok) {
