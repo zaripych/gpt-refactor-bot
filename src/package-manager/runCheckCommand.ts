@@ -1,4 +1,5 @@
 import assert from 'assert';
+import { realpath } from 'fs/promises';
 import { basename, isAbsolute, normalize, relative, sep } from 'path';
 
 import { logger } from '../logger/logger';
@@ -146,13 +147,17 @@ export async function runCheckCommandWithParser(opts: {
         'g'
     );
 
+    const realLocation = await realpath(opts.location).catch(
+        () => opts.location
+    );
+
     return opts.outputParser(chooseOutput()).map((data) => {
         const issue = data.issue.replaceAll(parentDirectoryRegex, '');
         return {
             ...data,
             issue,
             filePath: isAbsolute(data.filePath)
-                ? relative(opts.location, data.filePath)
+                ? relative(realLocation, data.filePath)
                 : data.filePath,
         };
     });
