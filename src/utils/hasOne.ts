@@ -1,9 +1,9 @@
 import assert from 'assert';
 
+export function hasOneElement<T>(arr: T[]): arr is [T, ...T[]];
 export function hasOneElement<T>(
     arr: readonly T[]
 ): arr is readonly [T, ...T[]];
-export function hasOneElement<T>(arr: T[]): arr is [T, ...T[]];
 export function hasOneElement(arr: unknown[] | readonly unknown[]): boolean {
     return arr.length >= 1;
 }
@@ -24,7 +24,7 @@ export function hasTwoElements<T>(
 ): arr is readonly [T, T, ...T[]];
 export function hasTwoElements<T>(arr: T[]): arr is [T, T, ...T[]];
 export function hasTwoElements(arr: unknown[] | readonly unknown[]): boolean {
-    return arr.length >= 1;
+    return arr.length >= 2;
 }
 
 export function ensureHasTwoElements<
