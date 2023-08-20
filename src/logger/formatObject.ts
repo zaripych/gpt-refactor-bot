@@ -15,7 +15,10 @@ export const formatObject = (
             const formattedValue =
                 typeof value === 'string'
                     ? value
-                    : formatWithOptions({ colors: true }, value);
+                    : formatWithOptions(
+                          { colors: true, depth: Number.POSITIVE_INFINITY },
+                          value
+                      );
             const extraIndent = '';
             if (formattedValue.includes('\n')) {
                 return [
