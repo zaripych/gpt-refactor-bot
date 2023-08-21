@@ -6,6 +6,7 @@ export type Args = z.infer<typeof argsSchema>;
 
 export const argsSchema = z.object({
     identifier: z.string().describe('The identifier to look for'),
+    line: z.number().optional().describe('The line number of the identifier'),
     identifierContext: identifierContextSchema
         .describe('The context where the identifier is used')
         .optional(),

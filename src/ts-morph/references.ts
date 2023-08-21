@@ -50,7 +50,11 @@ export async function references(
         }
     }
 
-    return Array.from(initialRefs.values()).map((entry) => entry);
+    const finalResult = Array.from(initialRefs.values())
+        .map((entry) => entry)
+        .filter((entry) => !entry.isInNodeModules);
+
+    return finalResult;
 }
 
 export const referencesFunction = makeTsFunction({
