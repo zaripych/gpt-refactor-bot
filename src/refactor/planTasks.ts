@@ -8,7 +8,7 @@ import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { isTruthy } from '../utils/isTruthy';
 import { makeDependencies } from './dependencies';
 import { determineModelParameters } from './determineModelParameters';
-import { promptWithFunctions } from './promptWithFunctions';
+import { prompt } from './prompt';
 import { refactorConfigSchema } from './types';
 
 export const planTasksInputSchema = refactorConfigSchema
@@ -144,7 +144,7 @@ export const planTasks = makePipelineFunction({
             issues: input.issues,
         });
 
-        const { messages } = await promptWithFunctions(
+        const { choices } = await prompt(
             {
                 preface: systemPrompt,
                 prompt: userPrompt,
@@ -160,21 +160,10 @@ export const planTasks = makePipelineFunction({
             persistence
         );
 
-        const lastMessage = messages[messages.length - 1];
-        if (!lastMessage) {
-            throw new Error(`No messages found after prompt`);
-        }
-        if (lastMessage.role !== 'assistant') {
-            throw new Error(`Expected last message to be from assistant`);
-        }
-        if ('functionCall' in lastMessage) {
-            throw new Error(`Expected last message to not be a function-call`);
-        }
-
         const tasksRegex = /^\s*\d+\.\s*([^\n]+)\s*/gm;
 
         return {
-            tasks: [...lastMessage.content.matchAll(tasksRegex)]
+            tasks: [...choices[0].resultingMessage.content.matchAll(tasksRegex)]
                 .map(([, task]) => task)
                 .filter(isTruthy),
         };

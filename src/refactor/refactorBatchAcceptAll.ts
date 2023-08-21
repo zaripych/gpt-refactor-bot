@@ -6,7 +6,7 @@ import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
 import { logger } from '../logger/logger';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
-import { refactorFileUntilChecksPass } from './refactorFileUntilChecksPass';
+import { refactorFile } from './refactorFile';
 import type { RefactorResult } from './types';
 import { refactorConfigSchema, refactorStepResultSchema } from './types';
 
@@ -46,11 +46,9 @@ export const refactorBatchAcceptAll = makePipelineFunction({
     transform: async (input, persistence) => {
         const { plannedFiles } = input;
 
-        const refactorFile = refactorFileUntilChecksPass
-            .withPersistence()
-            .retry({
-                maxAttempts: 3,
-            });
+        const refactor = refactorFile.withPersistence().retry({
+            maxAttempts: 3,
+        });
 
         const files: RefactorResult['files'] = {};
 
@@ -88,7 +86,7 @@ export const refactorBatchAcceptAll = makePipelineFunction({
             }
         } finally {
             if (persistence) {
-                await refactorFile.clean(persistence);
+                await refactor.clean(persistence);
             }
         }
 

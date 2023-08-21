@@ -20,7 +20,7 @@ import { retry } from '../utils/retry';
 import { UnreachableError } from '../utils/UnreachableError';
 import { applyChanges } from './applyChanges';
 import { check, checksSummary } from './check';
-import { editFilePrompt } from './editFile';
+import { edit } from './edit';
 import { formatCommitMessage } from './prompts/formatCommitMessage';
 import { formatFileContents } from './prompts/formatFileContents';
 import { formatFileDiff } from './prompts/formatFileDiff';
@@ -154,14 +154,14 @@ function fixLocalIssuesPromptText(opts: {
         .join('\n\n');
 }
 
-export const refactorFileUntilChecksPass = makePipelineFunction({
-    name: 'file-wp',
+export const refactorFile = makePipelineFunction({
+    name: 'file',
     inputSchema: refactorFileInputSchema,
     resultSchema: refactorFileResultSchema,
     transform: async (input, persistence) => {
         const { filePath, sandboxDirectoryPath } = input;
 
-        const editFileWithPersistence = editFilePrompt.withPersistence().retry({
+        const editFileWithPersistence = edit.withPersistence().retry({
             maxAttempts: 3,
         });
 
@@ -307,7 +307,7 @@ export const refactorFileUntilChecksPass = makePipelineFunction({
 
                     await retry(
                         async (attempt) => {
-                            const editResult =
+                            const { choices } =
                                 await editFileWithPersistence.transform(
                                     {
                                         ...commonEditOpts,
@@ -320,15 +320,14 @@ export const refactorFileUntilChecksPass = makePipelineFunction({
                                     persistence
                                 );
 
+                            const editResult = choices[0];
+
                             if (editResult.status !== 'success') {
                                 if (issues.length > 0) {
                                     throw new AbortError(
                                         `The model has failed to fix issues`
                                     );
                                 }
-                            }
-
-                            if (!editResult.fileContents) {
                                 return;
                             }
 

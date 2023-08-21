@@ -4,7 +4,7 @@ import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { makeDependencies } from './dependencies';
 import { determineModelParameters } from './determineModelParameters';
-import { promptWithFunctions } from './promptWithFunctions';
+import { prompt } from './prompt';
 import { refactorConfigSchema } from './types';
 
 export const enrichObjectiveInputSchema = refactorConfigSchema
@@ -61,39 +61,26 @@ export const enrichObjective = makePipelineFunction({
 
         const userPrompt = enrichPromptText(input.objective);
 
-        const { messages } = await promptWithFunctions
-            .withPersistence()
-            .transform(
-                {
-                    preface: systemPrompt,
-                    prompt: userPrompt,
-                    temperature: 1,
-                    budgetCents: input.budgetCents,
-                    functions: await includeFunctions(),
-                    functionsConfig: {
-                        repositoryRoot: input.sandboxDirectoryPath,
-                        dependencies: getDeps,
-                    },
-                    ...determineModelParameters(input, persistence),
+        const { choices } = await prompt(
+            {
+                preface: systemPrompt,
+                prompt: userPrompt,
+                temperature: 1,
+                budgetCents: input.budgetCents,
+                functions: await includeFunctions(),
+                functionsConfig: {
+                    repositoryRoot: input.sandboxDirectoryPath,
+                    dependencies: getDeps,
                 },
-                persistence
-            );
-
-        const lastMessage = messages[messages.length - 1];
-        if (!lastMessage) {
-            throw new Error(`No messages found after prompt`);
-        }
-        if (lastMessage.role !== 'assistant') {
-            throw new Error(`Expected last message to be from assistant`);
-        }
-        if ('functionCall' in lastMessage) {
-            throw new Error(`Expected last message to not be a function-call`);
-        }
+                ...determineModelParameters(input, persistence),
+            },
+            persistence
+        );
 
         return {
             enrichedObjective: [
                 input.objective.trim(),
-                lastMessage.content.trim(),
+                choices[0].resultingMessage.content.trim(),
             ].join('\n\n'),
         };
     },
