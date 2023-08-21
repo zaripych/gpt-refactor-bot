@@ -374,6 +374,24 @@ async function transformElement(
         }
     }
 
+    if (persistence?.location) {
+        const location = [key, '.yaml'].join('');
+        try {
+            await saveResult(
+                {
+                    input: value,
+                    inputSchema,
+                    result: {},
+                    location,
+                    resultSchema: z.object({}),
+                },
+                deps
+            );
+        } catch (err) {
+            // ignore
+        }
+    }
+
     const result =
         foundValidResult && foundValidResult.success
             ? foundResult
