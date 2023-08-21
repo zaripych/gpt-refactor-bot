@@ -2,8 +2,13 @@ export function formatFileContents(opts: {
     filePath: string;
     fileContents: string;
     language: string;
+    headline?: string;
 }) {
-    return `Given the contents of the file: \`${opts.filePath}\`:
+    const headline =
+        opts.headline ??
+        `Here are the current contents of the file at \`${opts.filePath}\`:`;
+
+    return `${headline}
 
 \`\`\`${opts.language}
 ${opts.fileContents}

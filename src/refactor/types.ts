@@ -213,7 +213,6 @@ export const checkIssuesResultSchema = z.object({
             code: z.string().optional(),
         })
     ),
-    commit: z.string(),
 });
 
 export type CheckIssuesResult = z.infer<typeof checkIssuesResultSchema>;

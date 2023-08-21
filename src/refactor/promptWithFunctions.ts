@@ -46,7 +46,7 @@ export const promptWithFunctionsResultSchema = z.object({
 let totalSpend = 0;
 
 export const promptWithFunctions = makePipelineFunction({
-    name: 'prompt-with-functions',
+    name: 'prompt',
     inputSchema: promptWithFunctionsInputSchema,
     resultSchema: promptWithFunctionsResultSchema,
     transform: async (opts, persistence) => {
@@ -123,6 +123,15 @@ export const promptWithFunctions = makePipelineFunction({
                             (fn) => fn.name === functionCall.name
                         )
                     ) {
+                        const badFunctionIndex = next.messages.findIndex(
+                            (fn) =>
+                                fn.role === 'assistant' &&
+                                'functionCall' in fn &&
+                                fn.functionCall.name === functionCall.name
+                        );
+                        if (badFunctionIndex >= 0) {
+                            next.messages.splice(badFunctionIndex, 1);
+                        }
                         next.messages.push({
                             role: 'system',
                             content:
@@ -160,8 +169,7 @@ export const promptWithFunctions = makePipelineFunction({
                                         } satisfies FunctionResultMessage)
                                 )
                                 .catch((e) => ({
-                                    role: 'function' as const,
-                                    name: functionCall.name,
+                                    role: 'system' as const,
                                     content: JSON.stringify({
                                         status: 'error',
                                         message:

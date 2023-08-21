@@ -61,21 +61,23 @@ export const enrichObjective = makePipelineFunction({
 
         const userPrompt = enrichPromptText(input.objective);
 
-        const { messages } = await promptWithFunctions(
-            {
-                preface: systemPrompt,
-                prompt: userPrompt,
-                temperature: 1,
-                budgetCents: input.budgetCents,
-                functions: await includeFunctions(),
-                functionsConfig: {
-                    repositoryRoot: input.sandboxDirectoryPath,
-                    dependencies: getDeps,
+        const { messages } = await promptWithFunctions
+            .withPersistence()
+            .transform(
+                {
+                    preface: systemPrompt,
+                    prompt: userPrompt,
+                    temperature: 1,
+                    budgetCents: input.budgetCents,
+                    functions: await includeFunctions(),
+                    functionsConfig: {
+                        repositoryRoot: input.sandboxDirectoryPath,
+                        dependencies: getDeps,
+                    },
+                    ...determineModelParameters(input, persistence),
                 },
-                ...determineModelParameters(input, persistence),
-            },
-            persistence
-        );
+                persistence
+            );
 
         const lastMessage = messages[messages.length - 1];
         if (!lastMessage) {

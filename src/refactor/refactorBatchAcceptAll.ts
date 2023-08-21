@@ -56,13 +56,14 @@ export const refactorBatchAcceptAll = makePipelineFunction({
 
         try {
             for (const filePath of plannedFiles) {
-                const { steps, lastCommit } = await refactorFile.transform(
-                    {
-                        filePath,
-                        ...input,
-                    },
-                    persistence
-                );
+                const { issues, steps, lastCommit } =
+                    await refactorFile.transform(
+                        {
+                            filePath,
+                            ...input,
+                        },
+                        persistence
+                    );
 
                 if (lastCommit) {
                     const currentCommit = await gitRevParse({
@@ -71,7 +72,7 @@ export const refactorBatchAcceptAll = makePipelineFunction({
                     });
 
                     if (currentCommit !== lastCommit) {
-                        logger.log('Resetting to', [lastCommit]);
+                        logger.info('Resetting to', lastCommit);
                         await gitResetHard({
                             location: input.sandboxDirectoryPath,
                             ref: lastCommit,
@@ -81,7 +82,9 @@ export const refactorBatchAcceptAll = makePipelineFunction({
 
                 files[filePath] = steps;
 
-                throw new AbortError('Stop for now');
+                if (issues.length > 0) {
+                    throw new AbortError('Stop for now');
+                }
             }
         } finally {
             if (persistence) {

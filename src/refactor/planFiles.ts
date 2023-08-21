@@ -3,13 +3,14 @@ import { orderBy } from 'lodash-es';
 import { join } from 'path';
 import { z } from 'zod';
 
+import type { RegularAssistantMessage } from '../chat-gpt/api';
 import { diffHash } from '../git/diffHash';
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { isTruthy } from '../utils/isTruthy';
 import { makeDependencies } from './dependencies';
 import { determineModelParameters } from './determineModelParameters';
-import { promptWithFunctions } from './promptWithFunctions';
+import { prompt } from './prompt';
 import { refactorConfigSchema } from './types';
 
 export const planFilesInputSchema = refactorConfigSchema
@@ -60,6 +61,57 @@ Given the above objective produce a list of file paths to be edited. Return one 
 The number of each entry must be followed by a period. If the list of files is empty, write "There are no files to add at this time". Unless the list is empty, do not include any headers before the numbered list or follow the numbered list with any other output.
     `;
 
+const validateParseAndOrderThePlan = async (opts: {
+    sandboxDirectoryPath: string;
+    message: RegularAssistantMessage;
+}) => {
+    const { sandboxDirectoryPath, message } = opts;
+    const filePathRegex = /^\s*\d+\.\s*[`]([^`]+)[`]\s*/gm;
+
+    const filePaths = [
+        ...new Set(
+            [...message.content.matchAll(filePathRegex)]
+                .map(([, filePath]) => filePath)
+                .filter(isTruthy)
+        ),
+    ];
+
+    const filesInfos = await Promise.all(
+        filePaths.map(async (filePath) => {
+            const result = await stat(
+                join(sandboxDirectoryPath, filePath)
+            ).catch((error: NodeJS.ErrnoException) => {
+                if (error.code === 'ENOENT') {
+                    return null;
+                }
+                return Promise.reject(error);
+            });
+            return {
+                filePath,
+                size: result?.size,
+            };
+        })
+    );
+
+    const nonExistingFiles = filesInfos.filter(
+        (file) => typeof file.size !== 'number'
+    );
+
+    if (nonExistingFiles.length > 0) {
+        throw new Error(
+            `Files at the following paths do not exist: ${nonExistingFiles
+                .map(({ filePath }) => `\`${filePath}\``)
+                .join(
+                    ', '
+                )}. Please specify file paths relative to the repository root found via the tool box.`
+        );
+    }
+
+    const sorted = orderBy(filesInfos, ['size'], ['asc']);
+
+    return sorted.map((info) => info.filePath);
+};
+
 export const planFiles = makePipelineFunction({
     name: 'plan',
     inputSchema: planFilesInputSchema,
@@ -73,76 +125,36 @@ export const planFiles = makePipelineFunction({
 
         const userPrompt = planFilesPromptText(input.objective);
 
-        const { messages } = await promptWithFunctions(
+        const { choices } = await prompt.withPersistence().transform(
             {
                 preface: systemPrompt,
                 prompt: userPrompt,
+                budgetCents: input.budgetCents,
                 temperature: 1,
                 functions: await includeFunctions(),
-                budgetCents: input.budgetCents,
                 functionsConfig: {
                     repositoryRoot: input.sandboxDirectoryPath,
                     dependencies: getDeps,
+                },
+                shouldStop: async (message) => {
+                    await validateParseAndOrderThePlan({
+                        sandboxDirectoryPath: input.sandboxDirectoryPath,
+                        message,
+                    });
+                    return true as const;
                 },
                 ...determineModelParameters(input, persistence),
             },
             persistence
         );
 
-        const lastMessage = messages[messages.length - 1];
-        if (!lastMessage) {
-            throw new Error(`No messages found after prompt`);
-        }
-        if (lastMessage.role !== 'assistant') {
-            throw new Error(`Expected last message to be from assistant`);
-        }
-        if ('functionCall' in lastMessage) {
-            throw new Error(`Expected last message to not be a function-call`);
-        }
-
-        const filePathRegex = /^\s*\d+\.\s*[`]([^`]+)[`]\s*/gm;
-
-        const filePaths = [
-            ...new Set(
-                [...lastMessage.content.matchAll(filePathRegex)]
-                    .map(([, filePath]) => filePath)
-                    .filter(isTruthy)
-            ),
-        ];
-
-        const filesInfos = await Promise.all(
-            filePaths.map(async (filePath) => {
-                const result = await stat(
-                    join(input.sandboxDirectoryPath, filePath)
-                ).catch((error: NodeJS.ErrnoException) => {
-                    if (error.code === 'ENOENT') {
-                        return null;
-                    }
-                    return Promise.reject(error);
-                });
-                return {
-                    filePath,
-                    size: result?.size,
-                };
-            })
-        );
-
-        const nonExistingFiles = filesInfos.filter(
-            (file) => typeof file.size !== 'number'
-        );
-
-        if (nonExistingFiles.length > 0) {
-            throw new Error(
-                `Files at the following paths do not exist: ${nonExistingFiles.join(
-                    ', '
-                )}. Please specify file paths relative to the repository root found via the tool box.`
-            );
-        }
-
-        const sorted = orderBy(filesInfos, ['size'], ['asc']);
+        const plannedFiles = await validateParseAndOrderThePlan({
+            sandboxDirectoryPath: input.sandboxDirectoryPath,
+            message: choices[0].resultingMessage,
+        });
 
         return {
-            plannedFiles: sorted.map((info) => info.filePath),
+            plannedFiles,
         };
     },
 });

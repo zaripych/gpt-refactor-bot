@@ -183,9 +183,13 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
                             const result = checksSummary({
                                 issues,
                                 checkResult,
+                                checkCommit: commit,
                             });
 
-                            issues = result.issues;
+                            issues = [
+                                ...result.newIssues,
+                                ...result.remainingIssues,
+                            ];
                         }
                     }
                 }
@@ -221,9 +225,13 @@ export const refactorFileViaPlanAndExecute = makePipelineFunction({
                 const result = checksSummary({
                     issues,
                     checkResult,
+                    checkCommit: await gitRevParse({
+                        location: input.sandboxDirectoryPath,
+                        ref: 'HEAD',
+                    }),
                 });
 
-                issues = result.issues;
+                issues = [...result.newIssues, ...result.remainingIssues];
             }
         } finally {
             if (persistence) {

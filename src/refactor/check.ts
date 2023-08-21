@@ -1,8 +1,8 @@
+import assert from 'assert';
 import { z } from 'zod';
 
 import { diffHash } from '../git/diffHash';
 import { filesDiffHash } from '../git/filesDiffHash';
-import { gitRevParse } from '../git/gitRevParse';
 import { runCheckCommand } from '../package-manager/runCheckCommand';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import type { CheckIssuesResult, Issue } from './types';
@@ -39,10 +39,6 @@ export const check = makePipelineFunction({
     inputSchema: checkInputSchema,
     resultSchema: checkIssuesResultSchema,
     transform: async (opts) => {
-        const commit = await gitRevParse({
-            location: opts.location,
-            ref: 'HEAD',
-        });
         const results = await Promise.all(
             opts.scripts.map((script) =>
                 runCheckCommand({
@@ -52,7 +48,7 @@ export const check = makePipelineFunction({
             )
         );
         return {
-            commit,
+            location: opts.location,
             issues: results.reduce((acc, result) => acc.concat(result), []),
             checkedFiles: opts.filePaths,
         };
@@ -62,41 +58,47 @@ export const check = makePipelineFunction({
 export const checksSummary = (opts: {
     issues: Issue[];
     checkResult: CheckIssuesResult;
+    checkCommit: string;
 }) => {
     const newIssues: Issue[] = [];
     const resolvedIssues: Issue[] = [];
+    const remainingIssues: Issue[] = [];
 
-    const existingIssues = new Set(opts.issues.map((issue) => issue.issue));
-    const checkIssues = new Set(
+    const previousChecks = new Map(
+        opts.issues.map((issue) => [issue.issue, issue])
+    );
+    const lastCheck = new Set(
         opts.checkResult.issues.map((issue) => issue.issue)
     );
 
     for (const issue of opts.checkResult.issues) {
-        if (existingIssues.has(issue.issue)) {
-            continue;
+        const existing = previousChecks.get(issue.issue);
+        if (existing) {
+            remainingIssues.push(existing);
+        } else {
+            newIssues.push({
+                ...issue,
+                commit: opts.checkCommit,
+            });
         }
-        newIssues.push({
-            ...issue,
-            commit: opts.checkResult.commit,
-        });
     }
 
     for (const issue of opts.issues) {
-        if (!checkIssues.has(issue.issue)) {
-            continue;
+        if (!lastCheck.has(issue.issue)) {
+            resolvedIssues.push(issue);
         }
-        resolvedIssues.push({
-            ...issue,
-            commit: opts.checkResult.commit,
-        });
     }
 
+    assert(
+        opts.checkResult.issues.length ===
+            newIssues.length + remainingIssues.length,
+        'check result issues length mismatch'
+    );
+
     return {
-        issues: opts.checkResult.issues.map((issue) => ({
-            ...issue,
-            commit: opts.checkResult.commit,
-        })),
         newIssues,
+        remainingIssues,
         resolvedIssues,
+        totalNumberOfIssues: newIssues.length + remainingIssues.length,
     };
 };

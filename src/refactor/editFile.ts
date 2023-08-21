@@ -1,6 +1,7 @@
 import hash from 'object-hash';
 import { z } from 'zod';
 
+import { autoFixIssuesContents } from '../eslint/autoFixIssues';
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { prettierTypescript } from '../prettier/prettier';
@@ -22,6 +23,7 @@ export const editFileInputSchema = refactorConfigSchema
         filePath: z.string(),
         fileContents: z.string(),
         sandboxDirectoryPath: z.string(),
+        eslintAutoFixScriptArgs: z.array(z.string()).nonempty().optional(),
     });
 
 export const editFileResultSchema = z.object({
@@ -78,21 +80,23 @@ export const editFilePrompt = makePipelineFunction({
             filePath: input.filePath,
         });
 
-        const { messages } = await promptWithFunctions(
-            {
-                preface,
-                prompt,
-                temperature: 1,
-                functions: await includeFunctions(),
-                budgetCents: input.budgetCents,
-                functionsConfig: {
-                    repositoryRoot: input.sandboxDirectoryPath,
-                    dependencies: getDeps,
+        const { messages } = await promptWithFunctions
+            .withPersistence()
+            .transform(
+                {
+                    preface,
+                    prompt,
+                    temperature: 1,
+                    functions: await includeFunctions(),
+                    budgetCents: input.budgetCents,
+                    functionsConfig: {
+                        repositoryRoot: input.sandboxDirectoryPath,
+                        dependencies: getDeps,
+                    },
+                    ...determineModelParameters(input, persistence),
                 },
-                ...determineModelParameters(input, persistence),
-            },
-            persistence
-        );
+                persistence
+            );
 
         const lastMessage = messages[messages.length - 1];
         if (!lastMessage) {
@@ -136,8 +140,27 @@ export const editFilePrompt = makePipelineFunction({
         const codeChunk = codeChunks[0];
 
         const formattedCodeChunk = await prettierTypescript(codeChunk);
+        const eslintFixed = input.eslintAutoFixScriptArgs
+            ? await autoFixIssuesContents({
+                  eslintScriptArgs: input.eslintAutoFixScriptArgs,
+                  fileContents: formattedCodeChunk,
+                  filePath: input.filePath,
+                  location: input.sandboxDirectoryPath,
+              })
+            : formattedCodeChunk;
 
-        if (formattedCodeChunk === input.fileContents) {
+        if (input.eslintAutoFixScriptArgs) {
+            if (
+                eslintFixed === input.fileContents &&
+                formattedCodeChunk !== input.fileContents
+            ) {
+                throw new Error(
+                    'ESLint just reverted the code changes made by the model, this is not supposed to happen'
+                );
+            }
+        }
+
+        if (eslintFixed === input.fileContents) {
             return {
                 key: persistence?.location,
                 status: 'no-changes-required',
@@ -147,8 +170,8 @@ export const editFilePrompt = makePipelineFunction({
 
         return {
             key: persistence?.location,
-            fileContentsHash: hash(formattedCodeChunk),
-            fileContents: formattedCodeChunk,
+            fileContentsHash: hash(eslintFixed),
+            fileContents: eslintFixed,
             status: 'success',
         };
     },
