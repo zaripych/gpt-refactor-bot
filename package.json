@@ -14,6 +14,7 @@
     "dependencies": {
         "chalk": "5.2.0",
         "chokidar": "3.5.3",
+        "diff": "^5.1.0",
         "dotenv": "16.3.1",
         "fast-glob": "3.2.12",
         "js-yaml": "4.1.0",
@@ -21,9 +22,9 @@
         "micromatch": "4.0.5",
         "object-hash": "3.0.0",
         "ora": "6.3.1",
-        "pino": "^8.15.0",
-        "pino-pretty": "^10.2.0",
+        "parse-git-diff": "^0.0.13",
         "prompts": "2.4.2",
+        "rxjs": "^7.8.1",
         "strip-ansi": "7.1.0",
         "ts-morph": "19.0.0",
         "tsx": "3.12.7",
@@ -35,6 +36,7 @@
     "devDependencies": {
         "@jest/globals": "29.5.0",
         "@repka-kit/ts": "1.0.0-beta.7",
+        "@types/diff": "^5.0.3",
         "@types/js-yaml": "4.0.5",
         "@types/lodash-es": "4.17.7",
         "@types/micromatch": "4.0.2",
