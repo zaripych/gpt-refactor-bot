@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import type zodToJsonSchema from 'zod-to-json-schema';
 
+import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
+import { RateLimitExceededError } from '../errors/rateLimitExceeded';
 import { ensureHasOneElement } from '../utils/hasOne';
 import type {
     BodyShape,
@@ -132,6 +134,23 @@ export const responseSchema = z.object({
 });
 
 export type Response = z.infer<typeof responseSchema>;
+
+const errorResponseShape = z.object({
+    error: z.object({
+        message: z.string().optional(),
+        type: z.string().optional(),
+        param: z.string().optional(),
+        code: z.string().transform(
+            (code) =>
+                code as
+                    | 'context_length_exceeded'
+                    | 'rate_limit_exceeded'
+                    | (string & {
+                          _brand?: 'unknown';
+                      })
+        ),
+    }),
+});
 
 const messageToInternal = (message: Message): MessageShape =>
     'functionCall' in message
@@ -281,6 +300,32 @@ export async function chatCompletions(opts: Opts): Promise<Response> {
     });
 
     if (!response.ok) {
+        if (
+            response.headers.get('content-type')?.startsWith('application/json')
+        ) {
+            const result = errorResponseShape.safeParse(await response.json());
+            if (result.success) {
+                switch (result.data.error.code) {
+                    case 'context_length_exceeded':
+                        throw new OutOfContextBoundsError(
+                            result.data.error.message ?? 'Out of context bounds'
+                        );
+                    case 'rate_limit_exceeded':
+                        throw new RateLimitExceededError(
+                            result.data.error.message ?? 'Rate limit exceeded'
+                        );
+                    default:
+                        throw new Error(
+                            `Unknown OpenAI API error: ${
+                                result.data.error.code
+                            }\n${
+                                result.data.error.message ??
+                                JSON.stringify(result.data.error, undefined, 2)
+                            }`
+                        );
+                }
+            }
+        }
         const text = await response.text();
         throw new Error(
             `Failed to fetch chat completions: ${response.statusText}\n${text}`
