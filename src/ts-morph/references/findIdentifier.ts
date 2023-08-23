@@ -3,6 +3,7 @@ import type { ts } from 'ts-morph';
 import { type Node, type Project, SyntaxKind } from 'ts-morph';
 
 import type { FunctionsConfig } from '../../functions/makeFunction';
+import { handleExceptions } from '../../utils/handleExceptions';
 import { syntaxKindByIdentifierContext } from './identifierContext';
 import type { Args } from './types';
 
@@ -29,7 +30,14 @@ export function findIdentifier(
         : undefined;
 
     const sourceFile = fullInitialFilePath
-        ? project.getSourceFileOrThrow(fullInitialFilePath)
+        ? handleExceptions(
+              () => project.getSourceFileOrThrow(fullInitialFilePath),
+              () => {
+                  throw new Error(
+                      `Cannot find source file "${fullInitialFilePath}" - if you don't know the exact file path, do not pass the initialFilePath argument.`
+                  );
+              }
+          )
         : project.getSourceFiles().find((file) => {
               const descendant = file.getFirstDescendant(
                   findIdentifierInternal

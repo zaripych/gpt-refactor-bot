@@ -20,7 +20,8 @@ const argsSchema = z.object({
         .string()
         .describe(
             'A valid file path where to start looking for the identifier. Since identifiers can have same name in different files, specifying initial file path can help disambiguate between them.'
-        ),
+        )
+        .optional(),
 });
 
 const resultSchema = z.object({
@@ -36,7 +37,9 @@ export async function quickInfo(
 ): Promise<Result> {
     const node = findIdentifier(project, config, {
         ...args,
-        includeFilePaths: [args.initialFilePath],
+        ...(args.initialFilePath && {
+            includeFilePaths: [args.initialFilePath],
+        }),
     });
 
     return {
