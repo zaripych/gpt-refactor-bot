@@ -5,12 +5,12 @@ import { gitRevParse } from '../git/gitRevParse';
 import { gitStatus } from '../git/gitStatus';
 import { logger } from '../logger/logger';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
-import type { RefactorFilesResult } from './refactorBatchAcceptAll';
-import { refactorObjective } from './refactorObjective';
+import { planAndRefactor } from './refactorObjective';
+import type { RefactorFilesResult } from './types';
 import {
-    mergeRefactorFilesResults,
+    mutateToMergeRefactorFilesResults,
     refactorConfigSchema,
-    refactorStepResultSchema,
+    refactorFilesResultSchema,
 } from './types';
 
 export const refactorGoalInputSchema = refactorConfigSchema.augment({
@@ -19,16 +19,10 @@ export const refactorGoalInputSchema = refactorConfigSchema.augment({
     startCommit: z.string(),
 });
 
-export const refactorGoalResultSchema = z.object({
-    files: z.record(z.string(), z.array(refactorStepResultSchema)),
-});
-
-export type RefactorGoalResponse = z.infer<typeof refactorGoalResultSchema>;
-
 export const refactorGoal = makePipelineFunction({
     name: 'goal',
     inputSchema: refactorGoalInputSchema,
-    resultSchema: refactorGoalResultSchema,
+    resultSchema: refactorFilesResultSchema,
     transform: async (input, persistence) => {
         const { sandboxDirectoryPath } = input;
 
@@ -36,6 +30,7 @@ export const refactorGoal = makePipelineFunction({
             location: sandboxDirectoryPath,
             ref: 'HEAD',
         });
+
         const status = await gitStatus({
             location: sandboxDirectoryPath,
         });
@@ -55,30 +50,30 @@ export const refactorGoal = makePipelineFunction({
             });
         }
 
-        const refactorObjectiveWithPersistence =
-            refactorObjective.withPersistence();
+        const planAndRefactorWithPersistence =
+            planAndRefactor.withPersistence();
 
-        const files: RefactorFilesResult = {};
+        const files: RefactorFilesResult = {
+            accepted: {},
+            discarded: {},
+        };
 
         try {
-            const initialResult =
-                await refactorObjectiveWithPersistence.transform(
-                    input,
-                    persistence
-                );
+            const result = await planAndRefactorWithPersistence.transform(
+                input,
+                persistence
+            );
 
-            mergeRefactorFilesResults({
-                from: initialResult.files,
+            mutateToMergeRefactorFilesResults({
+                from: result,
                 into: files,
             });
         } finally {
             if (persistence) {
-                await refactorObjectiveWithPersistence.clean(persistence);
+                await planAndRefactorWithPersistence.clean(persistence);
             }
         }
 
-        return {
-            files,
-        };
+        return files;
     },
 });

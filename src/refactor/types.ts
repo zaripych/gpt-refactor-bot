@@ -38,12 +38,6 @@ export const refactorConfigSchema = z.object({
     allowDirtyWorkingTree: z.boolean().optional().default(false),
 
     /**
-     * Globs that represent files to be refactored, this can also be
-     * automatically inferred from the goal description.
-     */
-    target: z.array(z.string()).optional(),
-
-    /**
      * Maximum amount of money we can spend on a single run
      */
     budgetCents: z.number().optional().default(10_00),
@@ -147,37 +141,71 @@ export const issueSchema = z.object({
     code: z.string().optional(),
 });
 
-export const refactorFileResultSchema = z.object({
-    status: z.enum(['success', 'failure']),
-    failureDescription: z.string().optional(),
+export const refactorSuccessResultSchema = z.object({
+    status: z.literal('success'),
     filePath: z.string(),
     issues: z.array(issueSchema),
     steps: z.array(refactorStepResultSchema),
     lastCommit: z.string().optional(),
 });
 
-export type RefactorFileResultSchema = z.infer<typeof refactorFileResultSchema>;
-
-export const refactorFilesResultSchema = z.record(
-    z.string(),
-    z.array(refactorStepResultSchema)
-);
-
-export type RefactorFilesResult = z.infer<typeof refactorFilesResultSchema>;
-
-export const refactorResultSchema = z.object({
-    files: refactorFilesResultSchema,
+export const refactorFailedResultSchema = z.object({
+    status: z.literal('failure'),
+    failureDescription: z.string(),
+    filePath: z.string(),
+    issues: z.array(issueSchema),
+    steps: z.array(refactorStepResultSchema),
+    lastCommit: z.string().optional(),
 });
 
+export const refactorResultSchema = z.discriminatedUnion('status', [
+    refactorSuccessResultSchema,
+    refactorFailedResultSchema,
+]);
+
 export type RefactorResult = z.infer<typeof refactorResultSchema>;
+
+export const refactorFileResultSchema = z.object({
+    file: refactorResultSchema,
+});
+
+export type RefactorFileResult = z.infer<typeof refactorFileResultSchema>;
+
+export const refactorFilesRecordSchema = z.record(
+    z.string(),
+    z.array(refactorResultSchema)
+);
+
+export type RefactorResultByFilePathRecord = z.infer<
+    typeof refactorFilesRecordSchema
+>;
+
+export const refactorFilesResultSchema = z.object({
+    accepted: z.record(z.string(), z.array(refactorResultSchema)),
+    discarded: z.record(z.string(), z.array(refactorFailedResultSchema)),
+});
+
+export type RefactorFilesResult = z.infer<typeof refactorFilesResultSchema>;
 
 export const lastCommit = <T extends { commit: string }>(steps: T[]) => {
     return steps[steps.length - 1]?.commit;
 };
 
-export const mergeRefactorFilesResults = (opts: {
-    from: RefactorFilesResult;
-    into: RefactorFilesResult;
+export const pushRefactorFileResults = (opts: {
+    result: RefactorResult;
+    into: RefactorResultByFilePathRecord;
+}) => {
+    const array = opts.into[opts.result.filePath];
+    if (array) {
+        array.push(opts.result);
+    } else {
+        opts.into[opts.result.filePath] = [opts.result];
+    }
+};
+
+export const mutateToMergeRefactorRecords = (opts: {
+    from: RefactorResultByFilePathRecord;
+    into: RefactorResultByFilePathRecord;
 }) => {
     for (const [file, tasks] of Object.entries(opts.from)) {
         const existing = opts.into[file];
@@ -189,16 +217,18 @@ export const mergeRefactorFilesResults = (opts: {
     }
 };
 
-export const mergedRefactorFilesResults = (
-    a: RefactorFilesResult,
-    b: RefactorFilesResult
-) => {
-    const files: RefactorFilesResult = { ...a };
-    mergeRefactorFilesResults({
-        from: b,
-        into: files,
+export const mutateToMergeRefactorFilesResults = (opts: {
+    from: RefactorFilesResult;
+    into: RefactorFilesResult;
+}) => {
+    mutateToMergeRefactorRecords({
+        from: opts.from.accepted,
+        into: opts.into.accepted,
     });
-    return files;
+    mutateToMergeRefactorRecords({
+        from: opts.from.discarded,
+        into: opts.into.discarded,
+    });
 };
 
 export type Issue = z.infer<typeof issueSchema>;

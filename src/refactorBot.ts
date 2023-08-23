@@ -1,7 +1,15 @@
 import yargs from 'yargs';
 
+import { flush } from './logger/logger';
 import { promptCommand } from './prompt/cli';
 import { refactorCommand } from './refactor/cli';
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception', error);
+});
+process.on('unhandledRejection', (error) => {
+    console.error('Unhandled rejection', error);
+});
 
 await yargs(process.argv.slice(2))
     .scriptName('pnpm refactor-bot')
@@ -12,11 +20,9 @@ await yargs(process.argv.slice(2))
     .parseAsync()
     .catch((err) => {
         console.error(err);
+    })
+    .then(async () => {
+        await flush().catch(() => {
+            // do nothing
+        });
     });
-
-process.on('uncaughtException', (err) => {
-    console.error(err);
-});
-process.on('unhandledRejection', (err) => {
-    console.error(err);
-});

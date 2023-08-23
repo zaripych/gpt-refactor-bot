@@ -310,7 +310,7 @@ async function transformElement(
                     return undefined;
                 }
 
-                const entries = await fg([`${elementKey}*.yaml`], {
+                const entries = await fg([`${elementKey}.yaml`], {
                     cwd: persistence.location,
                     ignore: [],
                 });
@@ -375,7 +375,7 @@ async function transformElement(
     }
 
     if (persistence?.location) {
-        const location = [key, '.yaml'].join('');
+        const location = [key, '-input.yaml'].join('');
         try {
             await saveResult(
                 {

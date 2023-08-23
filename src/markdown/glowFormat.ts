@@ -70,6 +70,6 @@ export async function glowFormat(
         return result.stdout;
     } catch (err) {
         deps.disableGlow();
-        return [deps.fallbackFormat(input)];
+        return deps.fallbackFormat(input);
     }
 }

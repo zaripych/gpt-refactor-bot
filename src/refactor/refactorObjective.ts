@@ -1,41 +1,36 @@
-import type { TypeOf } from 'zod';
 import { z } from 'zod';
 
+import { CycleDetectedError } from '../errors/cycleDetectedError';
+import { logger } from '../logger/logger';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { planFiles } from './planFiles';
-import { refactorBatchAcceptAll } from './refactorBatchAcceptAll';
+import { refactorBatch } from './refactorBatch';
+import type { RefactorFilesResult } from './types';
 import {
-    mergeRefactorFilesResults,
+    mutateToMergeRefactorFilesResults,
     refactorConfigSchema,
-    refactorStepResultSchema,
+    refactorFilesResultSchema,
 } from './types';
 
-export const refactorObjectiveInputSchema = refactorConfigSchema.augment({
+export const planAndRefactorInputSchema = refactorConfigSchema.augment({
     objective: z.string(),
     startCommit: z.string(),
     sandboxDirectoryPath: z.string(),
 });
 
-export const refactorObjectiveResultSchema = z.object({
-    files: z.record(z.string(), z.array(refactorStepResultSchema)),
-});
-
-export type RefactorObjectiveResponse = z.infer<
-    typeof refactorObjectiveResultSchema
->;
-
-export const refactorObjective = makePipelineFunction({
+export const planAndRefactor = makePipelineFunction({
     name: 'objective',
-    inputSchema: refactorObjectiveInputSchema,
-    resultSchema: refactorObjectiveResultSchema,
+    inputSchema: planAndRefactorInputSchema,
+    resultSchema: refactorFilesResultSchema,
     transform: async (input, persistence) => {
         const planFilesWithPersistence = planFiles.withPersistence().retry({
             maxAttempts: 3,
         });
-        const files: Record<
-            string,
-            Array<TypeOf<typeof refactorStepResultSchema>>
-        > = {};
+
+        const files: RefactorFilesResult = {
+            accepted: {},
+            discarded: {},
+        };
 
         try {
             const { plannedFiles } = await planFilesWithPersistence.transform(
@@ -44,7 +39,7 @@ export const refactorObjective = makePipelineFunction({
             );
 
             while (plannedFiles.length > 0) {
-                const result = await refactorBatchAcceptAll.transform(
+                const result = await refactorBatch(
                     {
                         plannedFiles,
                         ...input,
@@ -52,20 +47,37 @@ export const refactorObjective = makePipelineFunction({
                     persistence
                 );
 
-                mergeRefactorFilesResults({
-                    from: result.files,
+                mutateToMergeRefactorFilesResults({
+                    from: result,
                     into: files,
                 });
 
-                const repeatedPlanResult =
-                    await planFilesWithPersistence.transform(
-                        input,
-                        persistence
-                    );
+                const repeatedPlanResult = await planFilesWithPersistence
+                    .transform(input, persistence)
+                    .catch((err) => {
+                        if (err instanceof CycleDetectedError) {
+                            /**
+                             * @note Ideally the planFiles function would
+                             * be able to detect this and return an empty
+                             * list instead.
+                             */
+                            logger.warn(
+                                'Cycle detected when planning files to change, this is likely result of the last batch of changes not producing any changes.',
+                                {
+                                    error: err,
+                                    result,
+                                }
+                            );
+                            return {
+                                plannedFiles: [],
+                            };
+                        }
+                        return Promise.reject(err);
+                    });
 
                 plannedFiles.splice(
                     0,
-                    planFiles.length,
+                    plannedFiles.length,
                     ...repeatedPlanResult.plannedFiles
                 );
             }
@@ -75,8 +87,6 @@ export const refactorObjective = makePipelineFunction({
             }
         }
 
-        return {
-            files,
-        };
+        return files;
     },
 });
