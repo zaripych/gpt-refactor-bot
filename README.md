@@ -34,12 +34,16 @@ pnpm refactor-bot <command>
 Commands:
   pnpm refactor-bot prompt      Sends a prompt to the ChatGPT API to generate a
                                 response
+  pnpm refactor-bot refactor    Performs a refactoring using Plan and Execute te
+                                chnique
   pnpm refactor-bot completion  generate completion script
 
 Options:
   --help     Show help                                                 [boolean]
   --version  Show version number                                       [boolean]
 ```
+
+## Prompt
 
 The `prompt` command allows you to test the functions API we provide to the
 ChatGPT.
@@ -59,13 +63,34 @@ editor. Save the message with `---` at the end to send it.
 See example conversation at
 [`.refactor-bot/prompts/example.md`](.refactor-bot/prompts/example.md).
 
+## Refactor
+
+```sh
+➜  pnpm refactor-bot refactor
+
+Performs a refactoring using Plan and Execute technique
+
+Options:
+  --help     Show help                                                 [boolean]
+  --version  Show version number                                       [boolean]
+  --name     Name of the refactoring to run                             [string]
+  --id       Unique id of the refactoring that was previously run but didn't fin
+             ish to start from last successful point                    [string]
+```
+
+[Example output](.refactor-bot/refactors/replace-read-file-sync/example-report.png?raw=true 'Example output')
+
 ## Roadmap
 
 Currently working on `refactor` command, which will allow you to perform
 refactoring.
 
 -   [x] tested using `prompt` command whether the approach is going to work
--   [ ] implementing `refactor` command via "Plan and Execute" approach
+-   [x] implementing initial version of the `refactor` command via "Plan and Execute" approach
+-   [ ] provide documentation on the approach and what should be expected from the `refactor` command
+-   [ ] ability to create pull requests in GitHub for both successful refactoring and discarded commits with issues
+-   [ ] as every source code repository can be very different provide a `doctor` command to help diagnose setup issues and generally make `refactor` and `prompt` smarter aiming for no-config and automatic discovery/configuration
+-   [ ] polishing and testing the experience more
 
 ## Expectations
 

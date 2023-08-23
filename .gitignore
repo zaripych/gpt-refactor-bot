@@ -4,3 +4,4 @@ node_modules
 src/test.ts
 .refactor-bot/refactors/*/state
 .vscode
+.DS_Store
