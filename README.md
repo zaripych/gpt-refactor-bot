@@ -104,7 +104,7 @@ In any case, the CLI was built in a way that it can reproduce all the successful
 
 Use `LOG_LEVEL=debug` environment variable to see more information about what's happening.
 
-[Example output](.refactor-bot/refactors/replace-read-file-sync/example-report.png?raw=true 'Example output')
+![Example output](.refactor-bot/refactors/replace-read-file-sync/example-report.png?raw=true 'Example output')
 
 ## Expectations
 
