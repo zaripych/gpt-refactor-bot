@@ -53,7 +53,7 @@ const planFilesPromptText = (objective: string) =>
     markdown`
 ${objective}
 
-Given the above objective produce a list of file paths to be edited. Return one file path per line in your response. File paths should be surrounded by a backtick. File paths should be relative to repository root. The result must be a numbered list in the format:
+Given the above objective we want to produce a list of file paths to be edited. To do that, use the OpenAI function calling to analyze current state of the code and produce a list based on state of the code. When the objective explicitly mentions to limit the refactoring only to specific file or files - only return a list from the subset mentioned. Return one file path per line in your response. File paths should be surrounded by a backtick. File paths should be relative to repository root. The result must be a numbered list in the format:
 
 #. \`path/to/file.ts\`
 #. \`path/to/another/file.ts\`
