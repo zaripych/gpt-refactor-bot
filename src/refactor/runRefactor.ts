@@ -4,7 +4,12 @@ import { basename, dirname } from 'path';
 import prompts from 'prompts';
 import { z } from 'zod';
 
+import { ConfigurationError } from '../errors/configurationError';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
+import { extractErrorInfo } from '../logger/extractErrorInfo';
+import { formatObject } from '../logger/formatObject';
+import { glowFormat } from '../markdown/glowFormat';
+import { markdown } from '../markdown/markdown';
 import { goToEndOfFile } from '../prompt/editor';
 import { hasOneElement } from '../utils/hasOne';
 import { loadRefactorConfigs } from './loadRefactors';
@@ -71,7 +76,7 @@ async function promptForConfig(refactors: RefactorConfig[]) {
             `
 \`\`\`yaml
 # For information about possible options have a look at the code:
-# https://github.com/zaripych/refactor-bot/blob/9b928d601a7586cd1adf20dbeb406625a0d7663f/src/refactor/types.ts#L11
+# https://github.com/zaripych/refactor-bot/blob/main/src/refactor/types.ts#L5
 budgetCents: 100
 model: gpt-4
 \`\`\`
@@ -83,7 +88,14 @@ model: gpt-4
 
         if (!(await goToEndOfFile(goalMdFilePath))) {
             console.log(
-                `Please describe the refactoring in "${goalMdFilePath}", save the file and restart the command to continue...`
+                await glowFormat({
+                    input: `# Created a file
+
+at \`${goalMdFilePath}\`
+
+Please describe the refactoring in the file, save the file and restart the command to continue.
+`,
+                })
             );
         }
 
@@ -108,7 +120,9 @@ async function determineConfig(opts: {
         const config = opts.configs.find((config) => config.name === opts.name);
 
         if (!config) {
-            throw new Error(`Cannot find config with name ${opts.name}`);
+            throw new ConfigurationError(
+                `Cannot find config with name "${opts.name}"`
+            );
         }
 
         return {
@@ -124,7 +138,7 @@ async function determineConfig(opts: {
         });
 
         if (!hasOneElement(init)) {
-            throw new Error(
+            throw new ConfigurationError(
                 `Cannot find files to load state from for id "${opts.id}"`
             );
         }
@@ -132,34 +146,232 @@ async function determineConfig(opts: {
         const name = basename(dirname(dirname(dirname(init[0]))));
 
         const config = opts.configs.find((config) => config.name === name);
+
         if (!config) {
-            throw new Error(
+            throw new ConfigurationError(
                 `No refactor config has been found, please provide id for an existing refactor`
             );
         }
 
         return {
-            config,
+            config: {
+                ...config,
+                id: opts.id,
+            },
         };
     }
 
     return await promptForConfig(opts.configs);
 }
 
+type RefactorResult = Awaited<ReturnType<typeof refactor>>;
+
+const currentRepositoryRefactoringReport = async (
+    opts: RefactorResult & {
+        successBranch: string;
+    }
+) => {
+    const { accepted, discarded, successBranch, sandboxDirectoryPath } = opts;
+
+    const perFile = Object.entries(accepted)
+        .flatMap(([file, results]) => {
+            const firstCommit = results[0]?.steps[0]?.commit?.substring(0, 7);
+            const lastCommit = results[
+                results.length - 1
+            ]?.lastCommit?.substring(0, 7);
+            if (!firstCommit || !lastCommit) {
+                return [];
+            }
+            return [
+                `# ${file}\ngit cherry-pick -n ${firstCommit}^..${lastCommit}`,
+            ];
+        })
+        .join('\n');
+
+    const firstCommits = Object.entries(discarded)
+        .flatMap(([file, results]) => {
+            const firstCommit = results[0]?.steps[0]?.commit?.substring(0, 7);
+            if (!firstCommit) {
+                return [`# ${file}\n# No commits found for this file`];
+            }
+            return [`# ${file}\ngit cherry-pick -n ${firstCommit}`];
+        })
+        .join('\n');
+
+    let failedToRefactor = '';
+    if (Object.keys(discarded).length > 0) {
+        failedToRefactor = markdown`
+Failed to refactor:
+
+${Object.keys(discarded)
+    .map((file, i) => `${i + 1}. \`${file}\``)
+    .join('\n')}
+`;
+    }
+
+    let firstCommitsOfFailures = '';
+    if (Object.keys(discarded).length > 0 && firstCommits) {
+        firstCommitsOfFailures = markdown`
+
+## First commits of failed files
+
+These are least invasive commits focused on the goal which didn't pass checks. You can try to fix them manually.
+
+\`\`\`sh
+${firstCommits}
+\`\`\`
+`;
+    }
+
+    return (
+        await glowFormat({
+            input: markdown`
+# Refactoring completed
+
+Sandbox directory path:
+
+\`SANDBOX_PATH\`
+
+Successfully refactored:
+
+${Object.keys(accepted)
+    .map((file, i) => `${i + 1}. \`${file}\``)
+    .join('\n')}
+${failedToRefactor}
+The code passing checks has been checked out as \`${successBranch}\` branch for you. So you can now try following command to merge changes into your current branch:
+
+## Merge directly
+
+\`\`\`sh
+git merge ${successBranch}
+\`\`\`
+
+## Interactively
+
+\`\`\`sh
+git checkout -p ${successBranch}
+\`\`\`
+
+## Individually per file
+
+\`\`\`sh
+${perFile}
+\`\`\`
+
+${firstCommitsOfFailures}
+
+`,
+        })
+    ).replace(
+        /**
+         * @note ensure the path is not broken by padding
+         */
+        'SANDBOX_PATH',
+        sandboxDirectoryPath
+    );
+};
+
+const currentRepositoryFailedRefactoringReport = async (
+    opts: RefactorResult
+) => {
+    const { discarded, sandboxDirectoryPath } = opts;
+
+    const firstCommits = Object.entries(discarded)
+        .flatMap(([file, results]) => {
+            const firstCommit = results[0]?.steps[0]?.commit?.substring(0, 7);
+            if (!firstCommit) {
+                return [`# ${file}\n# No commits found for this file`];
+            }
+            return [`# ${file}\ngit cherry-pick -n ${firstCommit}`];
+        })
+        .join('\n');
+
+    return (
+        await glowFormat({
+            input: markdown`
+# Refactoring failed
+
+Sandbox directory path:
+
+\`SANDBOX_PATH\`
+
+Failed to refactor:
+
+${Object.keys(discarded)
+    .map((file, i) => `${i + 1}. \`${file}\``)
+    .join('\n')}
+
+## First commits of failed files
+
+These are least invasive commits focused on the goal which didn't pass checks. You can try to fix them manually.
+
+\`\`\`sh
+${firstCommits}
+\`\`\`
+
+`,
+        })
+    ).replace(
+        /**
+         * @note ensure the path is not broken by padding
+         */
+        'SANDBOX_PATH',
+        sandboxDirectoryPath
+    );
+};
+
 export async function runRefactor(opts: {
     id?: string;
     name?: string;
     //
 }) {
-    const configs = await loadRefactorConfigs();
+    try {
+        const configs = await loadRefactorConfigs();
 
-    const { config } = await determineConfig({
-        ...opts,
-        configs,
-    });
+        const { config } = await determineConfig({
+            ...opts,
+            configs,
+        });
 
-    await refactor({
-        ...opts,
-        config,
-    });
+        const result = await refactor({
+            config,
+        });
+
+        if (!result.repository) {
+            if (result.successBranch) {
+                console.log(await currentRepositoryRefactoringReport(result));
+            } else {
+                console.log(
+                    await currentRepositoryFailedRefactoringReport(result)
+                );
+            }
+        }
+    } catch (err) {
+        if (err instanceof ConfigurationError) {
+            console.log(
+                await glowFormat({
+                    input: `# Configuration error
+
+${err.message}
+
+\`\`\`
+${formatObject(extractErrorInfo(err), { indent: '' })}
+\`\`\`
+`,
+                })
+            );
+        } else if (err instanceof Error) {
+            console.log(
+                await glowFormat({
+                    input: `# Unhandled error
+
+\`\`\`
+${formatObject(extractErrorInfo(err), { indent: '' })}
+\`\`\``,
+                })
+            );
+        } else {
+            throw err;
+        }
+    }
 }

@@ -34,21 +34,6 @@ export const refactorGoalInputSchema = refactorConfigSchema
             );
         }
         const scripts = checkScriptsFromConfig(input, checks);
-        const checkResult = await check({
-            packageManager: await determinePackageManager({
-                directory: input.sandboxDirectoryPath,
-            }),
-            location: input.sandboxDirectoryPath,
-            scripts,
-            startCommit: input.startCommit,
-        });
-        if (checkResult.issues.length > 0) {
-            logger.info('Following scripts are used for checks', scripts);
-            logger.info('Found following issues', checkResult.issues);
-            throw new ConfigurationError(
-                `Initial checks have failed - the refactor command is designed to be run on the codebase that passes all checks. Please fix the issues or checkout the repository at a green state and try again. Ensure that the refactor bot is configured correctly and executing correct commands to make the checks. Checks can be disabled and adjusted in the goal.md file. Use the above log entries to understand which checks have failed.`
-            );
-        }
         return {
             ...input,
             scripts,
@@ -84,6 +69,22 @@ export const refactorGoal = makePipelineFunction({
                 location: sandboxDirectoryPath,
                 ref: input.startCommit,
             });
+        }
+
+        const checkResult = await check({
+            packageManager: await determinePackageManager({
+                directory: input.sandboxDirectoryPath,
+            }),
+            location: input.sandboxDirectoryPath,
+            scripts: input.scripts,
+            startCommit: input.startCommit,
+        });
+        if (checkResult.issues.length > 0) {
+            logger.info('Following scripts are used for checks', input.scripts);
+            logger.info('Found following issues', checkResult.issues);
+            throw new ConfigurationError(
+                `Initial checks have failed - the refactor command is designed to be run on the codebase that passes all checks. Please fix the issues or checkout the repository at a green state and try again. Ensure that the refactor bot is configured correctly and executing correct commands to make the checks. Checks can be disabled and adjusted in the goal.md file. Use the above log entries to understand which checks have failed.`
+            );
         }
 
         const planAndRefactorWithPersistence =

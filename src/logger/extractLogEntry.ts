@@ -1,6 +1,7 @@
 import { format } from 'util';
 
 import { hasOneElement } from '../utils/hasOne';
+import { extractErrorInfo } from './extractErrorInfo';
 
 export function extractLogEntry(
     logLevel: string,
@@ -39,14 +40,8 @@ export function extractLogEntry(
             level: logLevel,
             message: formattedText.join(' '),
             data: hasOneElement(errors)
-                ? {
-                      ...errors[0],
-                      stack: errors[0].stack,
-                  }
-                : errors.map((err) => ({
-                      ...err,
-                      stack: err.stack,
-                  })),
+                ? extractErrorInfo(errors[0])
+                : errors.map((err) => extractErrorInfo(err)),
         };
     } else if (formatArgs.length === 0) {
         return {

@@ -21,6 +21,7 @@ import { refactorConfigSchema } from './types';
 
 export const checkoutSandboxInputSchema = refactorConfigSchema
     .pick({
+        id: true,
         name: true,
         repository: true,
         ref: true,
@@ -60,10 +61,7 @@ export const checkoutSandbox = makePipelineFunction({
 
         const { sandboxId, sandboxDirectoryPath } = sandboxLocation({
             tag: config.name,
-            /**
-             * @todo don't forget to change this before committing
-             */
-            sandboxId: 'unr87ijk',
+            sandboxId: config.id,
         });
 
         if (config.repository) {

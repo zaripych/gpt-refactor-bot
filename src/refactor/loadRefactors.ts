@@ -4,6 +4,7 @@ import { load as loadYaml } from 'js-yaml';
 import { basename, dirname } from 'path';
 import { z } from 'zod';
 
+import { ConfigurationError } from '../errors/configurationError';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { refactorConfigSchema } from './types';
 
@@ -14,7 +15,16 @@ async function parseConfig(opts: { defaultName: string; contents: string }) {
     const parsedConfig = await refactorConfigSchema
         .setKey('name', z.string().default(opts.defaultName))
         .setKey('objective', z.string().optional())
-        .parseAsync(loadYaml(config));
+        .parseAsync(loadYaml(config))
+        .catch((err) => {
+            throw new ConfigurationError(
+                `Failed to parse the config in the refactor goal ` +
+                    `description file`,
+                {
+                    cause: err,
+                }
+            );
+        });
     return {
         ...parsedConfig,
         objective:

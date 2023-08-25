@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { modelsSchema } from '../chat-gpt/api';
+import { randomText } from '../utils/randomText';
 
 export const refactorConfigSchema = z.object({
     /**
@@ -131,6 +132,13 @@ export const refactorConfigSchema = z.object({
             })
         )
         .optional(),
+
+    /**
+     * Unique identifier of the refactor, used to identify and restore
+     * the refactor state and finding the right sandbox when running
+     * multiple times.
+     */
+    id: z.string().default(() => randomText(8)),
 });
 
 export type RefactorConfig = z.input<typeof refactorConfigSchema>;
@@ -192,7 +200,7 @@ export type RefactorResultByFilePathRecord = z.infer<
 
 export const refactorFilesResultSchema = z.object({
     accepted: z.record(z.string(), z.array(refactorResultSchema)),
-    discarded: z.record(z.string(), z.array(refactorFailedResultSchema)),
+    discarded: z.record(z.string(), z.array(refactorResultSchema)),
 });
 
 export type RefactorFilesResult = z.infer<typeof refactorFilesResultSchema>;
