@@ -18,7 +18,7 @@ import { changeInfo } from '../ts-morph/quick-info/changeInfo';
 import { ensureHasOneElement, hasTwoElements } from '../utils/hasOne';
 import { UnreachableError } from '../utils/UnreachableError';
 import { applyChanges } from './applyChanges';
-import { check, checksSummary } from './check';
+import { check, checksSummary, scriptSchema } from './check';
 import { edit } from './edit';
 import { formatCommitMessage } from './prompts/formatCommitMessage';
 import { formatFileContents } from './prompts/formatFileContents';
@@ -34,8 +34,6 @@ import {
 export const refactorFileInputSchema = refactorConfigSchema
     .pick({
         budgetCents: true,
-        lintScripts: true,
-        testScripts: true,
         model: true,
         modelByStepCode: true,
         useMoreExpensiveModelsOnRetry: true,
@@ -45,6 +43,7 @@ export const refactorFileInputSchema = refactorConfigSchema
         filePath: z.string(),
         startCommit: z.string(),
         sandboxDirectoryPath: z.string(),
+        scripts: z.array(scriptSchema),
     })
     .transform(async (input) => ({
         ...input,
@@ -166,8 +165,6 @@ export const refactorFile = makePipelineFunction({
 
         const checkWithPersistence = check.withPersistence();
 
-        const scripts = [...input.lintScripts, ...input.testScripts];
-
         const packageManager = await determinePackageManager({
             directory: input.sandboxDirectoryPath,
         });
@@ -186,12 +183,14 @@ export const refactorFile = makePipelineFunction({
                 location: input.sandboxDirectoryPath,
                 startCommit: input.startCommit,
                 filePaths: [filePath],
-                scripts,
+                scripts: input.scripts,
             },
             persistence
         );
         if (initialCheck.issues.length > 0) {
-            throw new AbortError('We should have no errors initially');
+            throw new AbortError(
+                'We should have no errors initially, this should be guaranteed by the initial pre-check made in refactorGoal function. If we got here there must be a bug in the code.'
+            );
         }
         const issues: Issue[] = [];
         const commonEditOpts = {
@@ -199,7 +198,7 @@ export const refactorFile = makePipelineFunction({
             filePath,
             sandboxDirectoryPath: input.sandboxDirectoryPath,
             budgetCents: input.budgetCents,
-            eslintAutoFixScriptArgs: input.lintScripts.find((script) =>
+            eslintAutoFixScriptArgs: input.scripts.find((script) =>
                 script.args.includes('eslint')
             )?.args,
         };
@@ -357,7 +356,7 @@ export const refactorFile = makePipelineFunction({
                             packageManager,
                             location: input.sandboxDirectoryPath,
                             startCommit: input.startCommit,
-                            scripts,
+                            scripts: input.scripts,
                         },
                         persistence
                     );

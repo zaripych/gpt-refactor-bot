@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { CycleDetectedError } from '../errors/cycleDetectedError';
 import { logger } from '../logger/logger';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
+import { scriptSchema } from './check';
 import { planFiles } from './planFiles';
 import { refactorBatch } from './refactorBatch';
 import type { RefactorFilesResult } from './types';
@@ -16,6 +17,7 @@ export const planAndRefactorInputSchema = refactorConfigSchema.augment({
     objective: z.string(),
     startCommit: z.string(),
     sandboxDirectoryPath: z.string(),
+    scripts: z.array(scriptSchema),
 });
 
 export const planAndRefactor = makePipelineFunction({

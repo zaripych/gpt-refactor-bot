@@ -5,8 +5,12 @@ import { diffHash } from '../git/diffHash';
 import { filesDiffHash } from '../git/filesDiffHash';
 import { runCheckCommand } from '../package-manager/runCheckCommand';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
-import type { CheckIssuesResult, Issue } from './types';
-import { checkIssuesResultSchema, scriptSchema } from './types';
+import type { CheckIssuesResult, Issue, RefactorConfig } from './types';
+import { checkIssuesResultSchema } from './types';
+
+export const scriptSchema = z.object({
+    args: z.array(z.string()).nonempty(),
+});
 
 const checkInputSchema = z
     .object({
@@ -54,6 +58,43 @@ export const check = makePipelineFunction({
         };
     },
 });
+
+export const checkScriptsFromConfig = (
+    config: Pick<RefactorConfig, 'tsc' | 'eslint' | 'jest'>,
+    discoverResults: {
+        tsc: boolean;
+        eslint: boolean;
+        jest: boolean;
+    }
+) => {
+    const scripts = [];
+
+    const keys = ['tsc', 'eslint', 'jest'] as const;
+
+    for (const key of keys) {
+        const defaultConfig = {
+            args: [key],
+        };
+
+        const configValue = config[key];
+        if (typeof configValue === 'boolean') {
+            if (configValue) {
+                scripts.push(defaultConfig);
+            }
+        } else if (typeof configValue === 'object') {
+            scripts.push({
+                ...defaultConfig,
+                args: configValue.args,
+            });
+        } else {
+            if (discoverResults[key]) {
+                scripts.push(defaultConfig);
+            }
+        }
+    }
+
+    return z.array(scriptSchema).parse(scripts);
+};
 
 export const checksSummary = (opts: {
     issues: Issue[];

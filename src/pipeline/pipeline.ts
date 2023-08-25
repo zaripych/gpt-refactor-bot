@@ -346,9 +346,9 @@ async function transformElement(
 
     const foundValidResult =
         Boolean(foundResult) &&
-        nextElement.inputSchema.safeParse(
+        (await nextElement.inputSchema.safeParseAsync(
             (combine ?? combineAll)(input as object, foundResult)
-        );
+        ));
 
     if (foundValidResult && foundValidResult.success) {
         logger.debug(

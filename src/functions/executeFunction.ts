@@ -1,5 +1,6 @@
 import { realpath } from 'fs/promises';
 
+import { logger } from '../logger/logger';
 import { makeDependencies } from './dependencies';
 import type { FunctionsConfig } from './makeFunction';
 import type { functions } from './registry';
@@ -74,7 +75,7 @@ export async function executeFunction(
         });
     } catch (err: unknown) {
         if (err instanceof Error) {
-            console.error(err);
+            logger.debug(err);
             return {
                 error: {
                     message: err.message,

@@ -2,25 +2,27 @@ import { z } from 'zod';
 
 import { modelsSchema } from '../chat-gpt/api';
 
-export const scriptSchema = z.object({
-    args: z.array(z.string()).nonempty(),
-    parse: z.enum(['stdout', 'stderr'] as const),
-    supportsFileFiltering: z.boolean(),
-});
-
 export const refactorConfigSchema = z.object({
     /**
-     * Short name of the refactoring
+     * Short name of the refactor, should be a valid directory name
+     * and also used as a git branch name.
      */
     name: z.string(),
 
     /**
-     * Objective of the refactor
+     * Objective of the refactor, the objective is read from a goal.md file
+     * in a directory located at the root of the repository:
+     *
+     * `.refactor-bot/refactors/${name}/goal.md`
+     *
+     * The `goal.md` file is a markdown file can have a frontmatter section
+     * with fields that map to the fields of this schema. The frontmatter
+     * section is optional.
      */
     objective: z.string(),
 
     /**
-     * GitHub repository which is the target of the refactor, could be
+     * A git repository which is the target of the refactor, could be
      * undefined if the target is current repository.
      */
     repository: z.string().url().optional(),
@@ -73,54 +75,62 @@ export const refactorConfigSchema = z.object({
         }),
 
     /**
-     * An optional list of package.json scripts to run after code
-     * changes to lint and check the changed files for errors. Defaults
-     * to ['tsc', 'eslint'].
+     * `eslint` is supported by default as a checker for the code produced
+     * by the model during refactor. It also can serve as a formatter in
+     * addition to the `prettier` formatter.
+     *
+     * Whether to enable or disable `eslint` is determined by auto-discovery
+     * mechanism which checks `package.json` and the root of the repository
+     * for configs.
+     *
+     * When `eslint` is used as a linter, the `--fix` flag is used to
+     * automatically fix eslint issues produced by the models. This behavior
+     * cannot be disabled without disabling `eslint` entirely.
      */
-    lintScripts: z
-        .array(
+    eslint: z
+        .boolean()
+        .or(
             z.object({
                 args: z.array(z.string()).nonempty(),
-                parse: z.enum(['stdout', 'stderr'] as const),
-                supportsFileFiltering: z.boolean(),
             })
         )
-        .default([
-            {
-                args: ['tsc'],
-                parse: 'stdout',
-                supportsFileFiltering: false,
-            },
-            {
-                args: ['eslint'],
-                parse: 'stdout',
-                supportsFileFiltering: true,
-            },
-        ]),
+        .optional(),
 
     /**
-     * An optional list of package.json scripts to run after code
-     * changes to test the changed files. Defaults to ['jest'].
+     * `jest` is supported as a testing framework to automatically run
+     * tests after code changes produced by the model during refactor.
+     *
+     * Whether to enable or disable `jest` is determined by auto-discovery
+     * mechanism which checks `package.json` and the root of the repository
+     * for configs.
      *
      * When `jest` is used as a test runner, the `--findRelatedTests`
      * flag is used to only run tests that are related to the changed
      * files.
      */
-    testScripts: z
-        .array(
+    jest: z
+        .boolean()
+        .or(
             z.object({
                 args: z.array(z.string()).nonempty(),
-                parse: z.enum(['stdout', 'stderr'] as const),
-                supportsFileFiltering: z.boolean(),
             })
         )
-        .default([
-            {
-                args: ['jest'],
-                parse: 'stdout',
-                supportsFileFiltering: true,
-            },
-        ]),
+        .optional(),
+
+    /**
+     * `tsc` is supported as a type checker to automatically check for
+     * type errors after code changes produced by the model during refactor.
+     *
+     * `tsc` is always enabled, but can be configured to use custom arguments.
+     */
+    tsc: z
+        .boolean()
+        .or(
+            z.object({
+                args: z.array(z.string()).nonempty(),
+            })
+        )
+        .optional(),
 });
 
 export type RefactorConfig = z.input<typeof refactorConfigSchema>;

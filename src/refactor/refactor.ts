@@ -1,5 +1,6 @@
 import { join } from 'path';
 
+import { ConfigurationError } from '../errors/configurationError';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { gitCheckoutNewBranch } from '../git/gitCheckoutNewBranch';
 import { gitFetch } from '../git/gitFetch';
@@ -171,7 +172,7 @@ export async function refactor(
 
     const { pipe, location, id } = await loadRefactorState(opts, getDeps);
 
-    logger.debug(
+    logger.info(
         `Starting refactor with id "${id}", process id: "${process.pid}"`
     );
 
@@ -229,6 +230,21 @@ export async function refactor(
         return {
             accepted: result.accepted,
             discarded: result.discarded,
+        };
+    } catch (err) {
+        if (err instanceof ConfigurationError) {
+            console.log(
+                await glowFormat({
+                    input: `# Configuration error
+
+${err.message}`,
+                })
+            );
+        }
+
+        return {
+            accepted: {},
+            discarded: {},
         };
     } finally {
         await pipe.clean(persistence);

@@ -167,8 +167,6 @@ export async function runCheckCommand(opts: {
     packageManager: 'npm' | 'yarn' | 'pnpm';
     script: {
         args: [string, ...string[]];
-        parse: 'stdout' | 'stderr';
-        supportsFileFiltering: boolean;
     };
     filePaths?: string[];
     outputParser?: (output: string) => Issue[];
@@ -201,18 +199,19 @@ export async function runCheckCommand(opts: {
             break;
 
         default:
-            parser = opts.outputParser;
-            if (!parser) {
-                throw new Error('Cannot determine parser for script');
-            }
-            if (script.supportsFileFiltering && opts.filePaths) {
-                script.args.push(...opts.filePaths);
-            }
+            throw new Error(
+                `Command ${script.args[0]} is not supported, expecting ` +
+                    `one of: eslint, tsc, jest`
+            );
     }
 
     return runCheckCommandWithParser({
         ...opts,
-        script,
+        script: {
+            ...script,
+            parse: 'stdout',
+            supportsFileFiltering: script.args[0] !== 'tsc',
+        },
         outputParser: parser,
     });
 }

@@ -6,6 +6,7 @@ import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
 import { logger } from '../logger/logger';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
+import { scriptSchema } from './check';
 import { refactorFile } from './refactorFile';
 import type { RefactorFileResult, RefactorFilesResult } from './types';
 import {
@@ -38,6 +39,7 @@ export const refactorBatchInputSchema = refactorConfigSchema
                 z.promise(z.boolean()).or(z.boolean())
             )
             .optional(),
+        scripts: z.array(scriptSchema),
     });
 
 export const refactorBatch = makePipelineFunction({
