@@ -374,7 +374,7 @@ async function transformElement(
         }
     }
 
-    if (persistence?.location) {
+    if (persistence?.location && deps.saveInput) {
         const location = [key, '-input.yaml'].join('');
         try {
             await saveResult(
