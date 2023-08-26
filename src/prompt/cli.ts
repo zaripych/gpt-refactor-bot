@@ -1,6 +1,6 @@
 import type { CommandModule } from 'yargs';
 
-import type { Models } from '../chat-gpt/api';
+import { type Models, modelsSchema } from '../chat-gpt/api';
 import { run } from './run';
 
 export const promptCommand: CommandModule<
@@ -16,7 +16,7 @@ export const promptCommand: CommandModule<
     builder: (yargs) =>
         yargs
             .option('model', {
-                choices: ['gpt-3.5-turbo', 'gpt-4'] as const,
+                choices: modelsSchema.options,
                 default: 'gpt-3.5-turbo' as const,
             })
             .option('watch', {
