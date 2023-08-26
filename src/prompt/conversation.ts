@@ -25,7 +25,9 @@ export const conversationState = (conversationFile: string) => {
 
     const hint = async (message: string) => {
         contents = serializeMessages(messages);
-        contents += `\n\n> @hint ${message}\n\n`;
+        contents += `\n\n> @hint ${message
+            .trim()
+            .replaceAll('\n', '\n> ')}\n\n`;
         await writeFile(
             conversationFile,
             await prettierMarkdown(contents),
