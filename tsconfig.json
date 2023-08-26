@@ -4,5 +4,9 @@
         "outDir": ".tsc-out",
         "tsBuildInfoFile": ".tsc-out/.tsbuildinfo"
     },
-    "include": ["src/**/*.ts", "bin/refactor-bot.ts"]
+    "include": [
+        "src/**/*.ts",
+        "bin/refactor-bot.ts",
+        "src/ts-morph/builtinLibs.cjs"
+    ]
 }

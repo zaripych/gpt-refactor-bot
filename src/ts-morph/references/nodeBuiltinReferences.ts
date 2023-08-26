@@ -15,7 +15,10 @@ export async function nodeBuiltinReferences(
     }
 ) {
     const imports = findSourceFilePathsWhereModuleIsImported(project, config, {
-        module: args.module,
+        module: [
+            args.module.trim().replaceAll(/^node:/g, ''),
+            `node:${args.module.trim().replaceAll(/^node:/g, '')}`,
+        ],
     });
 
     for (const foundFile of args.alreadyFoundFiles.keys()) {

@@ -9,6 +9,7 @@ import type { FunctionsConfig } from '../functions/makeFunction';
 import { makeTsFunction } from '../functions/makeTsFunction';
 import { markdown } from '../markdown/markdown';
 import { firstLineOf } from '../utils/firstLineOf';
+import { getBuiltinLibs } from './builtinLibs.cjs';
 
 type Args = z.infer<typeof argsSchema>;
 
@@ -80,14 +81,23 @@ function getSourceFileFromDynamicImportStringLiteral(
         : undefined;
 }
 
+const builtIns = getBuiltinLibs();
+
 export async function moduleImports(
     project: Project,
     config: FunctionsConfig,
     args: Args
 ): Promise<Array<FileImports>> {
+    const modules = builtIns.includes(args.module)
+        ? [
+              args.module.trim().replaceAll(/^node:/g, ''),
+              `node:${args.module.trim().replaceAll(/^node:/g, '')}`,
+          ]
+        : [args.module.trim()];
+
     const findImport = (node: Node<ts.Node>) =>
         node.isKind(SyntaxKind.ImportDeclaration) &&
-        node.getModuleSpecifierValue().trim() === args.module.trim();
+        modules.includes(node.getModuleSpecifierValue().trim());
 
     const fullInitialFilePath = args.initialFilePath
         ? join(config.repositoryRoot, args.initialFilePath)
@@ -174,7 +184,10 @@ export async function moduleImports(
         const allNodes = dynamicImportNodes.concat(declarationNodes);
 
         for (const { node, moduleSpecifier, moduleSourceFile } of allNodes) {
-            if (!moduleSourceFile && moduleSpecifier !== args.module) {
+            if (
+                !moduleSourceFile &&
+                (!moduleSpecifier || !modules.includes(moduleSpecifier))
+            ) {
                 continue;
             }
 
