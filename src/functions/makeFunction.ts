@@ -18,6 +18,11 @@ export type FunctionsConfig = {
     repositoryRoot: string;
 
     /**
+     * List of package names and directory names to include in the analysis
+     */
+    scope?: string[];
+
+    /**
      * Dependencies to use when calling the functions
      */
     dependencies: typeof makeDependencies;

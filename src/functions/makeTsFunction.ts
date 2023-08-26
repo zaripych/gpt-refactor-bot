@@ -1,19 +1,10 @@
 import type { Project } from 'ts-morph';
 import type { AnyZodObject, ZodObject, ZodSchema } from 'zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 
 import { createProject } from '../ts-morph/createProject';
 import type { FunctionsConfig } from './makeFunction';
 import { makeFunction } from './makeFunction';
-
-const contextSchema = z.object({
-    scope: z
-        .array(z.string())
-        .describe(
-            'List of directory names and/or internal package names to include in the analysis'
-        )
-        .optional(),
-});
 
 export const makeTsFunction = <
     ArgSchema extends AnyZodObject,
@@ -31,15 +22,13 @@ export const makeTsFunction = <
     ) => Promise<z.infer<ResultSchema>>;
 }) =>
     makeFunction({
-        argsSchema: (
-            opts.argsSchema as unknown as ZodObject<ArgSchema['shape']>
-        ).merge(contextSchema),
+        argsSchema: opts.argsSchema as unknown as ZodObject<ArgSchema['shape']>,
         resultSchema: opts.resultSchema,
         name: opts.name,
         description: opts.description,
-        implementation: async ({ scope, ...args }, config: FunctionsConfig) => {
+        implementation: async (args, config: FunctionsConfig) => {
             const { project } = await createProject({
-                scope,
+                scope: config.scope,
                 repositoryRoot: config.repositoryRoot,
             });
             return opts.implementation(project, config, args);
