@@ -1,32 +1,6 @@
 import type { z, ZodSchema } from 'zod';
 
-import type { makeDependencies } from './dependencies';
-
-export type FunctionsConfig = {
-    /**
-     * Whether to perform strict validation of the arguments and result
-     * against the schema. This is always `true` when used by function
-     * calling mechanisms, but can be set to `false` when calling the
-     * function directly for testing purposes.
-     */
-    strict: boolean;
-
-    /**
-     * The root of the repository to use when calling the functions,
-     * defaults to the return value of `findRepositoryRoot`.
-     */
-    repositoryRoot: string;
-
-    /**
-     * List of package names and directory names to include in the analysis
-     */
-    scope?: string[];
-
-    /**
-     * Dependencies to use when calling the functions
-     */
-    dependencies: typeof makeDependencies;
-};
+import type { FunctionsConfig } from './types';
 
 /**
  * Generic definition of a function that can be called by the bot, see
@@ -62,10 +36,7 @@ export const makeFunction = <
             async (args: z.infer<Schema>, config: FunctionsConfig) => {
                 const validatedArgs = opts.argsSchema.parse(args) as unknown;
                 const result = await opts.implementation(validatedArgs, config);
-                if (config.strict) {
-                    return opts.resultSchema.parse(result) as unknown;
-                }
-                return result;
+                return (await opts.resultSchema.parseAsync(result)) as unknown;
             },
             {
                 description: opts.description,

@@ -3,8 +3,8 @@ import type { AnyZodObject, ZodObject, ZodSchema } from 'zod';
 import type { z } from 'zod';
 
 import { createProject } from '../ts-morph/createProject';
-import type { FunctionsConfig } from './makeFunction';
 import { makeFunction } from './makeFunction';
+import type { FunctionsConfig } from './types';
 
 export const makeTsFunction = <
     ArgSchema extends AnyZodObject,

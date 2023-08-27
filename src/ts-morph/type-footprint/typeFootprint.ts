@@ -2,7 +2,6 @@ import type { Node, Signature, Symbol as TsSymbol, ts, Type } from 'ts-morph';
 import { SymbolFlags, TypeFormatFlags } from 'ts-morph';
 
 import { findRepositoryRoot } from '../../file-system/findRepositoryRoot';
-import { makeDependencies } from '../../functions/dependencies';
 import { prettierTypescript } from '../../prettier/prettier';
 import { onceAsync } from '../../utils/onceAsync';
 import { createProject } from '../createProject';
@@ -410,8 +409,6 @@ export async function typeFootprint(args: {
         project,
         {
             repositoryRoot,
-            strict: false,
-            dependencies: makeDependencies,
         },
         args
     );

@@ -1,9 +1,9 @@
 import { realpath } from 'fs/promises';
 
+import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { logger } from '../logger/logger';
-import { makeDependencies } from './dependencies';
-import type { FunctionsConfig } from './makeFunction';
 import type { functions } from './registry';
+import type { FunctionsConfig } from './types';
 
 type FunctionNames = (typeof functions)[number]['name'];
 
@@ -57,10 +57,6 @@ export async function executeFunction(
         throw new Error(`Cannot find function ${opts.name}`);
     }
 
-    const dependencies = opts.dependencies ?? makeDependencies;
-
-    const { findRepositoryRoot } = dependencies();
-
     const repositoryRoot = opts.repositoryRoot ?? (await findRepositoryRoot());
 
     const realRepositoryRoot = await realpath(repositoryRoot).catch(
@@ -69,9 +65,7 @@ export async function executeFunction(
 
     try {
         return await fn(opts.arguments as never, {
-            strict: opts.strict ?? true,
             repositoryRoot: realRepositoryRoot,
-            dependencies: opts.dependencies ?? makeDependencies,
         });
     } catch (err: unknown) {
         if (err instanceof Error) {

@@ -5,8 +5,8 @@ import { Node, SyntaxKind } from 'ts-morph';
 import { z } from 'zod';
 
 import { findPackageName } from '../file-system/findPackageName';
-import type { FunctionsConfig } from '../functions/makeFunction';
 import { makeTsFunction } from '../functions/makeTsFunction';
+import type { FunctionsConfig } from '../functions/types';
 import { markdown } from '../markdown/markdown';
 import { firstLineOf } from '../utils/firstLineOf';
 import { getBuiltinLibs } from './builtinLibs.cjs';

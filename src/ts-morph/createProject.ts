@@ -2,8 +2,10 @@ import fg from 'fast-glob';
 import { orderBy } from 'lodash-es';
 import { basename, dirname } from 'path';
 
+import { ConfigurationError } from '../errors/configurationError';
 import { findPackageName } from '../file-system/findPackageName';
 import { readPackagesGlobsAt } from '../file-system/readPackagesGlobsAt';
+import { logger } from '../logger/logger';
 
 export async function createProject(opts: {
     repositoryRoot: string;
@@ -15,15 +17,28 @@ export async function createProject(opts: {
 
     const { Project } = await import('ts-morph');
 
-    const packages = await readPackagesGlobsAt(repositoryRoot);
+    const { isMonorepo, packagesGlobs } = await readPackagesGlobsAt(
+        repositoryRoot
+    );
+
+    if (isMonorepo) {
+        logger.debug(`Found monorepo packages globs`, {
+            packagesGlobs,
+        });
+    }
 
     const typescriptPackages = await fg(
-        packages.map((p) => `${p}/tsconfig.json`),
+        packagesGlobs.map((p) => `${p}/tsconfig.json`),
         {
             cwd: repositoryRoot,
             absolute: true,
+            ignore: ['**/node_modules/**'],
         }
     );
+
+    logger.debug(`Found typescript packages`, {
+        typescriptPackages,
+    });
 
     const unsortedPackageInfo = await Promise.all(
         typescriptPackages.map(async (tsconfig) => ({
@@ -48,8 +63,14 @@ export async function createProject(opts: {
     ]);
 
     if (!packageInfo[0]) {
-        throw new Error('Cannot find any packages');
+        throw new ConfigurationError(
+            'Cannot find any packages with tsconfig.json'
+        );
     }
+
+    logger.debug(`Using tsconfig.json as first project`, {
+        firstTsConfigJson: packageInfo[0].tsconfig,
+    });
 
     const project = new Project({
         tsConfigFilePath: packageInfo[0].tsconfig,
@@ -61,7 +82,18 @@ export async function createProject(opts: {
             (packageName && scope.some((s) => packageName.includes(s))) ||
             scope.some((s) => dirName.includes(s))
         ) {
-            project.addSourceFilesFromTsConfig(tsconfig);
+            logger.debug(`Adding tsconfig.json at`, {
+                tsconfig,
+            });
+
+            try {
+                project.addSourceFilesFromTsConfig(tsconfig);
+            } catch (err) {
+                logger.error(`Failed to add tsconfig.json at`, {
+                    tsconfig,
+                    err,
+                });
+            }
         }
     }
 

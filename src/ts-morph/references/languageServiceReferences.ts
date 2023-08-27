@@ -4,7 +4,7 @@ import type { Node, Project, ts } from 'ts-morph';
 import { SyntaxKind } from 'ts-morph';
 
 import { findPackageName } from '../../file-system/findPackageName';
-import type { FunctionsConfig } from '../../functions/makeFunction';
+import type { FunctionsConfig } from '../../functions/types';
 import { firstLineOf } from '../../utils/firstLineOf';
 import { syntaxKindByIdentifierContext } from './identifierContext';
 import type { Args } from './types';

@@ -17,8 +17,8 @@ import {
     responseSchema,
     systemMessageSchema,
 } from '../chat-gpt/api';
-import { makeDependencies } from '../functions/dependencies';
 import { executeFunction } from '../functions/executeFunction';
+import { functionsConfigSchema } from '../functions/types';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { ensureHasOneElement } from '../utils/hasOne';
 import { isTruthy } from '../utils/isTruthy';
@@ -29,14 +29,7 @@ export const promptInputSchema = z.object({
     temperature: z.number(),
     budgetCents: z.number(),
     functions: z.array(functionDefinitionSchema),
-    functionsConfig: z.object({
-        repositoryRoot: z.string(),
-        dependencies: z
-            .function()
-            .transform((value) => value as typeof makeDependencies)
-            .optional()
-            .default(() => makeDependencies),
-    }),
+    functionsConfig: functionsConfigSchema,
     shouldStop: z
         .function()
         .args(regularAssistantMessageSchema)
@@ -131,7 +124,6 @@ const exec = makePipelineFunction({
         try {
             const result = await executeFunction({
                 ...functionsConfig,
-                strict: true,
                 name: functionCall.name,
                 arguments: parsedArgs as never,
             });

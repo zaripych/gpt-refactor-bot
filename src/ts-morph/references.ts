@@ -1,7 +1,7 @@
 import type { Project } from 'ts-morph';
 
-import type { FunctionsConfig } from '../functions/makeFunction';
 import { makeTsFunction } from '../functions/makeTsFunction';
+import type { FunctionsConfig } from '../functions/types';
 import { markdown } from '../markdown/markdown';
 import { languageServiceReferences } from './references/languageServiceReferences';
 import { nodeBuiltinReferences } from './references/nodeBuiltinReferences';

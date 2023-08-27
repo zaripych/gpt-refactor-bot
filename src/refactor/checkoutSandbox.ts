@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { ConfigurationError } from '../errors/configurationError';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { changedFilesHash } from '../git/changedFilesHash';
 import { gitAddAll } from '../git/gitAddAll';
@@ -103,7 +104,7 @@ export const checkoutSandbox = makePipelineFunction({
 
         if (Object.values(status).some((files) => files.length > 0)) {
             if (!config.allowDirtyWorkingTree) {
-                throw new Error(
+                throw new ConfigurationError(
                     `Sandbox has non-committed files, please set ` +
                         `allowDirtyWorkingTree to ignore this and continue. ` +
                         `Running with dirty working tree will lead to non ` +
@@ -113,9 +114,12 @@ export const checkoutSandbox = makePipelineFunction({
             }
 
             logger.warn(
-                `Sandbox has non-committed files. We are going to commit ` +
+                `**WARNING** Sandbox has non-committed files. ` +
+                    `We are going to commit ` +
                     `those files to ensure that the sandbox is in a clean ` +
-                    `state before refactor.`
+                    `state before refactor. Before pushing the changes, ` +
+                    `please make sure that the changes do not contain any ` +
+                    `sensitive information.`
             );
 
             await gitAddAll({

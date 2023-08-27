@@ -23,6 +23,20 @@ export const refactorConfigSchema = z.object({
     objective: z.string(),
 
     /**
+     * Name of the `tsconfig.json` file to use for the refactor, defaults
+     * to `tsconfig.json`. In mono-repos scenarios this will affect the name
+     * of every `tsconfig.json` file for every package.
+     */
+    tsConfigJsonFileName: z.string().optional().default('tsconfig.json'),
+
+    /**
+     * List of package names or directory names where tsconfig.json files
+     * are to be found, to include in the refactoring process. If
+     * not specified all tsconfig.json files in the repository are included.
+     */
+    scope: z.array(z.string()).optional(),
+
+    /**
      * A git repository which is the target of the refactor, could be
      * undefined if the target is current repository.
      */
@@ -125,12 +139,9 @@ export const refactorConfigSchema = z.object({
      * `tsc` is always enabled, but can be configured to use custom arguments.
      */
     tsc: z
-        .boolean()
-        .or(
-            z.object({
-                args: z.array(z.string()).nonempty(),
-            })
-        )
+        .object({
+            args: z.array(z.string()).nonempty(),
+        })
         .optional(),
 
     /**

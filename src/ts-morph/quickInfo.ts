@@ -1,8 +1,8 @@
 import { type Project } from 'ts-morph';
 import { z } from 'zod';
 
-import type { FunctionsConfig } from '../functions/makeFunction';
 import { makeTsFunction } from '../functions/makeTsFunction';
+import type { FunctionsConfig } from '../functions/types';
 import { markdown } from '../markdown/markdown';
 import { quickInfoForNode } from './quick-info/quickInfoForNode';
 import { findIdentifier } from './references/findIdentifier';

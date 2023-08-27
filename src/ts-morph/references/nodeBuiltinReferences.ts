@@ -1,6 +1,6 @@
 import type { Project } from 'ts-morph';
 
-import type { FunctionsConfig } from '../../functions/makeFunction';
+import type { FunctionsConfig } from '../../functions/types';
 import { findSourceFilePathsWhereModuleIsImported } from './findSourceFilePathsWhereModuleIsImported';
 import { languageServiceReferences } from './languageServiceReferences';
 import { mergeReferences } from './mergeReferences';

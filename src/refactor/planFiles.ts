@@ -19,6 +19,8 @@ export const planFilesInputSchema = refactorConfigSchema
         model: true,
         modelByStepCode: true,
         useMoreExpensiveModelsOnRetry: true,
+        scope: true,
+        tsConfigJsonFileName: true,
     })
     .augment({
         objective: z.string(),
@@ -134,7 +136,8 @@ export const planFiles = makePipelineFunction({
                 functions: await includeFunctions(),
                 functionsConfig: {
                     repositoryRoot: input.sandboxDirectoryPath,
-                    dependencies: getDeps,
+                    scope: input.scope,
+                    tsconfigJsonFileName: input.tsConfigJsonFileName,
                 },
                 shouldStop: async (message) => {
                     await validateParseAndOrderThePlan({

@@ -17,6 +17,8 @@ export const planTasksInputSchema = refactorConfigSchema
         model: true,
         modelByStepCode: true,
         useMoreExpensiveModelsOnRetry: true,
+        tsConfigJsonFileName: true,
+        scope: true,
     })
     .augment({
         objective: z.string(),
@@ -153,7 +155,8 @@ export const planTasks = makePipelineFunction({
                 budgetCents: input.budgetCents,
                 functionsConfig: {
                     repositoryRoot: input.sandboxDirectoryPath,
-                    dependencies: getDeps,
+                    scope: input.scope,
+                    tsconfigJsonFileName: input.tsConfigJsonFileName,
                 },
                 ...determineModelParameters(input, persistence),
             },

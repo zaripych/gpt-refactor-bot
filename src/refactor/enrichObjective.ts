@@ -14,6 +14,8 @@ export const enrichObjectiveInputSchema = refactorConfigSchema
         model: true,
         modelByStepCode: true,
         useMoreExpensiveModelsOnRetry: true,
+        scope: true,
+        tsConfigJsonFileName: true,
     })
     .augment({
         sandboxDirectoryPath: z.string(),
@@ -70,7 +72,8 @@ export const enrichObjective = makePipelineFunction({
                 functions: await includeFunctions(),
                 functionsConfig: {
                     repositoryRoot: input.sandboxDirectoryPath,
-                    dependencies: getDeps,
+                    scope: input.scope,
+                    tsconfigJsonFileName: input.tsConfigJsonFileName,
                 },
                 ...determineModelParameters(input, persistence),
             },

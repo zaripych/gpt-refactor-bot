@@ -32,7 +32,7 @@ export async function discoverDependencies(opts: { location: string }) {
 
     const prettier = allDeps.has('prettier');
 
-    const [prettierConfigs, packagesGlobs] = await Promise.all([
+    const [prettierConfigs, { isMonorepo, packagesGlobs }] = await Promise.all([
         fg('*prettier*', {
             cwd: repositoryRoot,
             dot: true,
@@ -57,9 +57,7 @@ export async function discoverDependencies(opts: { location: string }) {
         hasCode: Boolean(toolConfigs.get('code')),
         hasGit: Boolean(toolConfigs.get('git')),
         hasGlow: Boolean(toolConfigs.get('glow')),
-        isMonoRepo: !(
-            packagesGlobs.includes('.') && packagesGlobs.length === 1
-        ),
+        isMonorepo,
         packagesGlobs,
     };
 }
