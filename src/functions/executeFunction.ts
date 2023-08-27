@@ -14,7 +14,8 @@ type ResultOf<Name extends FunctionNames> = Awaited<
 export async function executeFunction<
     Opts extends { name: FunctionNames; arguments: unknown }
 >(
-    opts: Opts & Partial<FunctionsConfig>
+    opts: Opts,
+    config?: Partial<FunctionsConfig>
 ): Promise<
     | ResultOf<Opts['name']>
     | {
@@ -27,7 +28,8 @@ export async function executeFunction(
     opts: {
         name: string;
         arguments: unknown;
-    } & Partial<FunctionsConfig>
+    },
+    config?: Partial<FunctionsConfig>
 ): Promise<
     | unknown
     | {
@@ -40,7 +42,8 @@ export async function executeFunction(
     opts: {
         name: string;
         arguments: unknown;
-    } & Partial<FunctionsConfig>
+    },
+    config?: Partial<FunctionsConfig>
 ): Promise<
     | unknown
     | {
@@ -57,7 +60,8 @@ export async function executeFunction(
         throw new Error(`Cannot find function ${opts.name}`);
     }
 
-    const repositoryRoot = opts.repositoryRoot ?? (await findRepositoryRoot());
+    const repositoryRoot =
+        config?.repositoryRoot ?? (await findRepositoryRoot());
 
     const realRepositoryRoot = await realpath(repositoryRoot).catch(
         () => repositoryRoot
@@ -65,6 +69,7 @@ export async function executeFunction(
 
     try {
         return await fn(opts.arguments as never, {
+            ...config,
             repositoryRoot: realRepositoryRoot,
         });
     } catch (err: unknown) {

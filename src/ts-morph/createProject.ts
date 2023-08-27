@@ -10,6 +10,7 @@ import { logger } from '../logger/logger';
 export async function createProject(opts: {
     repositoryRoot: string;
     scope?: string[];
+    tsconfigJsonFileName?: string;
 }) {
     const repositoryRoot = opts.repositoryRoot;
 
@@ -27,8 +28,10 @@ export async function createProject(opts: {
         });
     }
 
+    const tsconfigJsonFileName = opts.tsconfigJsonFileName ?? 'tsconfig.json';
+
     const typescriptPackages = await fg(
-        packagesGlobs.map((p) => `${p}/tsconfig.json`),
+        packagesGlobs.map((p) => `${p}/${tsconfigJsonFileName}`),
         {
             cwd: repositoryRoot,
             absolute: true,

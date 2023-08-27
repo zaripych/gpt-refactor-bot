@@ -27,10 +27,7 @@ export const makeTsFunction = <
         name: opts.name,
         description: opts.description,
         implementation: async (args, config: FunctionsConfig) => {
-            const { project } = await createProject({
-                scope: config.scope,
-                repositoryRoot: config.repositoryRoot,
-            });
+            const { project } = await createProject(config);
             return opts.implementation(project, config, args);
         },
     });

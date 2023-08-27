@@ -122,11 +122,13 @@ const exec = makePipelineFunction({
         }
 
         try {
-            const result = await executeFunction({
-                ...functionsConfig,
-                name: functionCall.name,
-                arguments: parsedArgs as never,
-            });
+            const result = await executeFunction(
+                {
+                    name: functionCall.name,
+                    arguments: parsedArgs as never,
+                },
+                functionsConfig
+            );
 
             return {
                 message: {
