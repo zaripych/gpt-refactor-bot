@@ -28,6 +28,8 @@ export const checkoutSandboxInputSchema = refactorConfigSchema
         ref: true,
         bootstrapScripts: true,
         allowDirtyWorkingTree: true,
+        ignore: true,
+        ignoreFiles: true,
     })
     .transform(async (input) => {
         if (!input.repository && !input.ref) {
@@ -85,6 +87,8 @@ export const checkoutSandbox = makePipelineFunction({
                 tag: config.name,
                 source: root,
                 sandboxId,
+                ignore: config.ignore,
+                ignoreFiles: config.ignoreFiles,
             });
 
             if (config.ref) {

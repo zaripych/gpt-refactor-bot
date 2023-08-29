@@ -1,5 +1,5 @@
-import fg from 'fast-glob';
 import { readFile } from 'fs/promises';
+import { globby } from 'globby';
 import { join } from 'path';
 import { z } from 'zod';
 
@@ -7,7 +7,11 @@ import { spawnResult } from '../child-process/spawnResult';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { readPackagesGlobsAt } from '../file-system/readPackagesGlobsAt';
 
-export async function discoverDependencies(opts: { location: string }) {
+export async function discoverDependencies(opts: {
+    location: string;
+    ignore?: string[];
+    ignoreFiles?: string[];
+}) {
     const repositoryRoot = await findRepositoryRoot(opts.location);
     const packageJson = await readFile(
         join(repositoryRoot, 'package.json'),
@@ -33,9 +37,11 @@ export async function discoverDependencies(opts: { location: string }) {
     const prettier = allDeps.has('prettier');
 
     const [prettierConfigs, { isMonorepo, packagesGlobs }] = await Promise.all([
-        fg('*prettier*', {
+        globby('*prettier*', {
             cwd: repositoryRoot,
             dot: true,
+            ignore: opts.ignore,
+            ignoreFiles: opts.ignoreFiles,
         }),
         readPackagesGlobsAt(repositoryRoot),
     ]);
@@ -62,7 +68,11 @@ export async function discoverDependencies(opts: { location: string }) {
     };
 }
 
-export async function discoverCheckDependencies(opts: { location: string }) {
+export async function discoverCheckDependencies(opts: {
+    location: string;
+    ignore?: string[];
+    ignoreFiles?: string[];
+}) {
     const repositoryRoot = await findRepositoryRoot(opts.location);
     const packageJson = await readFile(
         join(repositoryRoot, 'package.json'),
@@ -93,15 +103,21 @@ export async function discoverCheckDependencies(opts: { location: string }) {
     const tsc = allDeps.has('typescript');
 
     const [eslintConfigs, jestConfigs, tsConfigs] = await Promise.all([
-        fg('*eslint*', {
+        globby('*eslint*', {
             cwd: repositoryRoot,
             dot: true,
+            ignore: opts.ignore,
+            ignoreFiles: opts.ignoreFiles,
         }),
-        fg('*jest*', {
+        globby('*jest*', {
             cwd: repositoryRoot,
+            ignore: opts.ignore,
+            ignoreFiles: opts.ignoreFiles,
         }),
-        fg('*tsconfig*', {
+        globby('*tsconfig*', {
             cwd: repositoryRoot,
+            ignore: opts.ignore,
+            ignoreFiles: opts.ignoreFiles,
         }),
     ]);
 

@@ -2,7 +2,7 @@ import { mkdir } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { spawnResult } from '../child-process/spawnResult';
+import { copyFiles } from '../file-system/copyFiles';
 import { randomText } from '../utils/randomText';
 import { ensureSandboxSafe } from './ensureSandboxSafe';
 
@@ -29,7 +29,8 @@ type Opts = {
      */
     source: string;
 
-    exclude?: string[];
+    ignore?: string[];
+    ignoreFiles?: string[];
 };
 
 export function sandboxLocation(
@@ -54,18 +55,18 @@ export async function createSandbox(opts: Opts) {
 
     await mkdir(sandboxDirectoryPath, { recursive: true });
 
-    const excludeOpts = (opts.exclude ?? ['.vscode']).flatMap((exclude) => [
-        '--exclude',
-        exclude,
-    ]);
-
-    await spawnResult(
-        'rsync',
-        ['-a', ...excludeOpts, opts.source + '/', sandboxDirectoryPath],
-        {
-            exitCodes: [0],
-        }
-    );
+    await copyFiles({
+        source: opts.source,
+        destination: sandboxDirectoryPath,
+        include: ['**/*', '*'],
+        accessError: 'overwrite',
+        existsError: 'overwrite',
+        options: {
+            dot: true,
+            ignore: opts.ignore,
+            ignoreFiles: opts.ignoreFiles,
+        },
+    });
 
     await ensureSandboxSafe(sandboxDirectoryPath);
 

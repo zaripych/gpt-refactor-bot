@@ -1,5 +1,5 @@
-import fg from 'fast-glob';
 import { readFile } from 'fs/promises';
+import { globby } from 'globby';
 import { load as loadYaml } from 'js-yaml';
 import { basename, dirname } from 'path';
 import { z } from 'zod';
@@ -36,7 +36,7 @@ async function parseConfig(opts: { defaultName: string; contents: string }) {
 export async function loadRefactorConfigs() {
     const repoRoot = await findRepositoryRoot();
 
-    const refactors = await fg('.refactor-bot/refactors/*/goal.md', {
+    const refactors = await globby('.refactor-bot/refactors/*/goal.md', {
         cwd: repoRoot,
         absolute: true,
     });

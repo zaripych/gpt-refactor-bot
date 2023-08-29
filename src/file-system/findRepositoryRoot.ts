@@ -1,13 +1,13 @@
 import assert from 'assert';
-import fg from 'fast-glob';
 import { stat } from 'fs/promises';
+import { globby } from 'globby';
 import { join } from 'path';
 
 import { iterateDirectoriesUp } from './iterateDirectoriesUp';
 
 export async function findRepositoryRoot(startAt = process.cwd()) {
     const repoRoot = await iterateDirectoriesUp(startAt, async (directory) => {
-        const contents = await fg(
+        const contents = await globby(
             [
                 '.git',
                 'yarn.lock',
@@ -19,6 +19,7 @@ export async function findRepositoryRoot(startAt = process.cwd()) {
             {
                 cwd: directory,
                 onlyFiles: false,
+                dot: true,
             }
         );
 

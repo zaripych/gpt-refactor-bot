@@ -1,16 +1,18 @@
 import assert from 'assert';
-import fg from 'fast-glob';
 import { readlink, realpath } from 'fs/promises';
+import type { GlobEntry } from 'globby';
+import { globbyStream } from 'globby';
 import { isAbsolute, resolve } from 'path';
 
 export async function ensureSandboxSafe(location: string) {
-    const iterable = fg.stream('**/*', {
+    const iterable = globbyStream('**/*', {
         cwd: location,
         dot: true,
         onlyFiles: false,
         absolute: true,
         stats: true,
-    }) as AsyncIterable<fg.Entry>;
+        objectMode: true,
+    }) as AsyncIterable<GlobEntry>;
 
     for await (const entry of iterable) {
         assert(entry.stats);

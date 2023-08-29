@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { modelsSchema } from '../chat-gpt/api';
+import { functionsConfigSchema } from '../functions/types';
 import { randomText } from '../utils/randomText';
 
 export const refactorConfigSchema = z.object({
@@ -27,14 +28,34 @@ export const refactorConfigSchema = z.object({
      * to `tsconfig.json`. In mono-repos scenarios this will affect the name
      * of every `tsconfig.json` file for every package.
      */
-    tsConfigJsonFileName: z.string().optional().default('tsconfig.json'),
+    tsConfigJsonFileName: functionsConfigSchema.shape.tsconfigJsonFileName,
 
     /**
      * List of package names or directory names where tsconfig.json files
      * are to be found, to include in the refactoring process. If
      * not specified all tsconfig.json files in the repository are included.
      */
-    scope: z.array(z.string()).optional(),
+    scope: functionsConfigSchema.shape.scope,
+
+    /**
+     * List of file globs to ignore when copying the repository to the
+     * sandbox directory.
+     *
+     * This also affects `tsconfig.json` files lookup.
+     *
+     * When overriding this value, make sure to include the default
+     * value as well: `['**\/node_modules\/**', '.env*', '.vscode\/**']`
+     */
+    ignore: functionsConfigSchema.shape.ignore,
+
+    /**
+     * List of globs pointing to .gitignore-style files with patterns to
+     * ignore when copying the repository to the sandbox directory.
+     *
+     * When overriding this value, consider including the default value
+     * as well: `['.gitignore']`
+     */
+    ignoreFiles: functionsConfigSchema.shape.ignoreFiles,
 
     /**
      * A git repository which is the target of the refactor, could be

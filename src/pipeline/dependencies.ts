@@ -1,5 +1,5 @@
-import fg from 'fast-glob';
 import { mkdir, readFile, rename, rm, unlink, writeFile } from 'fs/promises';
+import { globby } from 'globby';
 import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import hash from 'object-hash';
 
@@ -21,7 +21,7 @@ export const defaultDeps = {
             onlyFiles?: boolean;
         }
     ) => {
-        return fg(patterns, opts);
+        return globby(patterns, opts);
     },
     unlink,
     rm,

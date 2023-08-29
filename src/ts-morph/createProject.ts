@@ -1,18 +1,18 @@
-import fg from 'fast-glob';
+import { globby } from 'globby';
 import { orderBy } from 'lodash-es';
 import { basename, dirname } from 'path';
 
 import { ConfigurationError } from '../errors/configurationError';
 import { findPackageName } from '../file-system/findPackageName';
 import { readPackagesGlobsAt } from '../file-system/readPackagesGlobsAt';
+import {
+    type FunctionsConfig,
+    functionsConfigSchema,
+} from '../functions/types';
 import { logger } from '../logger/logger';
 
-export async function createProject(opts: {
-    repositoryRoot: string;
-    scope?: string[];
-    tsconfigJsonFileName?: string;
-}) {
-    const repositoryRoot = opts.repositoryRoot;
+export async function createProject(opts: FunctionsConfig) {
+    const { repositoryRoot } = functionsConfigSchema.parse(opts);
 
     const scope = opts.scope;
 
@@ -30,12 +30,13 @@ export async function createProject(opts: {
 
     const tsconfigJsonFileName = opts.tsconfigJsonFileName ?? 'tsconfig.json';
 
-    const typescriptPackages = await fg(
+    const typescriptPackages = await globby(
         packagesGlobs.map((p) => `${p}/${tsconfigJsonFileName}`),
         {
             cwd: repositoryRoot,
             absolute: true,
-            ignore: ['**/node_modules/**'],
+            ignore: opts.ignore,
+            ignoreFiles: opts.ignoreFiles,
         }
     );
 

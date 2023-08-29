@@ -1,6 +1,6 @@
 import chalk from 'chalk';
-import fg from 'fast-glob';
 import { mkdir, writeFile } from 'fs/promises';
+import { globby } from 'globby';
 import { orderBy } from 'lodash-es';
 import ora, { oraPromise } from 'ora';
 import { join } from 'path';
@@ -172,11 +172,12 @@ export const run = async (opts: {
     const repoRoot = await findRepositoryRoot();
     const dir = join(repoRoot, '.refactor-bot', 'prompts');
     const dirContents = orderBy(
-        await fg('*.md', {
+        await globby('*.md', {
             cwd: dir,
             ignore: ['_*.md'],
             onlyFiles: true,
             stats: true,
+            objectMode: true,
         }),
         (file) => file.stats?.ctimeMs,
         'desc'

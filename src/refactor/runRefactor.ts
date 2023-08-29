@@ -1,5 +1,5 @@
-import fg from 'fast-glob';
 import { mkdir, writeFile } from 'fs/promises';
+import { globby } from 'globby';
 import { basename, dirname } from 'path';
 import prompts from 'prompts';
 import { z } from 'zod';
@@ -133,9 +133,12 @@ async function determineConfig(opts: {
     if (opts.id) {
         const repoRoot = await findRepositoryRoot();
 
-        const init = await fg(`.refactor-bot/refactors/*/state/${opts.id}/*`, {
-            cwd: repoRoot,
-        });
+        const init = await globby(
+            `.refactor-bot/refactors/*/state/${opts.id}/*`,
+            {
+                cwd: repoRoot,
+            }
+        );
 
         if (!hasOneElement(init)) {
             throw new ConfigurationError(
