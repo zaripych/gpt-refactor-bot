@@ -17,6 +17,7 @@ import {
     responseSchema,
     systemMessageSchema,
 } from '../chat-gpt/api';
+import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
 import { executeFunction } from '../functions/executeFunction';
 import { functionsConfigSchema } from '../functions/types';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
@@ -244,6 +245,15 @@ export const prompt = makePipelineFunction({
                                 messages: [...state.messages, choice.message],
                             })
                         );
+
+                        if (
+                            nextStateChoices.length === 1 &&
+                            nextStateChoices[0]?.status === 'length'
+                        ) {
+                            throw new OutOfContextBoundsError(
+                                `We have hit the maximum length of the context, please try again with a shorter prompt or upgrade to a more expensive model`
+                            );
+                        }
 
                         return nextStateChoices;
                     }).pipe(mergeAll());

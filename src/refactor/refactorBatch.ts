@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { AbortError } from '../errors/abortError';
 import { CycleDetectedError } from '../errors/cycleDetectedError';
+import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
 import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
 import { logger } from '../logger/logger';
@@ -77,7 +78,8 @@ export const refactorBatch = makePipelineFunction({
                 .catch((err) => {
                     if (
                         err instanceof AbortError &&
-                        !(err instanceof CycleDetectedError)
+                        !(err instanceof CycleDetectedError) &&
+                        !(err instanceof OutOfContextBoundsError)
                     ) {
                         return Promise.reject(err);
                     }

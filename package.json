@@ -4,6 +4,7 @@
     "private": true,
     "description": "refactor-bot --help",
     "type": "module",
+    "main": "./bin/refactor-bot.ts",
     "bin": {
         "refactor-bot": "./bin/refactor-bot.ts"
     },

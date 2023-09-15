@@ -326,7 +326,7 @@ export async function chatCompletions(opts: Opts): Promise<Response> {
                 }
             }
         }
-        const text = await response.text();
+        const text = await response.text().catch(() => '');
         throw new Error(
             `Failed to fetch chat completions: ${response.statusText}\n${text}`
         );

@@ -56,9 +56,22 @@ export async function autoFixIssuesContents(opts: {
     args.push('--stdin-filename');
     args.push(opts.filePath);
 
+    let extras: string[];
+    switch (packageManager) {
+        case 'yarn':
+            extras = ['--silent', 'exec', '--'];
+            break;
+        case 'npm':
+            extras = ['--quiet', 'exec', '--'];
+            break;
+        case 'pnpm':
+            extras = ['--silent', 'exec', '--'];
+            break;
+    }
+
     const child = spawn(
         packageManager as string,
-        [opts.eslintScriptArgs, ...args] as string[],
+        [...extras, opts.eslintScriptArgs, ...args] as string[],
         {
             cwd: opts.location,
             env: {

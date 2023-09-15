@@ -3,6 +3,7 @@ import type { TypeOf } from 'zod';
 import { z } from 'zod';
 
 import { autoFixIssuesContents } from '../eslint/autoFixIssues';
+import { logger } from '../logger/logger';
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { prettierTypescript } from '../prettier/prettier';
@@ -205,7 +206,22 @@ export const edit = makePipelineFunction({
             if (choices.length === 0) {
                 throw new Error('No choices returned by the model');
             } else {
-                throw new Error(
+                settledChoices
+                    .flatMap((choice) =>
+                        choice.status === 'rejected'
+                            ? [choice.reason as Error]
+                            : []
+                    )
+                    .forEach((err) => {
+                        logger.error(err);
+                    });
+
+                throw new AggregateError(
+                    settledChoices.flatMap((choice) =>
+                        choice.status === 'rejected'
+                            ? [choice.reason as Error]
+                            : []
+                    ),
                     'All choices returned by the model failed validation'
                 );
             }

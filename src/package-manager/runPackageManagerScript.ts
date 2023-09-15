@@ -7,9 +7,22 @@ export async function runPackageManagerScript(opts: {
     location: string;
     logOnError?: 'stdout' | 'stderr' | 'combined';
 }) {
+    let extras: string[];
+    switch (opts.packageManager) {
+        case 'yarn':
+            extras = ['--silent', 'exec', '--'];
+            break;
+        case 'npm':
+            extras = ['--quiet', 'exec', '--'];
+            break;
+        case 'pnpm':
+            extras = ['--silent', 'exec', '--'];
+            break;
+    }
+
     return await spawnResult(
         opts.packageManager,
-        [opts.script, ...(opts.args || [])],
+        [...extras, opts.script, ...(opts.args || [])],
         {
             cwd: opts.location,
             exitCodes: 'any',
