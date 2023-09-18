@@ -1,16 +1,8 @@
-> This is a conversation with a OpenAI model. You can edit this file manually to
-> enter a new prompt and then execute `pnpm refactor-bot prompt` to continue the
-> conversation.
+> This is a conversation with a OpenAI model. You can edit this file manually to enter a new prompt and then execute `pnpm refactor-bot prompt` to continue the conversation.
 
-> Messages are separated by a `---`. The first message has a role `system`,
-> followed by a message that has role `user`. Following that, all other even
-> indexed messages have the same `user` role, while odd numbered ones have role
-> `assistant` and represent a reply from the bot. The application is going to
-> automatically add `> @role [user|assistant|system]` to the messages depending
-> on what the previous message role was. All quotes are considered comments as
-> they are easy to remove from messages.
+> Messages are separated by a `---`. The application is going to automatically add `> @role [user|assistant|system]` to the messages depending on their order. Feel free to modify the comment to change the role of a message. All quotes are considered comments.
 
-> @role system
+> @role user
 
 How many times `readFile` function is used in the repository?
 
@@ -19,7 +11,10 @@ How many times `readFile` function is used in the repository?
 > @role assistant
 
 ```json
-{ "name": "references", "arguments": "{\n  \"identifier\": \"readFile\"\n}" }
+{
+    "name": "references",
+    "arguments": "{\n  \"identifier\": \"readFile\",\n  \"identifierContext\": \"function\"\n}"
+}
 ```
 
 ---
@@ -73,6 +68,66 @@ How many times `readFile` function is used in the repository?
         ]
     },
     {
+        "filePath": "src/file-system/readPackagesGlobsAt.ts",
+        "package": "refactor-bot",
+        "references": [
+            {
+                "pos": 8,
+                "line": 1,
+                "column": 9,
+                "excerpt": "import { readFile } from 'node:fs/promises';"
+            },
+            {
+                "pos": 198,
+                "line": 7,
+                "column": 23,
+                "excerpt": "const text = await readFile(join(repoRoot, 'pnpm-workspace.yaml'), 'utf-8')"
+            },
+            {
+                "pos": 547,
+                "line": 17,
+                "column": 23,
+                "excerpt": "const text = await readFile(join(repoRoot, 'package.json'), 'utf-8')"
+            }
+        ]
+    },
+    {
+        "filePath": "src/git/changedFilesHash.ts",
+        "package": "refactor-bot",
+        "references": [
+            {
+                "pos": 8,
+                "line": 1,
+                "column": 9,
+                "excerpt": "import { readFile } from 'fs/promises';"
+            },
+            {
+                "pos": 500,
+                "line": 19,
+                "column": 35,
+                "excerpt": "readFile(join(opts.location, file), 'utf-8')"
+            }
+        ]
+    },
+    {
+        "filePath": "src/package-manager/determinePackageManager.ts",
+        "package": "refactor-bot",
+        "references": [
+            {
+                "pos": 17,
+                "line": 1,
+                "column": 18,
+                "excerpt": "import { readdir, readFile } from 'node:fs/promises';"
+            },
+            {
+                "pos": 1198,
+                "line": 38,
+                "column": 38,
+                "excerpt": "const packageJsonContents = await readFile(path, 'utf-8')"
+            }
+        ]
+    },
+    {
         "filePath": "src/prompt/conversation.ts",
         "package": "refactor-bot",
         "references": [
@@ -83,8 +138,8 @@ How many times `readFile` function is used in the repository?
                 "excerpt": "import { readFile, writeFile } from 'fs/promises';"
             },
             {
-                "pos": 372,
-                "line": 12,
+                "pos": 429,
+                "line": 13,
                 "column": 25,
                 "excerpt": "contents = await readFile(conversationFile, 'utf-8')"
             }
@@ -101,10 +156,34 @@ How many times `readFile` function is used in the repository?
                 "excerpt": "import { readFile } from 'fs/promises';"
             },
             {
-                "pos": 183,
-                "line": 6,
+                "pos": 400,
+                "line": 14,
                 "column": 27,
                 "excerpt": "const contents = await readFile(file, 'utf-8')"
+            }
+        ]
+    },
+    {
+        "filePath": "src/refactor/discoverDependencies.ts",
+        "package": "refactor-bot",
+        "references": [
+            {
+                "pos": 8,
+                "line": 1,
+                "column": 9,
+                "excerpt": "import { readFile } from 'fs/promises';"
+            },
+            {
+                "pos": 561,
+                "line": 16,
+                "column": 30,
+                "excerpt": "const packageJson = await readFile("
+            },
+            {
+                "pos": 2306,
+                "line": 77,
+                "column": 30,
+                "excerpt": "const packageJson = await readFile("
             }
         ]
     },
@@ -113,16 +192,58 @@ How many times `readFile` function is used in the repository?
         "package": "refactor-bot",
         "references": [
             {
-                "pos": 36,
+                "pos": 8,
+                "line": 1,
+                "column": 9,
+                "excerpt": "import { readFile } from 'fs/promises';"
+            },
+            {
+                "pos": 1583,
+                "line": 46,
+                "column": 35,
+                "excerpt": "const contents = await readFile(goalDescriptionFile, 'utf-8')"
+            }
+        ]
+    },
+    {
+        "filePath": "src/refactor/planTasks.ts",
+        "package": "refactor-bot",
+        "references": [
+            {
+                "pos": 8,
+                "line": 1,
+                "column": 9,
+                "excerpt": "import { readFile } from 'fs/promises';"
+            },
+            {
+                "pos": 4264,
+                "line": 139,
+                "column": 32,
+                "excerpt": "fileContents: await readFile("
+            }
+        ]
+    },
+    {
+        "filePath": "src/refactor/refactorFile.ts",
+        "package": "refactor-bot",
+        "references": [
+            {
+                "pos": 37,
                 "line": 2,
                 "column": 9,
                 "excerpt": "import { readFile } from 'fs/promises';"
             },
             {
-                "pos": 548,
-                "line": 18,
-                "column": 31,
-                "excerpt": "const goal = await readFile(goalDescriptionFile, 'utf-8')"
+                "pos": 7389,
+                "line": 228,
+                "column": 46,
+                "excerpt": "const initialFileContents = await readFile("
+            },
+            {
+                "pos": 7584,
+                "line": 234,
+                "column": 47,
+                "excerpt": "const fileContents = await readFile("
             }
         ]
     }
@@ -133,18 +254,161 @@ How many times `readFile` function is used in the repository?
 
 > @role assistant
 
-The `readFile` function is used a total of 7 times in the repository.
+The `readFile` function is used multiple times in the repository. Here are the references:
 
--   `src/file-system/findPackageName.ts` file uses `readFile` function from the
-    `'fs/promises'` module twice.
--   `node_modules/.pnpm/@types+node@20.4.2/node_modules/@types/node/fs/promises.d.ts`
-    file defines the `readFile` function.
--   `src/prompt/conversation.ts` file uses `readFile` function from the
-    `'fs/promises'` module once.
--   `src/prompt/editor.ts` file uses `readFile` function from the
-    `'fs/promises'` module once.
--   `src/refactor/loadRefactors.ts` file uses `readFile` function from the
-    `'fs/promises'` module once.
+1. File: `src/file-system/findPackageName.ts`
 
-> @hint Last message is not a user prompt, please add another message and finish
-> with "---" to confirm ... [+ ~USD 0.0058]
+    - Line: 1
+    - Column: 9
+    - Code: `import { readFile } from 'fs/promises';`
+
+2. File: `src/file-system/findPackageName.ts`
+
+    - Line: 17
+    - Column: 31
+    - Code: `const contents = await readFile(join(location, 'package.json'), 'utf8')`
+
+3. File: `node_modules/.pnpm/@types+node@20.4.2/node_modules/@types/node/fs/promises.d.ts`
+
+    - Line: 1047
+    - Column: 13
+    - Code: `function readFile(`
+
+4. File: `node_modules/.pnpm/@types+node@20.4.2/node_modules/@types/node/fs/promises.d.ts`
+
+    - Line: 1063
+    - Column: 13
+    - Code: `function readFile(`
+
+5. File: `node_modules/.pnpm/@types+node@20.4.2/node_modules/@types/node/fs/promises.d.ts`
+
+    - Line: 1079
+    - Column: 13
+    - Code: `function readFile(`
+
+6. File: `src/file-system/readPackagesGlobsAt.ts`
+
+    - Line: 1
+    - Column: 9
+    - Code: `import { readFile } from 'node:fs/promises';`
+
+7. File: `src/file-system/readPackagesGlobsAt.ts`
+
+    - Line: 7
+    - Column: 23
+    - Code: `const text = await readFile(join(repoRoot, 'pnpm-workspace.yaml'), 'utf-8')`
+
+8. File: `src/file-system/readPackagesGlobsAt.ts`
+
+    - Line: 17
+    - Column: 23
+    - Code: `const text = await readFile(join(repoRoot, 'package.json'), 'utf-8')`
+
+9. File: `src/git/changedFilesHash.ts`
+
+    - Line: 1
+    - Column: 9
+    - Code: `import { readFile } from 'fs/promises';`
+
+10. File: `src/git/changedFilesHash.ts`
+
+    - Line: 19
+    - Column: 35
+    - Code: `readFile(join(opts.location, file), 'utf-8')`
+
+11. File: `src/package-manager/determinePackageManager.ts`
+
+    - Line: 1
+    - Column: 18
+    - Code: `import { readdir, readFile } from 'node:fs/promises';`
+
+12. File: `src/package-manager/determinePackageManager.ts`
+
+    - Line: 38
+    - Column: 38
+    - Code: `const packageJsonContents = await readFile(path, 'utf-8')`
+
+13. File: `src/prompt/conversation.ts`
+
+    - Line: 1
+    - Column: 9
+    - Code: `import { readFile, writeFile } from 'fs/promises';`
+
+14. File: `src/prompt/conversation.ts`
+
+    - Line: 13
+    - Column: 25
+    - Code: `contents = await readFile(conversationFile, 'utf-8')`
+
+15. File: `src/prompt/editor.ts`
+
+    - Line: 1
+    - Column: 9
+    - Code: `import { readFile } from 'fs/promises';`
+
+16. File: `src/prompt/editor.ts`
+
+    - Line: 14
+    - Column: 27
+    - Code: `const contents = await readFile(file, 'utf-8')`
+
+17. File: `src/refactor/discoverDependencies.ts`
+
+    - Line: 1
+    - Column: 9
+    - Code: `import { readFile } from 'fs/promises';`
+
+18. File: `src/refactor/discoverDependencies.ts`
+
+    - Line: 16
+    - Column: 30
+    - Code: `const packageJson = await readFile(`
+
+19. File: `src/refactor/discoverDependencies.ts`
+
+    - Line: 77
+    - Column: 30
+    - Code: `const packageJson = await readFile(`
+
+20. File: `src/refactor/loadRefactors.ts`
+
+    - Line: 1
+    - Column: 9
+    - Code: `import { readFile } from 'fs/promises';`
+
+21. File: `src/refactor/loadRefactors.ts`
+
+    - Line: 46
+    - Column: 35
+    - Code: `const contents = await readFile(goalDescriptionFile, 'utf-8')`
+
+22. File: `src/refactor/planTasks.ts`
+
+    - Line: 1
+    - Column: 9
+    - Code: `import { readFile } from 'fs/promises';`
+
+23. File: `src/refactor/planTasks.ts`
+
+    - Line: 139
+    - Column: 32
+    - Code: `fileContents: await readFile(`
+
+24. File: `src/refactor/refactorFile.ts`
+
+    - Line: 2
+    - Column: 9
+    - Code: `import { readFile } from 'fs/promises';`
+
+25. File: `src/refactor/refactorFile.ts`
+
+    - Line: 228
+    - Column: 46
+    - Code: `const initialFileContents = await readFile(`
+
+26. File: `src/refactor/refactorFile.ts`
+    - Line: 234
+    - Column: 47
+    - Code: `const fileContents = await readFile(`
+
+Please note that these are just the references found in the repository. There may be other references outside the repository as well.

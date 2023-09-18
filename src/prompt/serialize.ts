@@ -3,7 +3,7 @@ import { UnreachableError } from '../utils/UnreachableError';
 
 export const header = `> This is a conversation with a OpenAI model. You can edit this file manually to enter a new prompt and then execute \`pnpm refactor-bot prompt\` to continue the conversation.
 
-> Messages are separated by a \`---\`. The first message has a role \`system\`, followed by a message that has role \`user\`. Following that, all other even indexed messages have the same \`user\` role, while odd numbered ones have role \`assistant\` and represent a reply from the bot. The application is going to automatically add \`> @role [user|assistant|system]\` to the messages depending on what the previous message role was. All quotes are considered comments as they are easy to remove from messages.
+> Messages are separated by a \`---\`. The application is going to automatically add \`> @role [user|assistant|system]\` to the messages depending on their order. Feel free to modify the comment to change the role of a message. All quotes are considered comments.
 
 `;
 

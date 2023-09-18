@@ -6,17 +6,12 @@ const parseRole = (
     message: string,
     index: number
 ): MessageRole | 'function' => {
-    if (index === 0) {
-        return 'system';
-    }
     const match = message.match(/^> @role (system|user|assistant|function)/);
     if (match) {
         return match[1] as MessageRole;
     }
-    if (index % 1 === 0) {
-        return 'user';
-    }
-    return 'assistant';
+    const result = (['user', 'assistant'] as const)[index % 2];
+    return result as NonNullable<typeof result>;
 };
 
 const parseFunctionCall = (
