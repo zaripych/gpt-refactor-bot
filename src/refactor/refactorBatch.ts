@@ -25,6 +25,7 @@ export const refactorBatchInputSchema = refactorConfigSchema
         model: true,
         modelByStepCode: true,
         useMoreExpensiveModelsOnRetry: true,
+        allowedFunctions: true,
     })
     .augment({
         objective: z.string(),

@@ -58,6 +58,11 @@ export const refactorConfigSchema = z.object({
     ignoreFiles: functionsConfigSchema.shape.ignoreFiles,
 
     /**
+     * List of function names allowed to be called during refactor
+     */
+    allowedFunctions: functionsConfigSchema.shape.allowedFunctions,
+
+    /**
      * A git repository which is the target of the refactor, could be
      * undefined if the target is current repository.
      */

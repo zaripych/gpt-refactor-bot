@@ -5,10 +5,10 @@ import { gitCheckoutNewBranch } from '../git/gitCheckoutNewBranch';
 import { gitFetch } from '../git/gitFetch';
 import { gitForceCreateBranch } from '../git/gitForceCreateBranch';
 import { gitRevParse } from '../git/gitRevParse';
+import { logger } from '../logger/logger';
 import { pipeline } from '../pipeline/pipeline';
 import { randomText } from '../utils/randomText';
 import { checkoutSandbox } from './checkoutSandbox';
-import { makeDependencies } from './dependencies';
 import { enrichObjective } from './enrichObjective';
 import { refactorGoal } from './refactorGoal';
 import { type RefactorConfig, refactorConfigSchema } from './types';
@@ -27,14 +27,7 @@ const createPipe = () => {
     return pipe;
 };
 
-async function loadRefactorState(
-    opts: {
-        config: RefactorConfig;
-    },
-    getDeps = makeDependencies
-) {
-    const { findRepositoryRoot } = getDeps();
-
+async function loadRefactorState(opts: { config: RefactorConfig }) {
     const pipe = createPipe();
 
     const root = await findRepositoryRoot();
@@ -66,15 +59,8 @@ async function loadRefactorState(
     }
 }
 
-export async function refactor(
-    opts: {
-        config: RefactorConfig;
-    },
-    getDeps = makeDependencies
-) {
-    const { logger } = getDeps();
-
-    const { pipe, location, id } = await loadRefactorState(opts, getDeps);
+export async function refactor(opts: { config: RefactorConfig }) {
+    const { pipe, location, id } = await loadRefactorState(opts);
 
     logger.info(
         `Starting refactor with id "${id}", process id: "${process.pid}"`

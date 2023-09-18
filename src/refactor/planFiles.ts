@@ -8,7 +8,6 @@ import { diffHash } from '../git/diffHash';
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { isTruthy } from '../utils/isTruthy';
-import { makeDependencies } from './dependencies';
 import { determineModelParameters } from './determineModelParameters';
 import { prompt } from './prompt';
 import { refactorConfigSchema } from './types';
@@ -21,6 +20,7 @@ export const planFilesInputSchema = refactorConfigSchema
         useMoreExpensiveModelsOnRetry: true,
         scope: true,
         tsConfigJsonFileName: true,
+        allowedFunctions: true,
     })
     .augment({
         objective: z.string(),
@@ -118,13 +118,7 @@ export const planFiles = makePipelineFunction({
     name: 'plan',
     inputSchema: planFilesInputSchema,
     resultSchema: planFilesResultSchema,
-    transform: async (
-        input,
-        persistence,
-        getDeps = makeDependencies
-    ): Promise<PlanFilesResponse> => {
-        const { includeFunctions } = getDeps();
-
+    transform: async (input, persistence): Promise<PlanFilesResponse> => {
         const userPrompt = planFilesPromptText(input.objective);
 
         const { choices } = await prompt.withPersistence().transform(
@@ -133,11 +127,11 @@ export const planFiles = makePipelineFunction({
                 prompt: userPrompt,
                 budgetCents: input.budgetCents,
                 temperature: 1,
-                functions: await includeFunctions(),
                 functionsConfig: {
                     repositoryRoot: input.sandboxDirectoryPath,
                     scope: input.scope,
                     tsconfigJsonFileName: input.tsConfigJsonFileName,
+                    allowedFunctions: input.allowedFunctions,
                 },
                 shouldStop: async (message) => {
                     await validateParseAndOrderThePlan({

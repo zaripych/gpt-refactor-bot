@@ -9,7 +9,6 @@ import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { prettierTypescript } from '../prettier/prettier';
 import { hasOneElement } from '../utils/hasOne';
 import { isTruthy } from '../utils/isTruthy';
-import { makeDependencies } from './dependencies';
 import { determineModelParameters } from './determineModelParameters';
 import { prompt } from './prompt';
 import { refactorConfigSchema } from './types';
@@ -22,6 +21,7 @@ export const editInputSchema = refactorConfigSchema
         useMoreExpensiveModelsOnRetry: true,
         scope: true,
         tsConfigJsonFileName: true,
+        allowedFunctions: true,
     })
     .augment({
         objective: z.string(),
@@ -84,13 +84,7 @@ export const edit = makePipelineFunction({
     name: 'edit',
     inputSchema: editInputSchema,
     resultSchema: editResultSchema,
-    transform: async (
-        input,
-        persistence,
-        getDeps = makeDependencies
-    ): Promise<EditResponse> => {
-        const { includeFunctions } = getDeps();
-
+    transform: async (input, persistence): Promise<EditResponse> => {
         const text = promptText({
             objective: input.objective,
             filePath: input.filePath,
@@ -102,11 +96,11 @@ export const edit = makePipelineFunction({
                 prompt: text,
                 temperature: 1,
                 budgetCents: input.budgetCents,
-                functions: await includeFunctions(),
                 functionsConfig: {
                     repositoryRoot: input.sandboxDirectoryPath,
                     scope: input.scope,
                     tsconfigJsonFileName: input.tsConfigJsonFileName,
+                    allowedFunctions: input.allowedFunctions,
                 },
                 ...determineModelParameters(input, persistence),
                 choices: input.choices,

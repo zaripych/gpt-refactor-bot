@@ -11,13 +11,13 @@ import { gitDefaultBranch } from '../git/gitDefaultBranch';
 import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
 import { gitStatus } from '../git/gitStatus';
+import { logger } from '../logger/logger';
 import { determinePackageManager } from '../package-manager/determinePackageManager';
 import { installDependencies } from '../package-manager/installDependencies';
 import { runPackageManagerScript } from '../package-manager/runPackageManagerScript';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { createSandbox, sandboxLocation } from '../sandbox/createSandbox';
 import { ensureTruthy } from '../utils/isTruthy';
-import { makeDependencies } from './dependencies';
 import { refactorConfigSchema } from './types';
 
 export const checkoutSandboxInputSchema = refactorConfigSchema
@@ -57,9 +57,7 @@ export const checkoutSandboxResultSchema = z.object({
 
 export const checkoutSandbox = makePipelineFunction({
     name: 'checkout-sandbox',
-    transform: async (config, _persistence, getDeps = makeDependencies) => {
-        const { logger, findRepositoryRoot } = getDeps();
-
+    transform: async (config, _persistence) => {
         const root = await findRepositoryRoot();
 
         const { sandboxId, sandboxDirectoryPath } = sandboxLocation({

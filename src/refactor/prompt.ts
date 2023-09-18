@@ -9,7 +9,6 @@ import type { Message } from '../chat-gpt/api';
 import {
     calculatePriceCents,
     chatCompletions,
-    functionDefinitionSchema,
     functionResultMessageSchema,
     messageSchema,
     modelsSchema,
@@ -19,6 +18,7 @@ import {
 } from '../chat-gpt/api';
 import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
 import { executeFunction } from '../functions/executeFunction';
+import { includeFunctions } from '../functions/includeFunctions';
 import { functionsConfigSchema } from '../functions/types';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { ensureHasOneElement } from '../utils/hasOne';
@@ -29,7 +29,6 @@ export const promptInputSchema = z.object({
     prompt: z.string(),
     temperature: z.number(),
     budgetCents: z.number(),
-    functions: z.array(functionDefinitionSchema),
     functionsConfig: functionsConfigSchema,
     shouldStop: z
         .function()
@@ -61,12 +60,12 @@ const chat = makePipelineFunction({
     name: 'chat',
     inputSchema: promptInputSchema
         .pick({
-            functions: true,
             model: true,
             temperature: true,
             budgetCents: true,
         })
         .augment({
+            allowedFunctions: z.array(z.string()),
             messages: z.array(messageSchema),
             choices: z.number().optional(),
         }),
@@ -74,7 +73,10 @@ const chat = makePipelineFunction({
         response: responseSchema,
     }),
     transform: async (state) => {
-        const response = await chatCompletions(state);
+        const response = await chatCompletions({
+            ...state,
+            functions: await includeFunctions(state.allowedFunctions),
+        });
 
         const spentCents = calculatePriceCents({
             ...response,
@@ -153,7 +155,7 @@ function removeFunctionFromState(
     opts: {
         messages: Array<Message>;
         name: string;
-    } & Pick<TypeOf<typeof promptInputSchema>, 'functions' | 'functionsConfig'>
+    } & Pick<TypeOf<typeof promptInputSchema>, 'functionsConfig'>
 ) {
     // remove bad function name from messages because the ChatGPT
     // API itself chokes on it and stops processing the chain
@@ -173,7 +175,7 @@ function removeFunctionFromState(
         content:
             `Function "${opts.name}" is not a valid ` +
             `function name. Valid function names are: ` +
-            `${opts.functions.map((fn) => fn.name).join(', ')}`,
+            `${opts.functionsConfig.allowedFunctions.join(', ')}`,
     });
 }
 
@@ -217,7 +219,8 @@ export const prompt = makePipelineFunction({
                             {
                                 ...state,
                                 budgetCents: opts.budgetCents,
-                                functions: opts.functions,
+                                allowedFunctions:
+                                    opts.functionsConfig.allowedFunctions,
                                 model: opts.model,
                                 temperature: opts.temperature,
                                 /**
@@ -261,13 +264,12 @@ export const prompt = makePipelineFunction({
                     const functionCall = lastMessage.functionCall;
                     return defer(async () => {
                         if (
-                            !opts.functions.find(
-                                (fn) => fn.name === functionCall.name
+                            !opts.functionsConfig.allowedFunctions.find(
+                                (fn) => fn === functionCall.name
                             )
                         ) {
                             removeFunctionFromState({
                                 messages: state.messages,
-                                functions: opts.functions,
                                 functionsConfig: opts.functionsConfig,
                                 name: functionCall.name,
                             });

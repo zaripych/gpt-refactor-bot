@@ -41,6 +41,13 @@ export const functionsConfigSchema = z.object({
      * as well: `['.gitignore']`
      */
     ignoreFiles: z.array(z.string()).optional().default(['.gitignore']),
+
+    /**
+     * List of function names allowed to be called
+     */
+    allowedFunctions: z
+        .array(z.string())
+        .default(['references', 'moduleImports', 'quickInfo', 'declarations']),
 });
 
 export type FunctionsConfig = z.input<typeof functionsConfigSchema>;

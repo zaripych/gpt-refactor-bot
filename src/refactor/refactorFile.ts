@@ -39,6 +39,7 @@ export const refactorFileInputSchema = refactorConfigSchema
         useMoreExpensiveModelsOnRetry: true,
         scope: true,
         tsConfigJsonFileName: true,
+        allowedFunctions: true,
     })
     .augment({
         objective: z.string(),

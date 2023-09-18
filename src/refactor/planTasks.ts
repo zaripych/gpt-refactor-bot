@@ -6,7 +6,6 @@ import { gitFilesDiff } from '../git/gitFilesDiff';
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { isTruthy } from '../utils/isTruthy';
-import { makeDependencies } from './dependencies';
 import { determineModelParameters } from './determineModelParameters';
 import { prompt } from './prompt';
 import { refactorConfigSchema } from './types';
@@ -19,6 +18,7 @@ export const planTasksInputSchema = refactorConfigSchema
         useMoreExpensiveModelsOnRetry: true,
         tsConfigJsonFileName: true,
         scope: true,
+        allowedFunctions: true,
     })
     .augment({
         objective: z.string(),
@@ -127,13 +127,7 @@ export const planTasks = makePipelineFunction({
     name: 'tasks',
     inputSchema: planTasksInputSchema,
     resultSchema: planTasksResultSchema,
-    transform: async (
-        input,
-        persistence,
-        getDeps = makeDependencies
-    ): Promise<PlanTasksResponse> => {
-        const { includeFunctions } = getDeps();
-
+    transform: async (input, persistence): Promise<PlanTasksResponse> => {
         const userPrompt = planTasksPromptText({
             objective: input.objective,
             fileContents: await readFile(
@@ -151,12 +145,12 @@ export const planTasks = makePipelineFunction({
                 preface: systemPrompt,
                 prompt: userPrompt,
                 temperature: 1,
-                functions: await includeFunctions(),
                 budgetCents: input.budgetCents,
                 functionsConfig: {
                     repositoryRoot: input.sandboxDirectoryPath,
                     scope: input.scope,
                     tsconfigJsonFileName: input.tsConfigJsonFileName,
+                    allowedFunctions: input.allowedFunctions,
                 },
                 ...determineModelParameters(input, persistence),
             },

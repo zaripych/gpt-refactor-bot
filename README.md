@@ -51,9 +51,8 @@ ChatGPT.
 ```sh
 ➜  pnpm refactor-bot prompt --watch
 ? Select a file where the conversation is going to be stored › - Use arrow-keys. Return to submit.
-❯   test
-    test.1
-    test.2
+❯   example-1
+    example-2
     New conversation...
 ```
 
@@ -61,7 +60,7 @@ Select a file, and then you will be prompted to enter a message using your
 editor. Save the message with `---` at the end to send it.
 
 See example conversation at
-[`.refactor-bot/prompts/example.md`](.refactor-bot/prompts/example.md).
+[`.refactor-bot/prompts/example-1.md`](.refactor-bot/prompts/example-1.md).
 
 ## Refactor
 

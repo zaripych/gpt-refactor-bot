@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
-import { makeDependencies } from './dependencies';
 import { determineModelParameters } from './determineModelParameters';
 import { prompt } from './prompt';
 import { refactorConfigSchema } from './types';
@@ -16,6 +15,7 @@ export const enrichObjectiveInputSchema = refactorConfigSchema
         useMoreExpensiveModelsOnRetry: true,
         scope: true,
         tsConfigJsonFileName: true,
+        allowedFunctions: true,
     })
     .augment({
         sandboxDirectoryPath: z.string(),
@@ -54,13 +54,7 @@ export const enrichObjective = makePipelineFunction({
     name: 'enrich-objective',
     inputSchema: enrichObjectiveInputSchema,
     resultSchema: enrichObjectiveResultSchema,
-    transform: async (
-        input,
-        persistence,
-        getDeps = makeDependencies
-    ): Promise<EnrichObjectiveResponse> => {
-        const { includeFunctions } = getDeps();
-
+    transform: async (input, persistence): Promise<EnrichObjectiveResponse> => {
         const userPrompt = enrichPromptText(input.objective);
 
         const { choices } = await prompt(
@@ -69,11 +63,11 @@ export const enrichObjective = makePipelineFunction({
                 prompt: userPrompt,
                 temperature: 1,
                 budgetCents: input.budgetCents,
-                functions: await includeFunctions(),
                 functionsConfig: {
                     repositoryRoot: input.sandboxDirectoryPath,
                     scope: input.scope,
                     tsconfigJsonFileName: input.tsConfigJsonFileName,
+                    allowedFunctions: input.allowedFunctions,
                 },
                 ...determineModelParameters(input, persistence),
             },

@@ -213,7 +213,7 @@ export const run = async (opts: {
     const convo = conversationState(conversationFile);
     await convo.load();
 
-    const functions = await includeFunctions();
+    const functions = await includeFunctions('all');
 
     await goToEndOfFile(conversationFile);
 
