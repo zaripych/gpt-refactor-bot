@@ -1,6 +1,6 @@
 import type { Message } from '../chat-gpt/api';
 import { logger } from '../logger/logger';
-import { print } from '../markdown/markdown';
+import { printMarkdown } from '../markdown/markdown';
 import { UnreachableError } from '../utils/UnreachableError';
 
 const json = (obj: unknown) =>
@@ -48,5 +48,5 @@ export const printMessage = async (
     message: Message,
     prefixDivider?: boolean
 ) => {
-    await print(formatMessage(message, prefixDivider));
+    await printMarkdown(formatMessage(message, prefixDivider));
 };

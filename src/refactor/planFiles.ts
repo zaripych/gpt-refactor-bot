@@ -7,6 +7,7 @@ import type { RegularAssistantMessage } from '../chat-gpt/api';
 import { diffHash } from '../git/diffHash';
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
+import { format } from '../text/format';
 import { isTruthy } from '../utils/isTruthy';
 import { determineModelParameters } from './determineModelParameters';
 import { prompt } from './prompt';
@@ -48,20 +49,34 @@ export const planFilesResultSchema = z.object({
 export type PlanFilesResponse = z.infer<typeof planFilesResultSchema>;
 
 const systemPrompt = markdown`
-Think step by step. Be concise and to the point. Do not make assumptions other than what was given in the instructions.
+    Think step by step. Be concise and to the point. Do not make assumptions
+    other than what was given in the instructions.
 `;
 
 const planFilesPromptText = (objective: string) =>
-    markdown`
-${objective}
+    format(
+        markdown`
+            %objective%
 
-Given the above objective we want to produce a list of file paths to be edited. To do that, use the OpenAI function calling to analyze current state of the code and produce a list based on state of the code. When the objective explicitly mentions to limit the refactoring only to specific file or files - only return a list from the subset mentioned. Return one file path per line in your response. File paths should be surrounded by a backtick. File paths should be relative to repository root. The result must be a numbered list in the format:
+            Given the above objective we want to produce a list of file paths to
+            be edited. To do that, use the OpenAI function calling to analyze
+            current state of the code and produce a list based on state of the
+            code. When the objective explicitly mentions to limit the
+            refactoring only to specific file or files - only return a list from
+            the subset mentioned. Return one file path per line in your
+            response. File paths should be surrounded by a backtick. File paths
+            should be relative to repository root. The result must be a numbered
+            list in the format:
 
-#. \`path/to/file.ts\`
-#. \`path/to/another/file.ts\`
+            #. \`path/to/file.ts\` #. \`path/to/another/file.ts\`
 
-The number of each entry must be followed by a period. If the list of files is empty, write "There are no files to add at this time". Unless the list is empty, do not include any headers before the numbered list or follow the numbered list with any other output.
-    `;
+            The number of each entry must be followed by a period. If the list
+            of files is empty, write "There are no files to add at this time".
+            Unless the list is empty, do not include any headers before the
+            numbered list or follow the numbered list with any other output.
+        `,
+        { objective }
+    );
 
 const validateParseAndOrderThePlan = async (opts: {
     sandboxDirectoryPath: string;

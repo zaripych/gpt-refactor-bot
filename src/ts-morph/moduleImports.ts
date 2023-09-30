@@ -238,10 +238,10 @@ export const moduleImportsFunction = makeTsFunction({
     resultSchema,
     name: 'moduleImports',
     description: markdown`
-Finds all imports of a module with specified name in the repository. This will
-find both static and dynamic imports. This will work for both external packages
-and packages belonging to the repository. Cases when dynamic imports do not use
-literal strings are not supported.
+        Finds all imports of a module with specified name in the repository.
+        This will find both static and dynamic imports. And this will work for
+        both external packages and packages belonging to the repository. Cases
+        when dynamic imports do not use literal strings are not supported.
     `,
     implementation: moduleImports,
 });

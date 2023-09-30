@@ -52,7 +52,10 @@ export const quickInfoFunction = makeTsFunction({
     resultSchema,
     name: 'quickInfo',
     description: markdown`
-Gets semantic information about the specified identifier. Quick info is what you typically see when you hover in an editor. This function is useful when you want to know the inferred or declared type of a variable or function.
+        Gets semantic information about the specified identifier. Quick info is
+        what you typically see when you hover in an editor. This function is
+        useful when you want to know the inferred or declared type of a variable
+        or function.
     `,
     implementation: quickInfo,
 });

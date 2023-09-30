@@ -15,6 +15,7 @@
     "dependencies": {
         "chalk": "5.2.0",
         "chokidar": "3.5.3",
+        "dedent": "1.5.1",
         "diff": "^5.1.0",
         "dotenv": "16.3.1",
         "globby": "13.2.2",
@@ -35,8 +36,8 @@
         "zod-to-json-schema": "3.21.2"
     },
     "devDependencies": {
-        "@jest/globals": "29.5.0",
-        "@repka-kit/ts": "1.0.0-beta.7",
+        "@jest/globals": "29.7.0",
+        "@repka-kit/ts": "0.0.0-snap-20230929102045",
         "@types/diff": "^5.0.3",
         "@types/js-yaml": "4.0.5",
         "@types/lodash-es": "4.17.7",
@@ -48,7 +49,7 @@
         "utility-types": "3.10.0"
     },
     "peerDependencies": {
-        "prettier": "2.8.8",
-        "typescript": "^5.0.4"
+        "prettier": "3.0.3",
+        "typescript": "5.2.2"
     }
 }

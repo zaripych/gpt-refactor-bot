@@ -40,7 +40,7 @@ export async function glowFormat(
 
     const child = spawn(
         command,
-        args ?? ['-', '-s', style, '--width', String(width)],
+        args ?? ['-', '-s', style, '--width', String(width), '-l'],
         {
             stdio: 'pipe',
         }

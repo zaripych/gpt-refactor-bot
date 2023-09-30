@@ -2,7 +2,7 @@ import { Transform } from 'node:stream';
 
 import type { TransformCallback } from 'stream';
 
-export type FormatterMethod = (value: unknown) => unknown | Promise<unknown>;
+export type FormatterMethod = <Y>(value: Y) => string | Y | Promise<string | Y>;
 
 export type Formatters = {
     [key: string]: FormatterMethod;
@@ -69,7 +69,7 @@ export class AsyncFormatter extends Transform {
         callback: (error: Error | null) => void
     ): void {
         if (this.promise) {
-            this.promise.finally(() => {
+            void this.promise.finally(() => {
                 callback(null);
             });
         }
@@ -77,7 +77,7 @@ export class AsyncFormatter extends Transform {
 
     override _flush(callback: TransformCallback): void {
         if (this.promise) {
-            this.promise.finally(() => {
+            void this.promise.finally(() => {
                 callback();
             });
         }

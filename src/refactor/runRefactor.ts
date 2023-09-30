@@ -11,6 +11,7 @@ import { formatObject } from '../logger/formatObject';
 import { glowFormat } from '../markdown/glowFormat';
 import { markdown } from '../markdown/markdown';
 import { goToEndOfFile } from '../prompt/editor';
+import { format } from '../text/format';
 import { hasOneElement } from '../utils/hasOne';
 import { loadRefactorConfigs } from './loadRefactors';
 import { refactor } from './refactor';
@@ -201,76 +202,96 @@ const currentRepositoryRefactoringReport = async (
         })
         .join('\n');
 
-    let failedToRefactor = '';
-    if (Object.keys(discarded).length > 0) {
-        failedToRefactor = markdown`
-Failed to refactor:
+    const failedToRefactor =
+        Object.keys(discarded).length > 0
+            ? markdown`
+                Failed to refactor:
 
-${Object.keys(discarded)
-    .map((file, i) => `${i + 1}. \`${file}\``)
-    .join('\n')}
-`;
-    }
+                ${Object.keys(discarded)
+                    .map((file, i) => `${i + 1}. \`${file}\``)
+                    .join('\n')}
+            `
+            : '';
 
     let firstCommitsOfFailures = '';
     if (Object.keys(discarded).length > 0 && firstCommits) {
-        firstCommitsOfFailures = markdown`
+        firstCommitsOfFailures = format(
+            markdown`
+                ## First commits of failed files
 
-## First commits of failed files
+                These are least invasive commits focused on the goal which
+                didn't pass checks. You can try to fix them manually.
 
-These are least invasive commits focused on the goal which didn't pass checks. You can try to fix them manually.
-
-\`\`\`sh
-${firstCommits}
-\`\`\`
-`;
+                ~~~sh
+                %firstCommits%
+                ~~~
+            `,
+            { firstCommits }
+        );
     }
 
-    return (
+    const successfullyRefactored = Object.keys(accepted)
+        .map((file, i) => `${i + 1}. \`${file}\``)
+        .join('\n');
+
+    return format(
         await glowFormat({
-            input: markdown`
-# Refactoring completed
+            input: format(
+                markdown`
+                    # Refactoring completed
 
-Sandbox directory path:
+                    Sandbox directory path:
 
-\`SANDBOX_PATH\`
+                    \`$sandboxDirectoryPath$\`
 
-Successfully refactored:
+                    Successfully refactored:
 
-${Object.keys(accepted)
-    .map((file, i) => `${i + 1}. \`${file}\``)
-    .join('\n')}
-${failedToRefactor}
-The code passing checks has been checked out as \`${successBranch}\` branch for you. So you can now try following command to merge changes into your current branch:
+                    %successfullyRefactored%
 
-## Merge directly
+                    %failedToRefactor%
 
-\`\`\`sh
-git merge ${successBranch}
-\`\`\`
+                    The code passing checks has been checked out as
+                    \`%successBranch%\` branch for you. So you can now try
+                    following command to merge changes into your current branch:
 
-## Interactively
+                    ## Merge directly
 
-\`\`\`sh
-git checkout -p ${successBranch}
-\`\`\`
+                    ~~~sh
+                    git merge %successBranch%
+                    ~~~
 
-## Individually per file
+                    ## Interactively
 
-\`\`\`sh
-${perFile}
-\`\`\`
+                    ~~~sh
+                    git checkout -p %successBranch%
+                    ~~~
 
-${firstCommitsOfFailures}
+                    ## Individually per file
 
-`,
-        })
-    ).replace(
-        /**
-         * @note ensure the path is not broken by padding
-         */
-        'SANDBOX_PATH',
-        sandboxDirectoryPath
+                    ~~~sh
+                    %perFile%
+                    ~~~
+
+                    %firstCommitsOfFailures%
+                `,
+                {
+                    successfullyRefactored,
+                    failedToRefactor,
+                    successBranch,
+                    perFile,
+                    firstCommitsOfFailures,
+                }
+            ),
+        }),
+        {
+            /**
+             * @note ensure the path is not broken by padding
+             */
+            sandboxDirectoryPath,
+        },
+        {
+            prefix: '$',
+        }
     );
 };
 
@@ -289,37 +310,48 @@ const currentRepositoryFailedRefactoringReport = async (
         })
         .join('\n');
 
-    return (
+    const failedToRefactor = Object.keys(discarded)
+        .map((file, i) => `${i + 1}. \`${file}\``)
+        .join('\n');
+
+    return format(
         await glowFormat({
-            input: markdown`
-# Refactoring failed
+            input: format(
+                markdown`
+                    # Refactoring failed
 
-Sandbox directory path:
+                    Sandbox directory path:
 
-\`SANDBOX_PATH\`
+                    \`$sandboxDirectoryPath$\`
 
-Failed to refactor:
+                    Failed to refactor:
 
-${Object.keys(discarded)
-    .map((file, i) => `${i + 1}. \`${file}\``)
-    .join('\n')}
+                    %failedToRefactor%
 
-## First commits of failed files
+                    ## First commits of failed files
 
-These are least invasive commits focused on the goal which didn't pass checks. You can try to fix them manually.
+                    These are least invasive commits focused on the goal which
+                    didn't pass checks. You can try to fix them manually.
 
-\`\`\`sh
-${firstCommits}
-\`\`\`
-
-`,
-        })
-    ).replace(
-        /**
-         * @note ensure the path is not broken by padding
-         */
-        'SANDBOX_PATH',
-        sandboxDirectoryPath
+                    ~~~sh
+                    %firstCommits%
+                    ~~~
+                `,
+                {
+                    failedToRefactor,
+                    firstCommits,
+                }
+            ),
+        }),
+        {
+            /**
+             * @note ensure the path is not broken by padding
+             */
+            sandboxDirectoryPath,
+        },
+        {
+            prefix: '$',
+        }
     );
 };
 
@@ -353,24 +385,42 @@ export async function runRefactor(opts: {
         if (err instanceof ConfigurationError) {
             console.log(
                 await glowFormat({
-                    input: `# Configuration error
+                    input: format(
+                        markdown`
+                            # Configuration error
 
-${err.message}
+                            %errorMessage%
 
-\`\`\`
-${formatObject(extractErrorInfo(err), { indent: '' })}
-\`\`\`
-`,
+                            ~~~
+                            %errorDetails%
+                            ~~~
+                        `,
+                        {
+                            errorMessage: err.message,
+                            errorDetails: formatObject(extractErrorInfo(err), {
+                                indent: '',
+                            }),
+                        }
+                    ),
                 })
             );
         } else if (err instanceof Error) {
             console.log(
                 await glowFormat({
-                    input: `# Unhandled error
+                    input: format(
+                        markdown`
+                            # Unhandled error
 
-\`\`\`
-${formatObject(extractErrorInfo(err), { indent: '' })}
-\`\`\``,
+                            ~~~
+                            %errorDetails%
+                            ~~~
+                        `,
+                        {
+                            errorDetails: formatObject(extractErrorInfo(err), {
+                                indent: '',
+                            }),
+                        }
+                    ),
                 })
             );
         } else {

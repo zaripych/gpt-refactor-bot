@@ -35,9 +35,8 @@ export async function references(
 
         if (nodeBuiltin) {
             // find the module name of the node builtin:
-            const moduleName = nodeBuiltin.references.find(
-                (ref) => ref.module
-            )?.module;
+            const moduleName = nodeBuiltin.references.find((ref) => ref.module)
+                ?.module;
 
             if (moduleName) {
                 const result = await nodeBuiltinReferences(project, config, {
@@ -62,13 +61,13 @@ export const referencesFunction = makeTsFunction({
     resultSchema,
     name: 'references',
     description: markdown`
-Finds all occurrences of an identifier with specified name in the repository.
-Identifiers are function names, variable names, class names, etc. Identifiers
-cannot have spaces in them.
+        Finds all occurrences of an identifier with specified name in the
+        repository. Identifiers are function names, variable names, class names,
+        etc. Identifiers cannot have spaces in them.
 
-This will find references in the entire repository, unless \`includeFilePaths\`
-is specified. Specifying this option can be very useful when identifier is used
-in a large number of source files.
+        This will find references in the entire repository, unless
+        \`includeFilePaths\` is specified. Specifying this option can be very
+        useful when identifier is used in a large number of source files.
     `,
     implementation: references,
 });

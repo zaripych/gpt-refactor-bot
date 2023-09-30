@@ -12,7 +12,7 @@ type ResultOf<Name extends FunctionNames> = Awaited<
 >;
 
 export async function executeFunction<
-    Opts extends { name: FunctionNames; arguments: unknown }
+    Opts extends { name: FunctionNames; arguments: unknown },
 >(
     opts: Opts,
     config?: Partial<FunctionsConfig>
@@ -31,7 +31,7 @@ export async function executeFunction(
     },
     config?: Partial<FunctionsConfig>
 ): Promise<
-    | unknown
+    | object
     | {
           error?: {
               message: string;
@@ -45,7 +45,7 @@ export async function executeFunction(
     },
     config?: Partial<FunctionsConfig>
 ): Promise<
-    | unknown
+    | object
     | {
           error?: {
               message: string;

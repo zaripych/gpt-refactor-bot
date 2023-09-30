@@ -22,7 +22,9 @@ import { spawnResult } from '../child-process/spawnResult';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { executeFunction } from '../functions/executeFunction';
 import { includeFunctions } from '../functions/includeFunctions';
-import { markdown, print } from '../markdown/markdown';
+import { markdown, printMarkdown } from '../markdown/markdown';
+import { format } from '../text/format';
+import { line } from '../text/line';
 import {
     clearScreenFromCursorTillTheEnd,
     restoreCursorPosition,
@@ -64,7 +66,10 @@ async function promptForNewFileName() {
         name: 'name',
         message: 'Please specify the name of the file',
         type: 'text',
-        hint: 'The file will be stored in the ./prompts directory and will have .md extension',
+        hint: markdown`
+            The file will be stored in the ./prompts directory and will have .md
+            extension
+        `,
         format: (value: string) => `${value}.md`,
     })) as {
         name: string;
@@ -81,9 +86,17 @@ async function promptForNextAction(
 ) {
     const questionText =
         choice?.finishReason === 'function_call'
-            ? `The OpenAI model wants you to execute function ${chalk.bgYellowBright(
-                  choice.message.functionCall.name
-              )}. Please choose one of the options below:`
+            ? format(
+                  markdown`
+                      The OpenAI model wants you to execute function %name%.
+                      Please choose one of the options below:
+                  `,
+                  {
+                      name: chalk.bgYellowBright(
+                          choice.message.functionCall.name
+                      ),
+                  }
+              )
             : `Please choose one of the options below:`;
 
     const result = (await prompts({
@@ -124,42 +137,58 @@ const hr = chalk.green('"') + chalk.greenBright('---') + chalk.green('"');
 
 const text = {
     watchingSpinnerText: (price: string) =>
-        `Watching for file changes, please finish with a user prompt and confirm with ${hr} to send it ... [+ ~USD ${price}]`,
+        format(
+            markdown`
+                Watching for file changes, please finish with a user prompt and
+                confirm with %hr% to send it ... [+ ~USD %price%]
+            `,
+            { hr, price }
+        ),
 
     watchingWithLastMessage: (lastMessage: Message) =>
         [
             markdown`
-# Watching
+                # Watching
 
-Last message is from **\`${lastMessage.role}\`**
-`,
+                Last message is from **\`${lastMessage.role}\`**
+            `,
             formatMessage(lastMessage),
             '',
         ].join('\n\n---\n\n'),
 
     watchingCannotSend: (price: string) =>
-        `Last message is not a user prompt, please add another message and finish with ${hr} to confirm ...  [+ ~USD ${price}]`,
+        format(
+            markdown`
+                Last message is not a user prompt, please add another message
+                and finish with %hr% to confirm ... [+ ~USD %price%]
+            `,
+            { price, hr }
+        ),
 
     watchingNoConfirmation: (price: string) =>
-        `${note} We can send your request now ... finish with ${hr} to confirm ... [+ ~USD ${price}]`,
+        format(
+            markdown`
+                %note% We can send your request now ... finish with %hr% to
+                confirm ... [+ ~USD %price%]
+            `,
+            { hr, note, price }
+        ),
 
     errorNoMessagesToSend: markdown`
-# Stop Condition
+        # Stop Condition
 
-No messages to send, exiting ...
+        No messages to send, exiting ...
     `,
 
-    requesting: markdown`
-# Requesting
-    `,
+    requesting: `# Requesting`,
 
     requestingSpinnerText: `Sending messages to the OpenAI API ...`,
 
     totalSpend: (total: string) => markdown`
-# Total Spend
+        # Total Spend
 
-You have spent **USD ${total}** so far.
-`,
+        You have spent **USD ${total}** so far.
+    `,
 };
 
 export const run = async (opts: {
@@ -232,7 +261,9 @@ export const run = async (opts: {
             clearScreenFromCursorTillTheEnd();
 
             if (convo.lastMessage) {
-                await print(text.watchingWithLastMessage(convo.lastMessage));
+                await printMarkdown(
+                    text.watchingWithLastMessage(convo.lastMessage)
+                );
             }
 
             const price = (
@@ -260,7 +291,7 @@ export const run = async (opts: {
 
         let choice: Response['choices'][0];
         if (convo.canSend()) {
-            await print(text.requesting);
+            await printMarkdown(text.requesting);
             if (opts.watch) {
                 await convo.hint(text.requesting);
             }
@@ -282,21 +313,23 @@ export const run = async (opts: {
             });
 
             if (response.choices.length > 1) {
-                throw new Error(
-                    `There are more than one choice returned from the API, the current implementation is not designed to handle multiple choices`
-                );
+                throw new Error(line`
+                    There are more than one choice returned from the API,
+                    the current implementation is not designed to handle
+                    multiple choices
+                `);
             }
 
             choice = response.choices[0];
 
             // print last known request/message:
             if (convo.lastMessage && !opts.watch) {
-                await print(formatMessage(convo.lastMessage));
+                await printMarkdown(formatMessage(convo.lastMessage));
             }
 
             // add new message:
             convo.messages.push(choice.message);
-            await print(formatMessage(choice.message, true));
+            await printMarkdown(formatMessage(choice.message, true));
         } else {
             const { lastMessage } = convo;
             if (
@@ -310,12 +343,12 @@ export const run = async (opts: {
                     message: lastMessage,
                 };
             } else {
-                await print(text.errorNoMessagesToSend);
+                await printMarkdown(text.errorNoMessagesToSend);
                 return;
             }
         }
 
-        await print(text.totalSpend((totalCents * 100).toFixed(4)));
+        await printMarkdown(text.totalSpend((totalCents * 100).toFixed(4)));
 
         if (isManual) {
             let result = await promptForNextAction(
@@ -351,7 +384,6 @@ export const run = async (opts: {
                 const { functionCall } = choice.message;
                 const result = await executeFunction({
                     name: functionCall.name,
-                    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                     arguments: JSON.parse(functionCall.arguments),
                 })
                     .then(
@@ -360,7 +392,7 @@ export const run = async (opts: {
                                 role: 'function',
                                 name: functionCall.name,
                                 content: JSON.stringify(executeResult),
-                            } satisfies FunctionResultMessage)
+                            }) satisfies FunctionResultMessage
                     )
                     .catch(
                         (e: unknown) =>
@@ -374,7 +406,7 @@ export const run = async (opts: {
                                             ? e.message
                                             : String(e),
                                 }),
-                            } satisfies FunctionResultMessage)
+                            }) satisfies FunctionResultMessage
                     );
 
                 convo.messages.push(result);

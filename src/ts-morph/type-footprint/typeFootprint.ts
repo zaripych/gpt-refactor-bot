@@ -53,6 +53,7 @@ function isPrimitive(type: Type) {
         return true;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-comparison
     if (type.getSymbol()?.compilerSymbol.escapedName === 'Date') {
         return true;
     }

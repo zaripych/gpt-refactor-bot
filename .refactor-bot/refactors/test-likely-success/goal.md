@@ -5,4 +5,5 @@ budgetCents: 100
 model: gpt-4
 ```
 
-Replace all usages of `readFile` from `fs/promises` module with `readFileSync` from `fs` module in `src/refactor/planTasks.ts`.
+Replace all usages of `readFile` from `fs/promises` module with `readFileSync`
+from `fs` module in `src/refactor/planTasks.ts`.

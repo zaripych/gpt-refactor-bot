@@ -112,7 +112,7 @@ const exec = makePipelineFunction({
         message: z.union([systemMessageSchema, functionResultMessageSchema]),
     }),
     transform: async ({ functionCall, functionsConfig }) => {
-        let parsedArgs: unknown | undefined;
+        let parsedArgs: unknown;
         try {
             parsedArgs = JSON.parse(functionCall.arguments);
         } catch {

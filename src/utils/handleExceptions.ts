@@ -1,6 +1,6 @@
 export const handleExceptions = <
     Fn extends () => unknown,
-    Handler extends (err: unknown) => unknown
+    Handler extends (err: unknown) => unknown,
 >(
     fn: Fn,
     handler: Handler
@@ -13,8 +13,9 @@ export const handleExceptions = <
 };
 
 export const handleExceptionsAsync = async <
-    Fn extends () => unknown | Promise<unknown>,
-    Handler extends (err: unknown) => unknown | Promise<unknown>
+    Y,
+    Fn extends () => Y | Promise<Y>,
+    Handler extends (err: unknown) => Y | Promise<Y>,
 >(
     fn: Fn,
     handler: Handler

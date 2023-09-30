@@ -65,23 +65,25 @@ export const declarationsFunction = makeTsFunction({
     resultSchema: z.array(resultSchema),
     name: 'declarations',
     description: markdown`
-Finds the first occurrence of an identifier with specified name in the
-repository and then returns all declarations of that identifier along with
-inferred semantic information about it.
+        Finds the first occurrence of an identifier with specified name in the
+        repository and then returns all declarations of that identifier along
+        with inferred semantic information about it.
 
-Identifiers are function names, variable names, class names, etc. Identifiers
-cannot have spaces in them.
+        Identifiers are function names, variable names, class names, etc.
+        Identifiers cannot have spaces in them.
 
-Declaration is the source code that declares the identifier. For example, if
-the identifier is the name of a function, then the declaration is the function
-signature and body.
+        Declaration is the source code that declares the identifier. For
+        example, if the identifier is the name of a function, then the
+        declaration is the function signature and body.
 
-Semantic information is what you typically see when you hover in an editor. It
-will include the inferred information about the type of the identifier.
+        Semantic information is what you typically see when you hover in an
+        editor. It will include the inferred information about the type of the
+        identifier.
 
-This will find references in the entire repository, unless \`includeFilePaths\`
-is specified. Specifying this option can be very useful when same identifier
-name is used in a large number of source files.
+        This will find references in the entire repository, unless
+        \`includeFilePaths\` is specified. Specifying this option can be very
+        useful when same identifier name is used in a large number of source
+        files.
     `,
     implementation: declarations,
 });

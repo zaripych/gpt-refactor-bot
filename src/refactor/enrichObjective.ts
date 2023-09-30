@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
+import { format } from '../text/format';
 import { determineModelParameters } from './determineModelParameters';
 import { prompt } from './prompt';
 import { refactorConfigSchema } from './types';
@@ -34,21 +35,32 @@ export type EnrichObjectiveResponse = z.infer<
 >;
 
 const systemPrompt = markdown`
-Think step by step. Be concise and to the point. Do not make assumptions other than what was given in the instructions.
+    Think step by step. Be concise and to the point. Do not make assumptions
+    other than what was given in the instructions.
 `;
 
 const enrichPromptText = (originalObjective: string) =>
-    markdown`
-These are the original instructions:
+    format(
+        markdown`
+            These are the original instructions:
 
-${originalObjective}
+            %originalObjective%
 
-Given the above instructions that represent an objective, use the tool box directly via OpenAI function calling to obtain extra information. Feel free to make multiple calls, if needed.
+            Given the above instructions that represent an objective, use the
+            tool box directly via OpenAI function calling to obtain extra
+            information. Feel free to make multiple calls, if needed.
 
-The extra information is meant to help to determine the steps needed to achieve the objective, but doesn't need to describe the steps. Extra information should be concise, should not make conclusions or provide advice, it should contain just facts that are retrieved from results of the function calls. Do not include any information that is not relevant to the objective.
+            The extra information is meant to help to determine the steps needed
+            to achieve the objective, but doesn't need to describe the steps.
+            Extra information should be concise, should not make conclusions or
+            provide advice, it should contain just facts that are retrieved from
+            results of the function calls. Do not include any information that
+            is not relevant to the objective.
 
-Produce retrieved extra information as a final message.
-    `;
+            Produce retrieved extra information as a final message.
+        `,
+        { originalObjective }
+    );
 
 export const enrichObjective = makePipelineFunction({
     name: 'enrich-objective',

@@ -1,6 +1,11 @@
-> This is a conversation with a OpenAI model. You can edit this file manually to enter a new prompt and then execute `pnpm refactor-bot prompt` to continue the conversation.
+> This is a conversation with a OpenAI model. You can edit this file manually to
+> enter a new prompt and then execute `pnpm refactor-bot prompt` to continue the
+> conversation.
 
-> Messages are separated by a `---`. The application is going to automatically add `> @role [user|assistant|system]` to the messages depending on their order. Feel free to modify the comment to change the role of a message. All quotes are considered comments.
+> Messages are separated by a `---`. The application is going to automatically
+> add `> @role [user|assistant|system]` to the messages depending on their
+> order. Feel free to modify the comment to change the role of a message. All
+> quotes are considered comments.
 
 > @role user
 
