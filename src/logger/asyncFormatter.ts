@@ -72,6 +72,8 @@ export class AsyncFormatter extends Transform {
             void this.promise.finally(() => {
                 callback(null);
             });
+        } else {
+            callback(null);
         }
     }
 
@@ -80,6 +82,8 @@ export class AsyncFormatter extends Transform {
             void this.promise.finally(() => {
                 callback();
             });
+        } else {
+            callback(null);
         }
     }
 }

@@ -4,7 +4,7 @@ import { CycleDetectedError } from '../errors/cycleDetectedError';
 import { logger } from '../logger/logger';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { scriptSchema } from './check';
-import { planFiles } from './planFiles';
+import { planFiles, planFilesResultSchema } from './planFiles';
 import { refactorBatch } from './refactorBatch';
 import type { RefactorFilesResult } from './types';
 import {
@@ -20,10 +20,16 @@ export const planAndRefactorInputSchema = refactorConfigSchema.augment({
     scripts: z.array(scriptSchema),
 });
 
+export const planAndRefactorResultSchema = refactorFilesResultSchema.merge(
+    z.object({
+        planning: z.array(planFilesResultSchema),
+    })
+);
+
 export const planAndRefactor = makePipelineFunction({
     name: 'objective',
     inputSchema: planAndRefactorInputSchema,
-    resultSchema: refactorFilesResultSchema,
+    resultSchema: planAndRefactorResultSchema,
     transform: async (input, persistence) => {
         const planFilesWithPersistence = planFiles.withPersistence().retry({
             maxAttempts: 3,
@@ -34,11 +40,17 @@ export const planAndRefactor = makePipelineFunction({
             discarded: {},
         };
 
+        const planning: Array<z.output<typeof planFilesResultSchema>> = [];
+
         try {
-            const { plannedFiles } = await planFilesWithPersistence.transform(
+            const planResult = await planFilesWithPersistence.transform(
                 input,
                 persistence
             );
+
+            planning.push(planResult);
+
+            const { plannedFiles } = planResult;
 
             while (plannedFiles.length > 0) {
                 const result = await refactorBatch(
@@ -82,6 +94,8 @@ export const planAndRefactor = makePipelineFunction({
                     plannedFiles.length,
                     ...repeatedPlanResult.plannedFiles
                 );
+
+                planning.push(repeatedPlanResult);
             }
         } finally {
             if (persistence) {
@@ -89,6 +103,9 @@ export const planAndRefactor = makePipelineFunction({
             }
         }
 
-        return files;
+        return {
+            ...files,
+            planning,
+        };
     },
 });

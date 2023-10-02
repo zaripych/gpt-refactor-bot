@@ -1,5 +1,6 @@
 import { join } from 'path';
 
+import { AbortError } from '../errors/abortError';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { gitCheckoutNewBranch } from '../git/gitCheckoutNewBranch';
 import { gitFetch } from '../git/gitFetch';
@@ -13,8 +14,8 @@ import { enrichObjective } from './enrichObjective';
 import { refactorGoal } from './refactorGoal';
 import { type RefactorConfig, refactorConfigSchema } from './types';
 
-const createPipe = () => {
-    const pipe = pipeline(refactorConfigSchema)
+const createPipe = (opts?: { saveResult?: boolean }) => {
+    const pipe = pipeline(refactorConfigSchema, opts)
         .append(checkoutSandbox)
         .append(enrichObjective)
         .combineLast((input, result) => ({
@@ -27,8 +28,13 @@ const createPipe = () => {
     return pipe;
 };
 
-async function loadRefactorState(opts: { config: RefactorConfig }) {
-    const pipe = createPipe();
+async function loadRefactorState(opts: {
+    config: RefactorConfig;
+    cache?: boolean;
+}) {
+    const pipe = createPipe({
+        saveResult: opts.cache ?? true,
+    });
 
     const root = await findRepositoryRoot();
 
@@ -59,7 +65,10 @@ async function loadRefactorState(opts: { config: RefactorConfig }) {
     }
 }
 
-export async function refactor(opts: { config: RefactorConfig }) {
+export async function refactor(opts: {
+    config: RefactorConfig;
+    cache?: boolean;
+}) {
     const { pipe, location, id } = await loadRefactorState(opts);
 
     logger.info(
@@ -115,17 +124,24 @@ export async function refactor(opts: { config: RefactorConfig }) {
                 });
             }
 
+            await pipe.clean(persistence);
+
             return {
                 ...result,
                 successBranch,
             };
         }
 
+        await pipe.clean(persistence);
+
         return {
             ...result,
             successBranch: undefined,
         };
-    } finally {
-        await pipe.clean(persistence);
+    } catch (err) {
+        if (!(err instanceof AbortError)) {
+            await pipe.clean(persistence);
+        }
+        throw err;
     }
 }

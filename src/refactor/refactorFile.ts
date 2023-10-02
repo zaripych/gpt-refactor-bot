@@ -180,6 +180,7 @@ export const refactorFile = makePipelineFunction({
             fileContents: string;
             checkSummary: ReturnType<typeof checksSummary>;
         }>();
+
         const initialCheck = await checkWithPersistence.transform(
             {
                 packageManager,
@@ -195,6 +196,7 @@ export const refactorFile = makePipelineFunction({
                 'We should have no errors initially, this should be guaranteed by the initial pre-check made in refactorGoal function. If we got here there must be a bug in the code.'
             );
         }
+
         const issues: Issue[] = [];
         const commonEditOpts = {
             ...input,
@@ -232,6 +234,8 @@ export const refactorFile = makePipelineFunction({
             );
             do {
                 try {
+                    console.log('step');
+
                     const fileContents = await readFile(
                         join(input.sandboxDirectoryPath, filePath),
                         'utf-8'

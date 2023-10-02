@@ -1,5 +1,6 @@
 import type { CommandModule } from 'yargs';
 
+import { line } from '../text/line';
 import { runRefactor } from './runRefactor';
 
 export const refactorCommand: CommandModule<
@@ -7,6 +8,7 @@ export const refactorCommand: CommandModule<
     {
         name?: string;
         id?: string;
+        cache?: boolean;
     }
 > = {
     command: 'refactor',
@@ -19,7 +21,10 @@ export const refactorCommand: CommandModule<
             })
             .option('id', {
                 type: 'string',
-                describe: `Unique id of the refactoring that was previously run but didn't finish to start from last successful point`,
+                describe: line`
+                    Unique id of the refactoring that was previously run but
+                    didn't finish to start from last successful point
+                `,
             }),
     handler: async (opts) => {
         await runRefactor(opts);

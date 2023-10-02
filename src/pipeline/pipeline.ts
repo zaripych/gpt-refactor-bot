@@ -101,6 +101,10 @@ const clean = async (
 ) => {
     const { logger, unlink, rm, fg } = deps;
 
+    if (!deps.saveResult) {
+        return;
+    }
+
     const state = getTransformState(persistence);
     if (!state || state.results.size === 0) {
         return;
@@ -412,16 +416,18 @@ async function transformElement(
     if (persistence?.location) {
         const location = [key, '.yaml'].join('');
         try {
-            await saveResult(
-                {
-                    input: value,
-                    inputSchema,
-                    result,
-                    location,
-                    resultSchema,
-                },
-                deps
-            );
+            if (deps.saveResult) {
+                await saveResult(
+                    {
+                        input: value,
+                        inputSchema,
+                        result,
+                        location,
+                        resultSchema,
+                    },
+                    deps
+                );
+            }
             log.push(location);
         } catch (err) {
             if (err instanceof ZodError) {
@@ -494,7 +500,7 @@ let abort = false;
 
 type PipelineOpts = {
     initialInputSchema: SupportedZodSchemas;
-    deps: typeof defaultDeps;
+    deps: Partial<typeof defaultDeps>;
     elements: Array<
         AnyPipelineElement & {
             combine?: typeof Object.assign;
@@ -517,7 +523,6 @@ const createPipeline = <InputSchema extends SupportedZodSchemas>(
         },
         ...opts
     } = {
-        deps: defaultDeps,
         elements: [],
         finalResultSchema:
             'sourceType' in optsRaw.initialInputSchema
@@ -526,6 +531,10 @@ const createPipeline = <InputSchema extends SupportedZodSchemas>(
         combineAll: (first: unknown, second: unknown) =>
             Object.assign({}, first, second) as unknown,
         ...optsRaw,
+        deps: {
+            ...defaultDeps,
+            ...optsRaw.deps,
+        },
     };
 
     let state: TransformState | undefined;
@@ -680,7 +689,7 @@ const createPipeline = <InputSchema extends SupportedZodSchemas>(
  */
 export const pipeline: <Schema extends SupportedZodSchemas>(
     inputSchema: Schema,
-    deps?: typeof defaultDeps
+    deps?: Partial<typeof defaultDeps>
 ) => PipelineApi<Schema, TypeOf<Schema>, TypeOf<Schema>> = (
     inputSchema,
     deps = defaultDeps

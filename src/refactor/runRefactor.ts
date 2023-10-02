@@ -355,9 +355,48 @@ const currentRepositoryFailedRefactoringReport = async (
     );
 };
 
+const currentRepositoryPlanningEmptyReasonReport = async (
+    opts: RefactorResult
+) => {
+    const { planning, sandboxDirectoryPath } = opts;
+
+    const emptyPlanReason = planning[0]?.reasoning || '';
+
+    return format(
+        await glowFormat({
+            input: format(
+                markdown`
+                    # Refactoring failed
+
+                    Sandbox directory path:
+
+                    \`$sandboxDirectoryPath$\`
+
+                    ## No files require changes.
+
+                    %emptyPlanReason%
+                `,
+                {
+                    emptyPlanReason,
+                }
+            ),
+        }),
+        {
+            /**
+             * @note ensure the path is not broken by padding
+             */
+            sandboxDirectoryPath,
+        },
+        {
+            prefix: '$',
+        }
+    );
+};
+
 export async function runRefactor(opts: {
     id?: string;
     name?: string;
+    cache?: boolean;
     //
 }) {
     try {
@@ -370,15 +409,22 @@ export async function runRefactor(opts: {
 
         const result = await refactor({
             config,
+            cache: opts.cache,
         });
 
         if (!result.repository) {
             if (result.successBranch) {
                 console.log(await currentRepositoryRefactoringReport(result));
             } else {
-                console.log(
-                    await currentRepositoryFailedRefactoringReport(result)
-                );
+                if (result.planning[0]?.plannedFiles.length === 0) {
+                    console.log(
+                        await currentRepositoryPlanningEmptyReasonReport(result)
+                    );
+                } else {
+                    console.log(
+                        await currentRepositoryFailedRefactoringReport(result)
+                    );
+                }
             }
         }
     } catch (err) {

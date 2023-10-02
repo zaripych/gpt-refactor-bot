@@ -18,9 +18,6 @@ await yargs(process.argv.slice(2))
     .demandCommand(1, 'You need at least one command before moving on')
     .completion()
     .parseAsync()
-    .catch((err) => {
-        console.error(err);
-    })
     .then(async () => {
         await flush().catch(() => {
             // do nothing

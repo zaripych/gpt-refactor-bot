@@ -53,7 +53,8 @@ export const refactorBatch = makePipelineFunction({
 
         const shouldAcceptResult =
             input.shouldAcceptResult ??
-            ((result) => result.status === 'success' && result.lastCommit);
+            ((result) =>
+                result.status === 'success' && Boolean(result.lastCommit));
 
         const refactor = refactorFile.withPersistence().retry({
             maxAttempts: 3,
@@ -134,7 +135,7 @@ export const refactorBatch = makePipelineFunction({
                 });
 
                 if (currentCommit !== beforeRefactorCommit) {
-                    logger.info(
+                    logger.warn(
                         'Resetting to previous commit',
                         beforeRefactorCommit
                     );
@@ -145,10 +146,12 @@ export const refactorBatch = makePipelineFunction({
                     });
                 }
 
-                pushRefactorFileResults({
-                    into: discarded,
-                    result: file,
-                });
+                if (file.status === 'failure') {
+                    pushRefactorFileResults({
+                        into: discarded,
+                        result: file,
+                    });
+                }
             }
         }
 

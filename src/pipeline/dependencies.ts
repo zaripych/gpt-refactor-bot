@@ -27,6 +27,7 @@ export const defaultDeps = {
     rm,
     rename,
     saveInput: true,
+    saveResult: true,
     /**
      * @note I was testing whether the non-determinism of the models
      * can be used to break out of infinite loops and found it to be

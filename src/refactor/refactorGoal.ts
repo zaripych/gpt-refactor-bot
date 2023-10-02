@@ -7,15 +7,14 @@ import { gitStatus } from '../git/gitStatus';
 import { logger } from '../logger/logger';
 import { determinePackageManager } from '../package-manager/determinePackageManager';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
+import { line } from '../text/line';
 import { check, checkScriptsFromConfig } from './check';
 import { discoverCheckDependencies } from './discoverDependencies';
-import { planAndRefactor } from './refactorObjective';
-import type { RefactorFilesResult } from './types';
 import {
-    mutateToMergeRefactorFilesResults,
-    refactorConfigSchema,
-    refactorFilesResultSchema,
-} from './types';
+    planAndRefactor,
+    planAndRefactorResultSchema,
+} from './refactorObjective';
+import { refactorConfigSchema } from './types';
 
 export const refactorGoalInputSchema = refactorConfigSchema
     .augment({
@@ -43,7 +42,7 @@ export const refactorGoalInputSchema = refactorConfigSchema
 export const refactorGoal = makePipelineFunction({
     name: 'goal',
     inputSchema: refactorGoalInputSchema,
-    resultSchema: refactorFilesResultSchema,
+    resultSchema: planAndRefactorResultSchema,
     transform: async (input, persistence) => {
         const { sandboxDirectoryPath } = input;
 
@@ -82,35 +81,29 @@ export const refactorGoal = makePipelineFunction({
         if (checkResult.issues.length > 0) {
             logger.info('Following scripts are used for checks', input.scripts);
             logger.info('Found following issues', checkResult.issues);
-            throw new ConfigurationError(
-                `Initial checks have failed - the refactor command is designed to be run on the codebase that passes all checks. Please fix the issues or checkout the repository at a green state and try again. Ensure that the refactor bot is configured correctly and executing correct commands to make the checks. Checks can be disabled and adjusted in the goal.md file. Use the above log entries to understand which checks have failed.`
-            );
+            throw new ConfigurationError(line`
+                Initial checks have failed - at the moment, the refactor command
+                is designed to be run on the codebase that passes all checks.
+                Please fix the issues or checkout the repository at a green
+                state and try again. Ensure that the refactor bot is configured
+                correctly and executing correct commands to make the checks.
+                Checks can be disabled and adjusted in the goal.md file. Use the
+                above log entries to understand which checks have failed.
+            `);
         }
 
         const planAndRefactorWithPersistence =
             planAndRefactor.withPersistence();
 
-        const files: RefactorFilesResult = {
-            accepted: {},
-            discarded: {},
-        };
-
         try {
-            const result = await planAndRefactorWithPersistence.transform(
+            return await planAndRefactorWithPersistence.transform(
                 input,
                 persistence
             );
-
-            mutateToMergeRefactorFilesResults({
-                from: result,
-                into: files,
-            });
         } finally {
             if (persistence) {
                 await planAndRefactorWithPersistence.clean(persistence);
             }
         }
-
-        return files;
     },
 });
