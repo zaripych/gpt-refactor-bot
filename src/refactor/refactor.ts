@@ -12,11 +12,13 @@ import { randomText } from '../utils/randomText';
 import { checkoutSandbox } from './checkoutSandbox';
 import { enrichObjective } from './enrichObjective';
 import { refactorGoal } from './refactorGoal';
+import { retrieveParameters } from './retrieveParameters';
 import { type RefactorConfig, refactorConfigSchema } from './types';
 
 const createPipe = (opts?: { saveResult?: boolean }) => {
     const pipe = pipeline(refactorConfigSchema, opts)
         .append(checkoutSandbox)
+        .append(retrieveParameters)
         .append(enrichObjective)
         .combineLast((input, result) => ({
             ...input,

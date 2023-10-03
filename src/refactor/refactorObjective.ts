@@ -18,6 +18,7 @@ export const planAndRefactorInputSchema = refactorConfigSchema.augment({
     startCommit: z.string(),
     sandboxDirectoryPath: z.string(),
     scripts: z.array(scriptSchema),
+    filesToEdit: z.array(z.string()),
 });
 
 export const planAndRefactorResultSchema = refactorFilesResultSchema.merge(
@@ -48,7 +49,12 @@ export const planAndRefactor = makePipelineFunction({
                 persistence
             );
 
-            planning.push(planResult);
+            planning.push({
+                plannedFiles: [...planResult.plannedFiles],
+                ...('reasoning' in planResult && {
+                    reasoning: planResult.reasoning,
+                }),
+            });
 
             const { plannedFiles } = planResult;
 
@@ -95,7 +101,12 @@ export const planAndRefactor = makePipelineFunction({
                     ...repeatedPlanResult.plannedFiles
                 );
 
-                planning.push(repeatedPlanResult);
+                planning.push({
+                    plannedFiles: [...repeatedPlanResult.plannedFiles],
+                    ...('reasoning' in repeatedPlanResult && {
+                        reasoning: repeatedPlanResult.reasoning,
+                    }),
+                });
             }
         } finally {
             if (persistence) {

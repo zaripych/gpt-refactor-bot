@@ -272,6 +272,17 @@ export const mutateToMergeRefactorRecords = (opts: {
     }
 };
 
+const moveRefactorFileResults = (opts: {
+    filePath: string;
+    into: RefactorResultByFilePathRecord;
+    from: RefactorResultByFilePathRecord;
+}) => {
+    opts.into[opts.filePath] = (opts.from[opts.filePath] || []).concat(
+        opts.into[opts.filePath] || []
+    );
+    delete opts.from[opts.filePath];
+};
+
 export const mutateToMergeRefactorFilesResults = (opts: {
     from: RefactorFilesResult;
     into: RefactorFilesResult;
@@ -284,6 +295,22 @@ export const mutateToMergeRefactorFilesResults = (opts: {
         from: opts.from.discarded,
         into: opts.into.discarded,
     });
+
+    /**
+     * @note if we get a file in discarded list after previously
+     * getting a file in accepted list, we move the file to the
+     * discarded list
+     */
+    for (const filePath of Object.keys(opts.into.discarded)) {
+        const accepted = opts.into.accepted[filePath];
+        if (accepted) {
+            moveRefactorFileResults({
+                filePath,
+                from: opts.into.accepted,
+                into: opts.into.discarded,
+            });
+        }
+    }
 };
 
 export type Issue = z.infer<typeof issueSchema>;

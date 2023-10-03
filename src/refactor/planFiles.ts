@@ -1,15 +1,11 @@
-import { stat } from 'fs/promises';
-import { orderBy } from 'lodash-es';
-import { join } from 'path';
 import { z } from 'zod';
 
-import type { RegularAssistantMessage } from '../chat-gpt/api';
 import { diffHash } from '../git/diffHash';
 import { markdown } from '../markdown/markdown';
 import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { format } from '../text/format';
-import { isTruthy } from '../utils/isTruthy';
 import { determineModelParameters } from './determineModelParameters';
+import { validateAndParseListOfFiles } from './parsers/validateAndParseListOfFiles';
 import { prompt } from './prompt';
 import { refactorConfigSchema } from './types';
 
@@ -27,6 +23,7 @@ export const planFilesInputSchema = refactorConfigSchema
         objective: z.string(),
         sandboxDirectoryPath: z.string(),
         startCommit: z.string(),
+        filesToEdit: z.array(z.string()),
     })
     .transform(async (input) => ({
         ...input,
@@ -75,21 +72,13 @@ const planFilesPromptText = (objective: string) =>
                why editing is not required.
 
             2. Use the tool box via OpenAI function calling to find all files
-               that need editing.
+               that require editing and where the objective is not complete yet.
 
-            3. Check the objective if it explicitly mentions to limit the
-               editing or refactoring only to a specific file or set of files.
-               If there is no mention of files to be edited, continue on to step
-               #4. Otherwise, take the files found from the list in step #2 and
-               exclude any files that are not mentioned in the objective. This
-               way we ensure the editing is focusing on files the user wants us
-               to change.
-
-            4. If the resulting list from step #3 is empty, respond "There are
+            3. If the resulting list from step #3 is empty, respond "There are
                no files to edit at this time". Follow it with short sentence of
                reasoning why editing is not required.
 
-            5. If the resulting list from step #3 is not empty, format it -
+            4. If the resulting list from step #3 is not empty, format it -
                return one file path per line in your response. File paths should
                be surrounded by a backtick. File paths should be relative to
                repository root. The result must be a numbered list in the
@@ -101,76 +90,19 @@ const planFilesPromptText = (objective: string) =>
 
             The number of each entry must be followed by a period. Do not prefix
             the list of files with any text.
-
-            Now, retrace your steps back without using the tool box via OpenAI
-            calling and verify the list of files to be edited. Follow it with
-            short sentence of reasoning why the list is correct.
         `,
         { objective }
     );
-
-const validateParseAndOrderThePlan = async (opts: {
-    sandboxDirectoryPath: string;
-    message: RegularAssistantMessage;
-}) => {
-    const { sandboxDirectoryPath, message } = opts;
-    const filePathRegex = /^\s*\d+\.\s*[`]([^`]+)[`]\s*/gm;
-
-    const filePaths = [
-        ...new Set(
-            [...message.content.matchAll(filePathRegex)]
-                .map(([, filePath]) => filePath)
-                .filter(isTruthy)
-        ),
-    ];
-
-    const filesInfos = await Promise.all(
-        filePaths.map(async (filePath) => {
-            const result = await stat(
-                join(sandboxDirectoryPath, filePath)
-            ).catch((error: NodeJS.ErrnoException) => {
-                if (error.code === 'ENOENT') {
-                    return null;
-                }
-                return Promise.reject(error);
-            });
-            return {
-                filePath,
-                size: result?.size,
-            };
-        })
-    );
-
-    const nonExistingFiles = filesInfos.filter(
-        (file) => typeof file.size !== 'number'
-    );
-
-    if (nonExistingFiles.length > 0) {
-        throw new Error(
-            `Files at the following paths do not exist: ${nonExistingFiles
-                .map(({ filePath }) => `\`${filePath}\``)
-                .join(
-                    ', '
-                )}. Please specify file paths relative to the repository root found via the tool box.`
-        );
-    }
-
-    const sorted = orderBy(filesInfos, ['size'], ['asc']);
-
-    return sorted.map((info) => info.filePath);
-};
 
 export const planFiles = makePipelineFunction({
     name: 'plan',
     inputSchema: planFilesInputSchema,
     resultSchema: planFilesResultSchema,
     transform: async (input, persistence): Promise<PlanFilesResponse> => {
-        const userPrompt = planFilesPromptText(input.objective);
-
-        const { choices } = await prompt.withPersistence().transform(
+        const plannedFilesResult = await prompt.withPersistence().transform(
             {
                 preface: systemPrompt,
-                prompt: userPrompt,
+                prompt: planFilesPromptText(input.objective),
                 budgetCents: input.budgetCents,
                 temperature: 1,
                 functionsConfig: {
@@ -180,9 +112,10 @@ export const planFiles = makePipelineFunction({
                     allowedFunctions: input.allowedFunctions,
                 },
                 shouldStop: async (message) => {
-                    await validateParseAndOrderThePlan({
+                    await validateAndParseListOfFiles({
                         sandboxDirectoryPath: input.sandboxDirectoryPath,
-                        message,
+                        text: message.content,
+                        sortBySize: false,
                     });
                     return true as const;
                 },
@@ -191,15 +124,24 @@ export const planFiles = makePipelineFunction({
             persistence
         );
 
-        const plannedFiles = await validateParseAndOrderThePlan({
+        const plannedFiles = await validateAndParseListOfFiles({
             sandboxDirectoryPath: input.sandboxDirectoryPath,
-            message: choices[0].resultingMessage,
+            text: plannedFilesResult.choices[0].resultingMessage.content,
+            sortBySize: input.filesToEdit.length === 0,
         });
 
+        const filesRequiredToEdit =
+            input.filesToEdit.length > 0
+                ? plannedFiles.filter((filePath) =>
+                      input.filesToEdit.includes(filePath)
+                  )
+                : plannedFiles;
+
         return {
-            plannedFiles,
-            ...(plannedFiles.length === 0 && {
-                reasoning: choices[0].resultingMessage.content,
+            plannedFiles: filesRequiredToEdit,
+            ...(filesRequiredToEdit.length === 0 && {
+                reasoning:
+                    plannedFilesResult.choices[0].resultingMessage.content,
             }),
         };
     },

@@ -280,9 +280,10 @@ export async function chatCompletions(opts: Opts): Promise<Response> {
         body: JSON.stringify({
             model,
             messages: opts.messages.map(messageToInternal),
-            ...(opts.functions && {
-                functions: opts.functions,
-            }),
+            ...(opts.functions &&
+                opts.functions.length > 0 && {
+                    functions: opts.functions,
+                }),
             ...(opts.functionCall && {
                 function_call: opts.functionCall,
             }),

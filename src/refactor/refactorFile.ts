@@ -234,8 +234,6 @@ export const refactorFile = makePipelineFunction({
             );
             do {
                 try {
-                    console.log('step');
-
                     const fileContents = await readFile(
                         join(input.sandboxDirectoryPath, filePath),
                         'utf-8'
@@ -505,9 +503,7 @@ export const refactorFile = makePipelineFunction({
                                         step.checkSummary.totalNumberOfIssues,
                                 })),
                             });
-                            throw new AbortError(
-                                'Cycle detected, handle please TODO'
-                            );
+                            throw exc;
                         }
                     } else {
                         throw exc;

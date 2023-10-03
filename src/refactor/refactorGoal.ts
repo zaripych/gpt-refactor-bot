@@ -21,6 +21,7 @@ export const refactorGoalInputSchema = refactorConfigSchema
         objective: z.string(),
         sandboxDirectoryPath: z.string(),
         startCommit: z.string(),
+        filesToEdit: z.array(z.string()),
     })
     .transform(async (input) => {
         const checks = await discoverCheckDependencies({
