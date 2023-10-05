@@ -56,10 +56,6 @@ export const refactorBatch = makePipelineFunction({
             ((result) =>
                 result.status === 'success' && Boolean(result.lastCommit));
 
-        const refactor = refactorFile.withPersistence().retry({
-            maxAttempts: 3,
-        });
-
         const accepted: RefactorFilesResult['accepted'] = {};
         const discarded: RefactorFilesResult['discarded'] = {};
 
@@ -69,40 +65,37 @@ export const refactorBatch = makePipelineFunction({
                 ref: 'HEAD',
             });
 
-            const { file } = await refactor
-                .transform(
-                    {
-                        filePath,
-                        ...input,
-                    },
-                    persistence
-                )
-                .catch((err) => {
-                    if (
-                        err instanceof AbortError &&
-                        !(err instanceof CycleDetectedError) &&
-                        !(err instanceof OutOfContextBoundsError)
-                    ) {
-                        return Promise.reject(err);
-                    }
+            const { file } = await refactorFile(
+                {
+                    filePath,
+                    ...input,
+                },
+                persistence
+            ).catch((err) => {
+                if (
+                    err instanceof AbortError &&
+                    !(err instanceof CycleDetectedError) &&
+                    !(err instanceof OutOfContextBoundsError)
+                ) {
+                    return Promise.reject(err);
+                }
 
-                    /**
-                     * @note this is temporary, ideally the refactorFile
-                     * function should not throw and return a failure result
-                     */
-                    return {
-                        file: {
-                            status: 'failure',
-                            failureDescription:
-                                err instanceof Error
-                                    ? err.message
-                                    : String(err),
-                            filePath,
-                            issues: [],
-                            steps: [],
-                        },
-                    } as RefactorFileResult;
-                });
+                /**
+                 * @note this is temporary, ideally the refactorFile
+                 * function should not throw and return a failure result
+                 */
+                return {
+                    file: {
+                        status: 'failure',
+                        failureDescription:
+                            err instanceof Error ? err.message : String(err),
+                        filePath,
+                        issues: [],
+                        steps: [],
+                        timestamp: performance.now(),
+                    },
+                } as RefactorFileResult;
+            });
 
             const shouldAccept = await Promise.resolve(
                 shouldAcceptResult(file)

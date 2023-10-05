@@ -27,6 +27,7 @@ import { formatIssues } from './prompts/formatIssues';
 import type { Issue } from './types';
 import {
     lastCommit,
+    lastTimestamp,
     refactorConfigSchema,
     refactorFileResultSchema,
 } from './types';
@@ -156,17 +157,11 @@ function fixLocalIssuesPromptText(opts: {
 }
 
 export const refactorFile = makePipelineFunction({
-    name: 'file-wp',
+    name: 'file',
     inputSchema: refactorFileInputSchema,
     resultSchema: refactorFileResultSchema,
     transform: async (input, persistence) => {
         const { filePath, sandboxDirectoryPath } = input;
-
-        const editFileWithPersistence = edit.withPersistence().retry({
-            maxAttempts: 3,
-        });
-
-        const checkWithPersistence = check.withPersistence();
 
         const packageManager = await determinePackageManager({
             directory: input.sandboxDirectoryPath,
@@ -179,9 +174,10 @@ export const refactorFile = makePipelineFunction({
             patch: string;
             fileContents: string;
             checkSummary: ReturnType<typeof checksSummary>;
+            timestamp: number;
         }>();
 
-        const initialCheck = await checkWithPersistence.transform(
+        const initialCheck = await check(
             {
                 packageManager,
                 location: input.sandboxDirectoryPath,
@@ -218,304 +214,291 @@ export const refactorFile = makePipelineFunction({
                     commit: step.commit,
                     fileContents: step.fileContents,
                     task: step.task,
+                    timestamp: step.timestamp,
                 })),
                 lastCommit: lastCommit(steps),
+                timestamp: lastTimestamp(steps) ?? performance.now(),
             };
         };
 
-        try {
-            const startCommit = await gitRevParse({
-                location: input.sandboxDirectoryPath,
-                ref: 'HEAD',
-            });
-            const initialFileContents = await readFile(
-                join(input.sandboxDirectoryPath, filePath),
-                'utf-8'
-            );
-            do {
-                try {
-                    const fileContents = await readFile(
-                        join(input.sandboxDirectoryPath, filePath),
-                        'utf-8'
-                    );
+        const startCommit = await gitRevParse({
+            location: input.sandboxDirectoryPath,
+            ref: 'HEAD',
+        });
+        const initialFileContents = await readFile(
+            join(input.sandboxDirectoryPath, filePath),
+            'utf-8'
+        );
+        do {
+            try {
+                const fileContents = await readFile(
+                    join(input.sandboxDirectoryPath, filePath),
+                    'utf-8'
+                );
 
-                    const fileDiff = await gitFilesDiff({
-                        location: input.sandboxDirectoryPath,
-                        filePaths: [filePath],
-                        ref: startCommit,
-                    });
+                const fileDiff = await gitFilesDiff({
+                    location: input.sandboxDirectoryPath,
+                    filePaths: [filePath],
+                    ref: startCommit,
+                });
 
-                    const localIssues = issues.filter(
-                        (issue) => issue.filePath === filePath
-                    );
+                const localIssues = issues.filter(
+                    (issue) => issue.filePath === filePath
+                );
 
-                    const externalIssues = issues.filter(
-                        (issue) => issue.filePath !== filePath
-                    );
+                const externalIssues = issues.filter(
+                    (issue) => issue.filePath !== filePath
+                );
 
-                    let task: 'refactor' | 'fix-issues' | 'fix-export-issues' =
-                        'refactor';
-                    if (issues.length > 0) {
-                        if (localIssues.length > 0) {
-                            task = 'fix-issues';
-                        } else {
-                            task = 'fix-export-issues';
-                        }
-                    }
-
-                    let objective: string;
-                    switch (task) {
-                        case 'refactor':
-                            objective = performFileRefactoringPromptText({
-                                fileContents,
-                                filePath,
-                                language: 'TypeScript',
-                                objective: input.objective,
-                            });
-                            break;
-                        case 'fix-issues':
-                            objective = fixLocalIssuesPromptText({
-                                fileContents,
-                                filePath,
-                                language: 'TypeScript',
-                                objective: input.objective,
-                                issues: localIssues.map(({ issue }) => issue),
-                                fileDiff,
-                                advice,
-                            });
-                            break;
-                        case 'fix-export-issues':
-                            objective = fixExportIssuesPromptText({
-                                fileContents,
-                                filePath,
-                                language: 'TypeScript',
-                                objective: input.objective,
-                                issues: externalIssues.map(
-                                    ({ issue }) => issue
-                                ),
-                                fileDiff,
-                                advice,
-                                ...(await changeInfo({
-                                    location: input.sandboxDirectoryPath,
-                                    oldFileContents: initialFileContents,
-                                    newFileContents: fileContents,
-                                    filePath,
-                                    fileDiff,
-                                })),
-                            });
-                            break;
-                        default:
-                            throw new UnreachableError(task);
-                    }
-
-                    const { choices } = await editFileWithPersistence.transform(
-                        {
-                            ...commonEditOpts,
-                            objective,
-                            fileContents,
-                        },
-                        persistence
-                    );
-
-                    const editResult = choices[0];
-
-                    if (editResult.status !== 'success') {
-                        if (issues.length > 0) {
-                            return {
-                                file: {
-                                    status: 'failure' as const,
-                                    failureDescription:
-                                        'The model has failed to fix the issues in the file',
-                                    ...buildResult(),
-                                },
-                            };
-                        }
-                        continue;
-                    }
-
-                    const commitMessage =
-                        issues.length === 0
-                            ? formatCommitMessage({
-                                  type: 'refactor',
-                                  filePath,
-                                  description: input.objective,
-                              })
-                            : formatCommitMessage({
-                                  type: 'fix',
-                                  filePath,
-                                  description: issues
-                                      .map((issue) => issue.issue)
-                                      .join('\n'),
-                              });
-
-                    const { commit } = await applyChanges({
-                        commitMessage,
-                        filePath,
-                        sandboxDirectoryPath,
-                        fileContents: editResult.fileContents,
-                        fileContentsHash: editResult.fileContentsHash,
-                    });
-
-                    const checkResult = await checkWithPersistence.transform(
-                        {
-                            packageManager,
-                            location: input.sandboxDirectoryPath,
-                            startCommit: input.startCommit,
-                            scripts: input.scripts,
-                        },
-                        persistence
-                    );
-
-                    const checkSummary = checksSummary({
-                        issues,
-                        checkResult,
-                        checkCommit: commit,
-                    });
-
-                    issues.splice(
-                        0,
-                        issues.length,
-                        ...checkSummary.newIssues,
-                        ...checkSummary.remainingIssues
-                    );
-
-                    const key = editResult.key;
-                    assert(key);
-
-                    steps.push({
-                        task,
-                        key,
-                        patch: await gitFilesDiff({
-                            location: input.sandboxDirectoryPath,
-                            filePaths: [filePath],
-                            ref: lastCommit(steps) || startCommit,
-                        }),
-                        fileContents: editResult.fileContents,
-                        commit,
-                        checkSummary,
-                    });
-                } catch (exc) {
-                    if (exc instanceof CycleDetectedError) {
-                        const error = exc;
-                        const index = steps.findIndex(
-                            (step) => step.key === error.key
-                        );
-                        const stepsLeadingToCycle = steps.slice(index);
-                        const leastProblematicStep = ensureHasOneElement(
-                            orderBy(
-                                stepsLeadingToCycle,
-                                (step) => step.checkSummary.totalNumberOfIssues,
-                                'asc'
-                            )
-                        )[0];
-                        const leastProblematicStepIndex =
-                            stepsLeadingToCycle.findIndex(
-                                (value) => value === leastProblematicStep
-                            );
-
-                        /**
-                         * @todo haven't seen more complex cycles at this
-                         * moment, but it could be possible, so let's double
-                         * check that we are hitting the expected case
-                         */
-                        if (hasTwoElements(stepsLeadingToCycle)) {
-                            const [startRef, endRef] =
-                                leastProblematicStepIndex === 0
-                                    ? [
-                                          leastProblematicStep.commit,
-                                          stepsLeadingToCycle[1].commit,
-                                      ]
-                                    : [
-                                          leastProblematicStep.commit,
-                                          stepsLeadingToCycle[0].commit,
-                                      ];
-                            const mostIssues = stepsLeadingToCycle.reduce(
-                                (a, b) =>
-                                    Math.max(
-                                        a,
-                                        b.checkSummary.totalNumberOfIssues
-                                    ),
-                                0
-                            );
-                            const patch = await gitDiffRange({
-                                location: input.sandboxDirectoryPath,
-                                filePaths: [filePath],
-                                startRef,
-                                endRef,
-                            });
-                            //
-                            advice.push(
-                                formatFileDiff({
-                                    fileDiff: patch,
-                                    filePath,
-                                    headline: `Do not make changes represented by the following diff as that would cause ${mostIssues} lint and compilation issues:`,
-                                })
-                            );
-                            await gitResetHard({
-                                location: input.sandboxDirectoryPath,
-                                ref: leastProblematicStep.commit,
-                            });
-                            const leastProblematicStepGlobalIndex =
-                                steps.findIndex(
-                                    (value) => value === leastProblematicStep
-                                );
-                            steps.splice(
-                                leastProblematicStepGlobalIndex + 1,
-                                steps.length -
-                                    leastProblematicStepGlobalIndex +
-                                    1
-                            );
-                            issues.splice(
-                                0,
-                                issues.length,
-                                ...leastProblematicStep.checkSummary.newIssues,
-                                ...leastProblematicStep.checkSummary
-                                    .remainingIssues
-                            );
-
-                            logger.debug('Handling cycle', {
-                                leastProblematicStepIndex,
-                                leastProblematicStepCommit:
-                                    leastProblematicStep.commit,
-                                key: error.key,
-                                advice,
-                                steps: steps.map((step) => ({
-                                    task: step.task,
-                                    key: basename(step.key),
-                                    commit: step.commit,
-                                    totalNumberOfIssues:
-                                        step.checkSummary.totalNumberOfIssues,
-                                })),
-                            });
-                        } else {
-                            logger.log(stepsLeadingToCycle);
-                            logger.log({
-                                leastProblematicStepIndex,
-                                leastProblematicStepCommit:
-                                    leastProblematicStep.commit,
-                                key: error.key,
-                                advice,
-                                steps: steps.map((step) => ({
-                                    task: step.task,
-                                    key: basename(step.key),
-                                    commit: step.commit,
-                                    totalNumberOfIssues:
-                                        step.checkSummary.totalNumberOfIssues,
-                                })),
-                            });
-                            throw exc;
-                        }
+                let task: 'refactor' | 'fix-issues' | 'fix-export-issues' =
+                    'refactor';
+                if (issues.length > 0) {
+                    if (localIssues.length > 0) {
+                        task = 'fix-issues';
                     } else {
-                        throw exc;
+                        task = 'fix-export-issues';
                     }
                 }
-            } while (issues.length > 0);
-        } finally {
-            if (persistence) {
-                await editFileWithPersistence.clean(persistence);
-                await checkWithPersistence.clean(persistence);
+
+                let objective: string;
+                switch (task) {
+                    case 'refactor':
+                        objective = performFileRefactoringPromptText({
+                            fileContents,
+                            filePath,
+                            language: 'TypeScript',
+                            objective: input.objective,
+                        });
+                        break;
+                    case 'fix-issues':
+                        objective = fixLocalIssuesPromptText({
+                            fileContents,
+                            filePath,
+                            language: 'TypeScript',
+                            objective: input.objective,
+                            issues: localIssues.map(({ issue }) => issue),
+                            fileDiff,
+                            advice,
+                        });
+                        break;
+                    case 'fix-export-issues':
+                        objective = fixExportIssuesPromptText({
+                            fileContents,
+                            filePath,
+                            language: 'TypeScript',
+                            objective: input.objective,
+                            issues: externalIssues.map(({ issue }) => issue),
+                            fileDiff,
+                            advice,
+                            ...(await changeInfo({
+                                location: input.sandboxDirectoryPath,
+                                oldFileContents: initialFileContents,
+                                newFileContents: fileContents,
+                                filePath,
+                                fileDiff,
+                            })),
+                        });
+                        break;
+                    default:
+                        throw new UnreachableError(task);
+                }
+
+                const { choices } = await edit(
+                    {
+                        ...commonEditOpts,
+                        objective,
+                        fileContents,
+                    },
+                    persistence
+                );
+
+                const editResult = choices[0];
+
+                if (editResult.status !== 'success') {
+                    if (issues.length > 0) {
+                        return {
+                            file: {
+                                status: 'failure' as const,
+                                failureDescription:
+                                    'The model has failed to fix the issues in the file',
+                                ...buildResult(),
+                            },
+                        };
+                    }
+                    continue;
+                }
+
+                const commitMessage =
+                    issues.length === 0
+                        ? formatCommitMessage({
+                              type: 'refactor',
+                              filePath,
+                              description: input.objective,
+                          })
+                        : formatCommitMessage({
+                              type: 'fix',
+                              filePath,
+                              description: issues
+                                  .map((issue) => issue.issue)
+                                  .join('\n'),
+                          });
+
+                const { commit } = await applyChanges({
+                    commitMessage,
+                    filePath,
+                    sandboxDirectoryPath,
+                    fileContents: editResult.fileContents,
+                    fileContentsHash: editResult.fileContentsHash,
+                });
+
+                const checkResult = await check(
+                    {
+                        packageManager,
+                        location: input.sandboxDirectoryPath,
+                        startCommit: input.startCommit,
+                        scripts: input.scripts,
+                    },
+                    persistence
+                );
+
+                const checkSummary = checksSummary({
+                    issues,
+                    checkResult,
+                    checkCommit: commit,
+                });
+
+                issues.splice(
+                    0,
+                    issues.length,
+                    ...checkSummary.newIssues,
+                    ...checkSummary.remainingIssues
+                );
+
+                const key = editResult.key;
+                assert(key);
+
+                steps.push({
+                    task,
+                    key,
+                    patch: await gitFilesDiff({
+                        location: input.sandboxDirectoryPath,
+                        filePaths: [filePath],
+                        ref: lastCommit(steps) || startCommit,
+                    }),
+                    fileContents: editResult.fileContents,
+                    commit,
+                    checkSummary,
+                    timestamp: performance.now(),
+                });
+            } catch (exc) {
+                if (exc instanceof CycleDetectedError) {
+                    const error = exc;
+                    const index = steps.findIndex(
+                        (step) => step.key === error.key
+                    );
+                    const stepsLeadingToCycle = steps.slice(index);
+                    const leastProblematicStep = ensureHasOneElement(
+                        orderBy(
+                            stepsLeadingToCycle,
+                            (step) => step.checkSummary.totalNumberOfIssues,
+                            'asc'
+                        )
+                    )[0];
+                    const leastProblematicStepIndex =
+                        stepsLeadingToCycle.findIndex(
+                            (value) => value === leastProblematicStep
+                        );
+
+                    /**
+                     * @todo haven't seen more complex cycles at this
+                     * moment, but it could be possible, so let's double
+                     * check that we are hitting the expected case
+                     */
+                    if (hasTwoElements(stepsLeadingToCycle)) {
+                        const [startRef, endRef] =
+                            leastProblematicStepIndex === 0
+                                ? [
+                                      leastProblematicStep.commit,
+                                      stepsLeadingToCycle[1].commit,
+                                  ]
+                                : [
+                                      leastProblematicStep.commit,
+                                      stepsLeadingToCycle[0].commit,
+                                  ];
+                        const mostIssues = stepsLeadingToCycle.reduce(
+                            (a, b) =>
+                                Math.max(a, b.checkSummary.totalNumberOfIssues),
+                            0
+                        );
+                        const patch = await gitDiffRange({
+                            location: input.sandboxDirectoryPath,
+                            filePaths: [filePath],
+                            startRef,
+                            endRef,
+                        });
+                        //
+                        advice.push(
+                            formatFileDiff({
+                                fileDiff: patch,
+                                filePath,
+                                headline: `Do not make changes represented by the following diff as that would cause ${mostIssues} lint and compilation issues:`,
+                            })
+                        );
+                        await gitResetHard({
+                            location: input.sandboxDirectoryPath,
+                            ref: leastProblematicStep.commit,
+                        });
+                        const leastProblematicStepGlobalIndex = steps.findIndex(
+                            (value) => value === leastProblematicStep
+                        );
+                        steps.splice(
+                            leastProblematicStepGlobalIndex + 1,
+                            steps.length - leastProblematicStepGlobalIndex + 1
+                        );
+                        issues.splice(
+                            0,
+                            issues.length,
+                            ...leastProblematicStep.checkSummary.newIssues,
+                            ...leastProblematicStep.checkSummary.remainingIssues
+                        );
+
+                        logger.debug('Handling cycle', {
+                            leastProblematicStepIndex,
+                            leastProblematicStepCommit:
+                                leastProblematicStep.commit,
+                            key: error.key,
+                            advice,
+                            steps: steps.map((step) => ({
+                                task: step.task,
+                                key: basename(step.key),
+                                commit: step.commit,
+                                totalNumberOfIssues:
+                                    step.checkSummary.totalNumberOfIssues,
+                            })),
+                        });
+                    } else {
+                        logger.log(stepsLeadingToCycle);
+                        logger.log({
+                            leastProblematicStepIndex,
+                            leastProblematicStepCommit:
+                                leastProblematicStep.commit,
+                            key: error.key,
+                            advice,
+                            steps: steps.map((step) => ({
+                                task: step.task,
+                                key: basename(step.key),
+                                commit: step.commit,
+                                totalNumberOfIssues:
+                                    step.checkSummary.totalNumberOfIssues,
+                            })),
+                        });
+                        throw exc;
+                    }
+                } else {
+                    throw exc;
+                }
             }
-        }
+        } while (issues.length > 0);
 
         return {
             file: {

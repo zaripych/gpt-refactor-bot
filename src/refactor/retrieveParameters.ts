@@ -82,7 +82,7 @@ export const retrieveParameters = makePipelineFunction({
     inputSchema: retrieveParametersInputSchema,
     resultSchema: retrieveParametersResultSchema,
     transform: async (input, persistence) => {
-        const allowedFilesResult = await prompt.withPersistence().transform(
+        const allowedFilesResult = await prompt(
             {
                 preface: systemPrompt,
                 prompt: listFilesToEditPromptText(input.objective),

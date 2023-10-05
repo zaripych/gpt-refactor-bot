@@ -12,9 +12,9 @@ type ModelOpts = Pick<
     attempt?: number;
 };
 
-function determineModel(input: ModelOpts, persistence?: { location: string }) {
-    if (persistence?.location) {
-        const location = persistence.location;
+function determineModel(input: ModelOpts, stateRef?: { location?: string }) {
+    if (stateRef?.location) {
+        const location = stateRef.location;
         const matchingKeys = [...Object.keys(input.modelByStepCode)].filter(
             (stepCode) =>
                 micromatch.isMatch(location, stepCode, {
@@ -31,9 +31,9 @@ function determineModel(input: ModelOpts, persistence?: { location: string }) {
 
 export function determineModelParameters(
     input: ModelOpts,
-    persistence?: { location: string }
+    stateRef?: { location?: string }
 ) {
-    const model = determineModel(input, persistence);
+    const model = determineModel(input, stateRef);
 
     const result =
         (input.attempt ?? 1) > 1
@@ -45,7 +45,7 @@ export function determineModelParameters(
               };
 
     logger.trace('Model parameters', result, {
-        location: persistence?.location,
+        location: stateRef?.location,
     });
 
     return result;

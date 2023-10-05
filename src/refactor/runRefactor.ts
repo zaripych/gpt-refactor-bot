@@ -396,7 +396,7 @@ const currentRepositoryPlanningEmptyReasonReport = async (
 export async function runRefactor(opts: {
     id?: string;
     name?: string;
-    cache?: boolean;
+    saveToCache?: boolean;
     //
 }) {
     try {
@@ -409,7 +409,7 @@ export async function runRefactor(opts: {
 
         const result = await refactor({
             config,
-            cache: opts.cache,
+            saveToCache: opts.saveToCache,
         });
 
         if (!result.repository) {

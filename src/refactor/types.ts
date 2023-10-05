@@ -184,6 +184,7 @@ export const refactorStepResultSchema = z.object({
     task: z.string(),
     fileContents: z.string(),
     commit: z.string(),
+    timestamp: z.number(),
 });
 
 export type RefactorStepResult = z.infer<typeof refactorStepResultSchema>;
@@ -202,6 +203,7 @@ export const refactorSuccessResultSchema = z.object({
     issues: z.array(issueSchema),
     steps: z.array(refactorStepResultSchema),
     lastCommit: z.string().optional(),
+    timestamp: z.number(),
 });
 
 export const refactorFailedResultSchema = z.object({
@@ -211,6 +213,7 @@ export const refactorFailedResultSchema = z.object({
     issues: z.array(issueSchema),
     steps: z.array(refactorStepResultSchema),
     lastCommit: z.string().optional(),
+    timestamp: z.number(),
 });
 
 export const refactorResultSchema = z.discriminatedUnion('status', [
@@ -244,6 +247,10 @@ export type RefactorFilesResult = z.infer<typeof refactorFilesResultSchema>;
 
 export const lastCommit = <T extends { commit: string }>(steps: T[]) => {
     return steps[steps.length - 1]?.commit;
+};
+
+export const lastTimestamp = <T extends { timestamp: number }>(steps: T[]) => {
+    return steps[steps.length - 1]?.timestamp;
 };
 
 export const pushRefactorFileResults = (opts: {

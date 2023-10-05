@@ -99,7 +99,7 @@ export const planFiles = makePipelineFunction({
     inputSchema: planFilesInputSchema,
     resultSchema: planFilesResultSchema,
     transform: async (input, persistence): Promise<PlanFilesResponse> => {
-        const plannedFilesResult = await prompt.withPersistence().transform(
+        const plannedFilesResult = await prompt(
             {
                 preface: systemPrompt,
                 prompt: planFilesPromptText(input.objective),

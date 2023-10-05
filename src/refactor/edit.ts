@@ -101,13 +101,13 @@ export const edit = makePipelineFunction({
     name: 'edit',
     inputSchema: editInputSchema,
     resultSchema: editResultSchema,
-    transform: async (input, persistence): Promise<EditResponse> => {
+    transform: async (input, stateRef): Promise<EditResponse> => {
         const text = promptText({
             objective: input.objective,
             filePath: input.filePath,
         });
 
-        const { choices } = await prompt.withPersistence().transform(
+        const { choices } = await prompt(
             {
                 preface,
                 prompt: text,
@@ -119,10 +119,10 @@ export const edit = makePipelineFunction({
                     tsconfigJsonFileName: input.tsConfigJsonFileName,
                     allowedFunctions: input.allowedFunctions,
                 },
-                ...determineModelParameters(input, persistence),
+                ...determineModelParameters(input, stateRef),
                 choices: input.choices,
             },
-            persistence
+            stateRef
         );
 
         const settledChoices = await Promise.allSettled(
@@ -145,7 +145,7 @@ export const edit = makePipelineFunction({
 
                     if (noChangesRequired && codeChunks.length === 0) {
                         return {
-                            key: persistence?.location,
+                            key: stateRef?.location,
                             status: 'no-changes-required' as const,
                         };
                     }
@@ -189,13 +189,13 @@ export const edit = makePipelineFunction({
 
                     if (eslintFixed === input.fileContents) {
                         return {
-                            key: persistence?.location,
+                            key: stateRef?.location,
                             status: 'no-changes-required' as const,
                         };
                     }
 
                     return {
-                        key: persistence?.location,
+                        key: stateRef?.location,
                         fileContentsHash: hash(eslintFixed),
                         fileContents: eslintFixed,
                         status: 'success' as const,

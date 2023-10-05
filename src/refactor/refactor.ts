@@ -1,149 +1,168 @@
 import { join } from 'path';
 
-import { AbortError } from '../errors/abortError';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { gitCheckoutNewBranch } from '../git/gitCheckoutNewBranch';
 import { gitFetch } from '../git/gitFetch';
 import { gitForceCreateBranch } from '../git/gitForceCreateBranch';
 import { gitRevParse } from '../git/gitRevParse';
 import { logger } from '../logger/logger';
-import { pipeline } from '../pipeline/pipeline';
+import { abortPipeline } from '../pipeline/abort';
+import { cleanCache } from '../pipeline/cache';
+import { logExecutionLog } from '../pipeline/log';
+import { startPipeline } from '../pipeline/startPipeline';
 import { randomText } from '../utils/randomText';
 import { checkoutSandbox } from './checkoutSandbox';
 import { enrichObjective } from './enrichObjective';
 import { refactorGoal } from './refactorGoal';
 import { retrieveParameters } from './retrieveParameters';
-import { type RefactorConfig, refactorConfigSchema } from './types';
+import { type RefactorConfig } from './types';
 
-const createPipe = (opts?: { saveResult?: boolean }) => {
-    const pipe = pipeline(refactorConfigSchema, opts)
-        .append(checkoutSandbox)
-        .append(retrieveParameters)
-        .append(enrichObjective)
-        .combineLast((input, result) => ({
-            ...input,
-            ...result,
-            objective: result.enrichedObjective,
-        }))
-        .append(refactorGoal);
+const createPipeline = (opts: {
+    //
+    location: string;
+    saveResult: boolean;
+}) => {
+    const state = startPipeline({
+        location: opts.location,
+        saveInput: true,
+        saveResult: opts.saveResult,
+    });
 
-    return pipe;
+    return {
+        start: async (input: RefactorConfig) => {
+            try {
+                const checkoutResult = await checkoutSandbox(input, state);
+
+                const retrieveParametersResult = await retrieveParameters(
+                    {
+                        ...input,
+                        ...checkoutResult,
+                    },
+                    state
+                );
+
+                const enrichObjectiveResult = await enrichObjective(
+                    {
+                        ...input,
+                        ...checkoutResult,
+                        ...retrieveParametersResult,
+                    },
+                    state
+                );
+
+                const refactorResult = await refactorGoal(
+                    {
+                        ...input,
+                        ...checkoutResult,
+                        ...retrieveParametersResult,
+                        ...enrichObjectiveResult,
+                        objective: enrichObjectiveResult.enrichedObjective,
+                    },
+                    state
+                );
+
+                await cleanCache(state);
+
+                return {
+                    ...input,
+                    ...checkoutResult,
+                    ...retrieveParametersResult,
+                    ...enrichObjectiveResult,
+                    ...refactorResult,
+                };
+            } finally {
+                logExecutionLog(state);
+            }
+        },
+        abort: () => {
+            abortPipeline(state);
+        },
+    };
 };
 
 async function loadRefactorState(opts: {
     config: RefactorConfig;
-    cache?: boolean;
+    saveToCache?: boolean;
 }) {
-    const pipe = createPipe({
-        saveResult: opts.cache ?? true,
-    });
-
     const root = await findRepositoryRoot();
 
-    if (opts.config.id) {
-        const location = join(
-            root,
-            `.refactor-bot/refactors/${opts.config.name}/state/`,
-            opts.config.id
-        );
+    const id = opts.config.id ?? randomText(8);
 
-        return {
-            pipe,
+    const location = join(
+        root,
+        `.refactor-bot/refactors/${opts.config.name}/state/`,
+        id
+    );
+
+    return {
+        ...createPipeline({
             location,
-            id: opts.config.id,
-        };
-    } else {
-        const id = randomText(8);
-
-        return {
-            pipe,
-            location: join(
-                root,
-                `.refactor-bot/refactors/${opts.config.name}/state/`,
-                id
-            ),
-            id,
-        };
-    }
+            saveResult: opts.saveToCache ?? true,
+        }),
+        location,
+        id: opts.config.id,
+    };
 }
 
 export async function refactor(opts: {
     config: RefactorConfig;
-    cache?: boolean;
+    saveToCache?: boolean;
 }) {
-    const { pipe, location, id } = await loadRefactorState(opts);
+    const { start, abort, id } = await loadRefactorState(opts);
 
     logger.info(
         `Starting refactor with id "${id}", process id: "${process.pid}"`
     );
 
-    const persistence = {
-        location,
-    };
+    process.on('SIGINT', () => {
+        abort();
+    });
 
-    try {
-        process.on('SIGINT', () => {
-            pipe.abort();
-        });
+    const result = await start({
+        ...opts.config,
+        id,
+    });
 
-        const result = await pipe.transform(
-            {
-                ...opts.config,
-                id,
-            },
-            persistence
-        );
+    const lastCommit = await gitRevParse({
+        location: result.sandboxDirectoryPath,
+        ref: 'HEAD',
+    });
 
-        const lastCommit = await gitRevParse({
+    if (
+        lastCommit !== result.startCommit &&
+        Object.keys(result.accepted).length > 0
+    ) {
+        const successBranch = `refactor-bot/${opts.config.name}-${result.id}`;
+
+        await gitCheckoutNewBranch({
             location: result.sandboxDirectoryPath,
-            ref: 'HEAD',
+            branchName: successBranch,
         });
 
-        if (
-            lastCommit !== result.startCommit &&
-            Object.keys(result.accepted).length > 0
-        ) {
-            const successBranch = `refactor-bot/${opts.config.name}-${result.id}`;
+        if (!result.repository) {
+            const localRoot = await findRepositoryRoot();
 
-            await gitCheckoutNewBranch({
-                location: result.sandboxDirectoryPath,
-                branchName: successBranch,
+            await gitFetch({
+                location: localRoot,
+                from: result.sandboxDirectoryPath,
+                refs: [successBranch],
             });
 
-            if (!result.repository) {
-                const localRoot = await findRepositoryRoot();
-
-                await gitFetch({
-                    location: localRoot,
-                    from: result.sandboxDirectoryPath,
-                    refs: [successBranch],
-                });
-
-                await gitForceCreateBranch({
-                    location: localRoot,
-                    branchName: successBranch,
-                    ref: 'FETCH_HEAD',
-                });
-            }
-
-            await pipe.clean(persistence);
-
-            return {
-                ...result,
-                successBranch,
-            };
+            await gitForceCreateBranch({
+                location: localRoot,
+                branchName: successBranch,
+                ref: 'FETCH_HEAD',
+            });
         }
-
-        await pipe.clean(persistence);
 
         return {
             ...result,
-            successBranch: undefined,
+            successBranch,
         };
-    } catch (err) {
-        if (!(err instanceof AbortError)) {
-            await pipe.clean(persistence);
-        }
-        throw err;
     }
+
+    return {
+        ...result,
+        successBranch: undefined,
+    };
 }

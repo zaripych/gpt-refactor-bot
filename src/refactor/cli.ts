@@ -8,7 +8,7 @@ export const refactorCommand: CommandModule<
     {
         name?: string;
         id?: string;
-        cache?: boolean;
+        saveToCache?: boolean;
     }
 > = {
     command: 'refactor',
@@ -25,6 +25,14 @@ export const refactorCommand: CommandModule<
                     Unique id of the refactoring that was previously run but
                     didn't finish to start from last successful point
                 `,
+            })
+            .option('save-to-cache', {
+                type: 'boolean',
+                describe: line`
+                    Whether to enable saving results to the cache, by default
+                    it's enabled
+                `,
+                default: true,
             }),
     handler: async (opts) => {
         await runRefactor(opts);

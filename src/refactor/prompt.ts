@@ -93,7 +93,7 @@ const chat = makePipelineFunction({
             response,
         };
     },
-}).withPersistence();
+});
 
 const exec = makePipelineFunction({
     name: 'exec',
@@ -149,7 +149,7 @@ const exec = makePipelineFunction({
             };
         }
     },
-}).withPersistence();
+});
 
 function removeFunctionFromState(
     opts: {
@@ -215,7 +215,7 @@ export const prompt = makePipelineFunction({
                     lastMessage.role === 'user'
                 ) {
                     return defer(async () => {
-                        const result = await chat.transform(
+                        const result = await chat(
                             {
                                 ...state,
                                 budgetCents: opts.budgetCents,
@@ -280,7 +280,7 @@ export const prompt = makePipelineFunction({
                             };
                         }
 
-                        const result = await exec.transform(
+                        const result = await exec(
                             {
                                 functionCall: lastMessage.functionCall,
                                 functionsConfig: opts.functionsConfig,

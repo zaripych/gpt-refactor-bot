@@ -14,6 +14,7 @@ import {
     planAndRefactor,
     planAndRefactorResultSchema,
 } from './refactorObjective';
+import { resetToLastAcceptedCommit } from './resetToLastAcceptedCommit';
 import { refactorConfigSchema } from './types';
 
 export const refactorGoalInputSchema = refactorConfigSchema
@@ -71,14 +72,17 @@ export const refactorGoal = makePipelineFunction({
             });
         }
 
-        const checkResult = await check({
-            packageManager: await determinePackageManager({
-                directory: input.sandboxDirectoryPath,
-            }),
-            location: input.sandboxDirectoryPath,
-            scripts: input.scripts,
-            startCommit: input.startCommit,
-        });
+        const checkResult = await check(
+            {
+                packageManager: await determinePackageManager({
+                    directory: input.sandboxDirectoryPath,
+                }),
+                location: input.sandboxDirectoryPath,
+                scripts: input.scripts,
+                startCommit: input.startCommit,
+            },
+            persistence
+        );
         if (checkResult.issues.length > 0) {
             logger.info('Following scripts are used for checks', input.scripts);
             logger.info('Found following issues', checkResult.issues);
@@ -93,18 +97,13 @@ export const refactorGoal = makePipelineFunction({
             `);
         }
 
-        const planAndRefactorWithPersistence =
-            planAndRefactor.withPersistence();
+        const result = await planAndRefactor(input, persistence);
 
-        try {
-            return await planAndRefactorWithPersistence.transform(
-                input,
-                persistence
-            );
-        } finally {
-            if (persistence) {
-                await planAndRefactorWithPersistence.clean(persistence);
-            }
-        }
+        await resetToLastAcceptedCommit({
+            location: input.sandboxDirectoryPath,
+            result,
+        });
+
+        return result;
     },
 });

@@ -6,6 +6,7 @@ import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { scriptSchema } from './check';
 import { planFiles, planFilesResultSchema } from './planFiles';
 import { refactorBatch } from './refactorBatch';
+import { resetToLastAcceptedCommit } from './resetToLastAcceptedCommit';
 import type { RefactorFilesResult } from './types';
 import {
     mutateToMergeRefactorFilesResults,
@@ -28,14 +29,10 @@ export const planAndRefactorResultSchema = refactorFilesResultSchema.merge(
 );
 
 export const planAndRefactor = makePipelineFunction({
-    name: 'objective',
+    name: 'plan-and-refactor',
     inputSchema: planAndRefactorInputSchema,
     resultSchema: planAndRefactorResultSchema,
     transform: async (input, persistence) => {
-        const planFilesWithPersistence = planFiles.withPersistence().retry({
-            maxAttempts: 3,
-        });
-
         const files: RefactorFilesResult = {
             accepted: {},
             discarded: {},
@@ -43,75 +40,72 @@ export const planAndRefactor = makePipelineFunction({
 
         const planning: Array<z.output<typeof planFilesResultSchema>> = [];
 
-        try {
-            const planResult = await planFilesWithPersistence.transform(
-                input,
+        const planResult = await planFiles(input, persistence);
+
+        planning.push({
+            plannedFiles: [...planResult.plannedFiles],
+            ...('reasoning' in planResult && {
+                reasoning: planResult.reasoning,
+            }),
+        });
+
+        const { plannedFiles } = planResult;
+
+        while (plannedFiles.length > 0) {
+            const result = await refactorBatch(
+                {
+                    plannedFiles,
+                    ...input,
+                },
                 persistence
             );
 
-            planning.push({
-                plannedFiles: [...planResult.plannedFiles],
-                ...('reasoning' in planResult && {
-                    reasoning: planResult.reasoning,
-                }),
+            await resetToLastAcceptedCommit({
+                location: input.sandboxDirectoryPath,
+                result,
             });
 
-            const { plannedFiles } = planResult;
+            mutateToMergeRefactorFilesResults({
+                from: result,
+                into: files,
+            });
 
-            while (plannedFiles.length > 0) {
-                const result = await refactorBatch(
-                    {
-                        plannedFiles,
-                        ...input,
-                    },
-                    persistence
-                );
-
-                mutateToMergeRefactorFilesResults({
-                    from: result,
-                    into: files,
-                });
-
-                const repeatedPlanResult = await planFilesWithPersistence
-                    .transform(input, persistence)
-                    .catch((err) => {
-                        if (err instanceof CycleDetectedError) {
-                            /**
-                             * @note Ideally the planFiles function would
-                             * be able to detect this and return an empty
-                             * list instead.
-                             */
-                            logger.warn(
-                                'Cycle detected when planning files to change, this is likely result of the last batch of changes not producing any changes.',
-                                {
-                                    error: err,
-                                    result,
-                                }
-                            );
-                            return {
-                                plannedFiles: [],
-                            };
+            const repeatedPlanResult = await planFiles(
+                input,
+                persistence
+            ).catch((err) => {
+                if (err instanceof CycleDetectedError) {
+                    /**
+                     * @note Ideally the planFiles function would
+                     * be able to detect this and return an empty
+                     * list instead.
+                     */
+                    logger.warn(
+                        'Cycle detected when planning files to change, this is likely result of the last batch of changes not producing any changes.',
+                        {
+                            error: err,
+                            result,
                         }
-                        return Promise.reject(err);
-                    });
+                    );
+                    return {
+                        plannedFiles: [],
+                    };
+                }
+                return Promise.reject(err);
+            });
 
-                plannedFiles.splice(
-                    0,
-                    plannedFiles.length,
-                    ...repeatedPlanResult.plannedFiles
-                );
+            plannedFiles.splice(
+                0,
+                plannedFiles.length,
+                ...repeatedPlanResult.plannedFiles
+            );
 
-                planning.push({
-                    plannedFiles: [...repeatedPlanResult.plannedFiles],
-                    ...('reasoning' in repeatedPlanResult && {
-                        reasoning: repeatedPlanResult.reasoning,
-                    }),
-                });
-            }
-        } finally {
-            if (persistence) {
-                await planFilesWithPersistence.clean(persistence);
-            }
+            planning.push({
+                plannedFiles: [...repeatedPlanResult.plannedFiles],
+                ...('reasoning' in repeatedPlanResult && {
+                    reasoning: repeatedPlanResult.reasoning,
+                }),
+            });
         }
 
         return {

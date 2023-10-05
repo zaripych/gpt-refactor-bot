@@ -7,7 +7,7 @@ import type { SupportedZodSchemas } from './types';
 const save = async <Schema extends ZodType<unknown>>(
     opts: {
         location: string;
-        result: unknown;
+        data: unknown;
         schema: Schema;
     },
     deps = defaultDeps
@@ -15,9 +15,10 @@ const save = async <Schema extends ZodType<unknown>>(
     const { mkdir, writeFile, dumpYaml } = deps;
 
     await mkdir(dirname(opts.location), { recursive: true });
+
     await writeFile(
         opts.location,
-        dumpYaml(await opts.schema.parseAsync(opts.result), {
+        dumpYaml(await opts.schema.parseAsync(opts.data), {
             indent: 4,
             lineWidth: Number.MAX_SAFE_INTEGER,
             skipInvalid: true,
@@ -33,49 +34,56 @@ const load = async <Schema extends ZodType<unknown>>(
     deps = defaultDeps
 ): Promise<TypeOf<Schema>> => {
     const { readFile, loadYaml } = deps;
+
     const contents = await readFile(opts.location, 'utf-8');
+
     return (await opts.schema.parseAsync(loadYaml(contents))) as TypeOf<Schema>;
 };
 
 export const saveResult = async (
     opts: {
         location: string;
-        input: unknown;
-        inputSchema: SupportedZodSchemas;
         result: unknown;
         resultSchema: SupportedZodSchemas;
     },
     deps = defaultDeps
 ) => {
-    const { saveInput, logger } = deps;
+    const { logger } = deps;
 
-    logger.trace(`Saving data to "${relative(process.cwd(), opts.location)}"`);
+    logger.trace(
+        `Saving result to "${relative(process.cwd(), opts.location)}"`
+    );
 
-    if (saveInput) {
-        await save(
-            {
-                location: opts.location,
-                result: {
-                    result: await opts.resultSchema.parseAsync(opts.result),
-                    input: await opts.inputSchema.parseAsync(opts.input),
-                },
-                schema: z.object({
-                    result: opts.resultSchema,
-                    input: opts.inputSchema,
-                }),
-            },
-            deps
-        );
-    } else {
-        await save(
-            {
-                location: opts.location,
-                result: await opts.resultSchema.parseAsync(opts.result),
-                schema: opts.resultSchema,
-            },
-            deps
-        );
-    }
+    await save(
+        {
+            location: opts.location,
+            data: opts.result,
+            schema: opts.resultSchema,
+        },
+        deps
+    );
+};
+
+export const saveInput = async (
+    opts: {
+        location: string;
+        input: unknown;
+        inputSchema: SupportedZodSchemas;
+    },
+    deps = defaultDeps
+) => {
+    const { logger } = deps;
+
+    logger.trace(`Saving input to "${relative(process.cwd(), opts.location)}"`);
+
+    await save(
+        {
+            location: opts.location,
+            data: opts.input,
+            schema: opts.inputSchema,
+        },
+        deps
+    );
 };
 
 export const loadResult = async (
