@@ -6,6 +6,7 @@ export async function quickInfoForNode(
     project: Project,
     args: {
         node: Node<ts.Node>;
+        repositoryRoot: string;
     }
 ) {
     const { node } = args;
@@ -26,9 +27,11 @@ export async function quickInfoForNode(
     const quickInfoDisplayParts = joinTsParts(quickInfo?.displayParts);
 
     if (quickInfoDisplayParts) {
-        return await prettierTypescript(quickInfoDisplayParts).catch(
-            () => quickInfoDisplayParts
-        );
+        return await prettierTypescript({
+            prettierLocation: args.repositoryRoot,
+            repositoryRoot: args.repositoryRoot,
+            ts: quickInfoDisplayParts,
+        }).catch(() => quickInfoDisplayParts);
     }
 
     const initialRefs = project.getLanguageService().findReferences(node);
@@ -41,7 +44,9 @@ export async function quickInfoForNode(
         throw new Error(`Cannot find definition of the identifier`);
     }
 
-    return await prettierTypescript(definitionParts).catch(
-        () => definitionParts
-    );
+    return await prettierTypescript({
+        prettierLocation: args.repositoryRoot,
+        repositoryRoot: args.repositoryRoot,
+        ts: definitionParts,
+    }).catch(() => definitionParts);
 }

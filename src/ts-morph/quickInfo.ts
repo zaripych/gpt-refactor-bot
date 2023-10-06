@@ -43,7 +43,10 @@ export async function quickInfo(
     });
 
     return {
-        info: await quickInfoForNode(project, { node }),
+        info: await quickInfoForNode(project, {
+            node,
+            repositoryRoot: config.repositoryRoot,
+        }),
     };
 }
 

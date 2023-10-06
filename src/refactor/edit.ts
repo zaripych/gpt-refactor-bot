@@ -165,8 +165,11 @@ export const edit = makePipelineFunction({
 
                     const codeChunk = codeChunks[0];
 
-                    const formattedCodeChunk =
-                        await prettierTypescript(codeChunk);
+                    const formattedCodeChunk = await prettierTypescript({
+                        prettierLocation: input.sandboxDirectoryPath,
+                        repositoryRoot: input.sandboxDirectoryPath,
+                        ts: codeChunk,
+                    });
                     const eslintFixed = input.eslintAutoFixScriptArgs
                         ? await autoFixIssuesContents({
                               eslintScriptArgs: input.eslintAutoFixScriptArgs,

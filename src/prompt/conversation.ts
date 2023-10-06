@@ -18,7 +18,10 @@ export const conversationState = (conversationFile: string) => {
         contents = serializeMessages(messages);
         await writeFile(
             conversationFile,
-            await prettierMarkdown(contents),
+            await prettierMarkdown({
+                md: contents,
+                repositoryRoot: process.cwd(),
+            }),
             'utf-8'
         );
     };
@@ -30,7 +33,10 @@ export const conversationState = (conversationFile: string) => {
             .replaceAll('\n', '\n> ')}\n\n`;
         await writeFile(
             conversationFile,
-            await prettierMarkdown(contents),
+            await prettierMarkdown({
+                md: contents,
+                repositoryRoot: process.cwd(),
+            }),
             'utf-8'
         );
     };

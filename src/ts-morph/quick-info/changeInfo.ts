@@ -284,7 +284,10 @@ async function extractIdentifiersFromPatch(params: {
                                 )
                         ),
                     ],
-                    quickInfo: await quickInfoForNode(project, { node: id }),
+                    quickInfo: await quickInfoForNode(project, {
+                        node: id,
+                        repositoryRoot: params.location,
+                    }),
                     line: id.getStartLineNumber(),
                 });
             }

@@ -45,6 +45,7 @@ export async function declarations(
 
                 const info = await quickInfoForNode(project, {
                     node: decl,
+                    repositoryRoot: config.repositoryRoot,
                 });
 
                 return {
