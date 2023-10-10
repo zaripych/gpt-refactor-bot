@@ -1,0 +1,39 @@
+name: PR Checks
+
+on:
+    pull_request:
+    workflow_dispatch:
+        inputs:
+            checks:
+                type: boolean
+                required: false
+                default: true
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    quick-checks:
+        if: ${{ github.event.inputs.checks == '' || inputs.checks == true }}
+        name: ${{ matrix.runs-on }}
+        uses: ./.github/workflows/call-checks.yml
+        strategy:
+            matrix:
+                runs-on: [ubuntu-latest]
+        with:
+            lint: true
+            changed-only: true
+            runs-on: ${{ matrix.runs-on }}
+
+    # other-platform-checks:
+    #     if: ${{ github.event.inputs.checks == '' || inputs.checks == true }}
+    #     name: ${{ matrix.runs-on }}
+    #     uses: ./.github/workflows/call-checks.yml
+    #     strategy:
+    #         matrix:
+    #             runs-on: [windows-latest, macos-latest]
+    #     with:
+    #         lint: false
+    #         changed-only: true
+    #         runs-on: ${{ matrix.runs-on }}

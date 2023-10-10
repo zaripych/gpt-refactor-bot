@@ -1,5 +1,5 @@
 import { globby } from 'globby';
-import { orderBy } from 'lodash-es';
+import orderBy from 'lodash-es/orderBy';
 import { basename, dirname } from 'path';
 
 import { ConfigurationError } from '../errors/configurationError';
@@ -18,9 +18,8 @@ export async function createProject(opts: FunctionsConfig) {
 
     const { Project } = await import('ts-morph');
 
-    const { isMonorepo, packagesGlobs } = await readPackagesGlobsAt(
-        repositoryRoot
-    );
+    const { isMonorepo, packagesGlobs } =
+        await readPackagesGlobsAt(repositoryRoot);
 
     if (isMonorepo) {
         logger.debug(`Found monorepo packages globs`, {

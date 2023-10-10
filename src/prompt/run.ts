@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { mkdir, writeFile } from 'fs/promises';
 import { globby } from 'globby';
-import { orderBy } from 'lodash-es';
+import orderBy from 'lodash-es/orderBy';
 import ora, { oraPromise } from 'ora';
 import { join } from 'path';
 import prompts from 'prompts';
@@ -174,11 +174,15 @@ const text = {
             { hr, note, price }
         ),
 
-    errorNoMessagesToSend: markdown`
-        # Stop Condition
+    errorNoMessagesToSend: format(
+        markdown`
+            # Stop Condition
 
-        No messages to send, exiting ...
-    `,
+            No messages to send, exiting ... finish your message with a %hr% to
+            indicate an end of a message.
+        `,
+        { hr }
+    ),
 
     requesting: `# Requesting`,
 

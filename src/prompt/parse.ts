@@ -51,7 +51,7 @@ const removeBackticks = (message: string) =>
     message.replaceAll(/^```\w*$/gm, '').trim();
 
 const splitConversationFileContents = (contents: string) =>
-    contents.split(/^---\s*$/gm);
+    contents.search(/^---\s*$/gm) !== -1 ? contents.split(/^---\s*$/gm) : [];
 
 export const parseMessages = (contents: string) =>
     splitConversationFileContents(contents)

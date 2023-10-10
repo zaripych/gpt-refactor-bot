@@ -1,8 +1,6 @@
 import type { Node, Project, SymbolDisplayPart, ts } from 'ts-morph';
 
-import { prettierTypescript } from '../../prettier/prettier';
-
-export async function quickInfoForNode(
+export function quickInfoForNode(
     project: Project,
     args: {
         node: Node<ts.Node>;
@@ -27,11 +25,7 @@ export async function quickInfoForNode(
     const quickInfoDisplayParts = joinTsParts(quickInfo?.displayParts);
 
     if (quickInfoDisplayParts) {
-        return await prettierTypescript({
-            prettierLocation: args.repositoryRoot,
-            repositoryRoot: args.repositoryRoot,
-            ts: quickInfoDisplayParts,
-        }).catch(() => quickInfoDisplayParts);
+        return quickInfoDisplayParts;
     }
 
     const initialRefs = project.getLanguageService().findReferences(node);
@@ -44,9 +38,5 @@ export async function quickInfoForNode(
         throw new Error(`Cannot find definition of the identifier`);
     }
 
-    return await prettierTypescript({
-        prettierLocation: args.repositoryRoot,
-        repositoryRoot: args.repositoryRoot,
-        ts: definitionParts,
-    }).catch(() => definitionParts);
+    return definitionParts;
 }

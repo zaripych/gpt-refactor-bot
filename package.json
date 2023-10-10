@@ -4,15 +4,18 @@
     "private": true,
     "description": "refactor-bot --help",
     "type": "module",
-    "main": "./bin/refactor-bot.ts",
     "bin": {
-        "refactor-bot": "./bin/refactor-bot.ts"
+        "refactor-bot": "./src/bin/refactor-bot.ts"
     },
     "scripts": {
+        "build": "repka build:node",
         "lint": "repka lint",
-        "refactor-bot": "tsx ./bin/refactor-bot.ts"
+        "refactor-bot": "tsx ./src/bin/refactor-bot.ts",
+        "refactor-bot-bundled": "node ./dist/bin/refactor-bot.mjs"
     },
     "dependencies": {
+        "@changesets/changelog-github": "0.4.8",
+        "@changesets/cli": "2.26.2",
         "chalk": "5.2.0",
         "chokidar": "3.5.3",
         "dedent": "1.5.1",
@@ -37,7 +40,7 @@
     },
     "devDependencies": {
         "@jest/globals": "29.7.0",
-        "@repka-kit/ts": "0.0.0-snap-20230929102045",
+        "@repka-kit/ts": "1.0.4",
         "@types/diff": "^5.0.3",
         "@types/js-yaml": "4.0.5",
         "@types/lodash-es": "4.17.7",
@@ -51,5 +54,9 @@
     "peerDependencies": {
         "prettier": "3.0.3",
         "typescript": "5.2.2"
+    },
+    "packageManager": "pnpm@8.9.0",
+    "engines": {
+        "node": "18"
     }
 }

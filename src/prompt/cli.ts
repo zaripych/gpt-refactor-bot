@@ -1,7 +1,6 @@
 import type { CommandModule } from 'yargs';
 
 import { type Models, modelsSchema } from '../chat-gpt/api';
-import { run } from './run';
 
 export const promptCommand: CommandModule<
     Record<never, never>,
@@ -31,5 +30,12 @@ export const promptCommand: CommandModule<
                     'Prompt for next action confirmation when new messages are received',
                 default: false,
             }),
-    handler: run,
+    handler: async (opts) => {
+        try {
+            const { run } = await import('./run');
+            await run(opts);
+        } catch (err) {
+            console.error(err);
+        }
+    },
 };

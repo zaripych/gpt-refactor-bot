@@ -1,0 +1,78 @@
+name: _ Callable Checks
+
+on:
+    workflow_call:
+        inputs:
+            runs-on:
+                required: true
+                type: string
+
+            node-version:
+                required: false
+                type: string
+
+            changed-only:
+                required: false
+                default: false
+                type: boolean
+
+            lint:
+                required: false
+                default: false
+                type: boolean
+
+jobs:
+    checks:
+        name: Checks
+        timeout-minutes: 30
+        runs-on: ${{ inputs.runs-on }}
+
+        steps:
+            - name: Checkout And Install
+              uses: zaripych/repka/.github/actions/checkout-and-install@checkout-and-install-latest
+              with:
+                  node-version: ${{ inputs.node-version }}
+
+            - name: Build Changed
+              if: ${{ inputs.lint }}
+              run: >-
+                  git fetch origin main && pnpm -r build
+
+
+            - name: Lint Changed
+              if: ${{ inputs.changed-only && inputs.lint }}
+              run: >-
+                  git fetch origin main && pnpm -r --filter '...[FETCH_HEAD]' lint
+
+
+            - name: Test Changed
+              if: ${{ inputs.changed-only }}
+              run: >-
+                  git fetch origin main && pnpm jest --color --maxWorkers 2 --changedSince FETCH_HEAD
+
+
+            # - name: Integration Test Changed
+            #   if: ${{ inputs.changed-only }}
+            #   run: >-
+            #       git fetch origin main && pnpm -r --filter '...[FETCH_HEAD]' integration -- --maxWorkers 2
+
+            #   env:
+            #       LOG_LEVEL: debug
+            #       TEST_ROOT_DIR: ${{ github.workspace }}/../
+
+            - name: Lint
+              if: ${{ ! inputs.changed-only && inputs.lint }}
+              run: >-
+                  git fetch origin main && pnpm -r lint
+
+
+            - name: Test
+              if: ${{ ! inputs.changed-only }}
+              run: pnpm jest --color --maxWorkers 2
+
+            - name: Integration
+              if: ${{ ! inputs.changed-only }}
+              run: pnpm jest --integration --passWithNoTests --color --maxWorkers 2
+              env:
+                  LOG_LEVEL: debug
+                  TEST_ROOT_DIR: ${{ github.workspace }}/../

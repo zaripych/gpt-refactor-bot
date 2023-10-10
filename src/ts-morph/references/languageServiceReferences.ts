@@ -1,4 +1,4 @@
-import { orderBy } from 'lodash-es';
+import orderBy from 'lodash-es/orderBy';
 import { join, normalize, relative } from 'path';
 import type { Node, Project, ts } from 'ts-morph';
 import { SyntaxKind } from 'ts-morph';

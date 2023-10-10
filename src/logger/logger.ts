@@ -4,7 +4,6 @@ import { once as onEvent } from 'events';
 import type { Writable } from 'stream';
 import { pipeline, Transform } from 'stream';
 
-import { glowFormat } from '../markdown/glowFormat';
 import { once } from '../utils/once';
 import { AsyncFormatter } from './asyncFormatter';
 import { extractLogEntry } from './extractLogEntry';
@@ -88,14 +87,7 @@ const getLogLevel = once(() => {
 
 const destination = once(() => {
     const formatter = new AsyncFormatter({
-        formatters: {
-            objective: (input) =>
-                typeof input === 'string' ? glowFormat({ input }) : input,
-            err: (input) =>
-                typeof input === 'object' && input !== null
-                    ? formatObject(input)
-                    : input,
-        },
+        formatters: () => import('./formatters'),
     });
     const stringifier = new Transform({
         objectMode: true,

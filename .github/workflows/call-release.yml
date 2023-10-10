@@ -1,0 +1,107 @@
+name: _ Callable Release
+
+on:
+    workflow_call:
+        inputs:
+            runs-on:
+                required: false
+                type: string
+
+            node-version:
+                required: false
+                type: string
+
+            snapshot:
+                required: false
+                type: boolean
+
+        secrets:
+            NPM_TOKEN:
+                required: true
+            PAT_GITHUB:
+                required: false
+
+jobs:
+    release:
+        name: Release
+        timeout-minutes: 5
+        runs-on: ${{ inputs.runs-on || 'ubuntu-latest' }}
+
+        steps:
+            - name: Checkout And Install
+              uses: zaripych/repka/.github/actions/checkout-and-install@checkout-and-install-latest
+              with:
+                  token: ${{ secrets.PAT_GITHUB || secrets.GITHUB_TOKEN }}
+                  node-version: ${{ inputs.node-version }}
+
+            - id: create-and-publish-snapshot
+              name: Create and Publish Snapshot
+              if: ${{ inputs.snapshot }}
+              shell: bash
+              run: |
+                  set -eu
+
+                  package_json_path="./packages/build-tools/ts/package.json"
+
+                  # Change package.json version to create snapshot
+                  pnpm changeset version --snapshot snap
+
+                  # Skip if there are no changes in the package.json
+                  if git diff --quiet HEAD -- $package_json_path; then
+                      echo "No changes in package.json"
+                      exit 0
+                  else
+                      echo "Found changes in package.json"
+                  fi
+
+                  pnpm -r --filter @repka-kit/ts... "/build:tools|declarations/"
+
+                  echo "snapshot-version=$(jq -r .version $package_json_path)" >> \
+                    "$GITHUB_OUTPUT"
+
+                  # Dry run publish to print files to be published
+                  pnpm publish \
+                    -r --no-git-checks --tag snap \
+                    --access public --dry-run
+
+                  pnpm changeset publish --no-git-tag --tag snap
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+            - name: Build
+              if: ${{ ! inputs.snapshot }}
+              shell: bash
+              run: pnpm -r "/build|declarations/"
+
+            - name: PAT Test
+              if: ${{ ! inputs.snapshot }}
+              shell: bash
+              run: |
+                  if [[ -n "$PAT_GITHUB" ]]; then
+                    echo "PAT_GITHUB is set"
+                  else
+                    echo "PAT_GITHUB is not set"
+                  fi
+              env:
+                  PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
+
+            - name: Create and Publish Versions
+              if: ${{ ! inputs.snapshot }}
+              uses: changesets/action@v1
+              with:
+                  commit: 'chore: update versions'
+                  title: 'chore: update versions'
+                  version: pnpm run ci:version
+                  publish: pnpm changeset publish
+              env:
+                  # @note Using Personal Access Token here to ensure
+                  # the creation of the PR triggers Checks workflows
+                  # as was observed with this PR
+                  # https://github.com/zaripych/repka/pull/34
+                  # the checks wouldn't be triggered otherwise
+                  GITHUB_TOKEN: ${{ secrets.PAT_GITHUB || secrets.GITHUB_TOKEN }}
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+                  # @note see prettier.config.cjs for more information
+                  CHANGESETS_VERSION: 1
+                  HUSKY: 0

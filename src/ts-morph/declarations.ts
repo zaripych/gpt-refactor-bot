@@ -23,6 +23,7 @@ const resultSchema = z.object({
         .describe('Semantic information about the specified identifier'),
 });
 
+// eslint-disable-next-line @typescript-eslint/require-await
 export async function declarations(
     project: Project,
     config: FunctionsConfig,
@@ -32,33 +33,31 @@ export async function declarations(
 
     const definitions = project.getLanguageService().getDefinitions(node);
 
-    return (
-        await Promise.all(
-            definitions.map(async (definition) => {
-                const decl = definition.getDeclarationNode();
+    return definitions
+        .map((definition) => {
+            const decl = definition.getDeclarationNode();
 
-                if (!decl) {
-                    return undefined;
-                }
+            if (!decl) {
+                return undefined;
+            }
 
-                const declaration = decl.getFullText().trim();
+            const declaration = decl.getFullText().trim();
 
-                const info = await quickInfoForNode(project, {
-                    node: decl,
-                    repositoryRoot: config.repositoryRoot,
-                });
+            const info = quickInfoForNode(project, {
+                node: decl,
+                repositoryRoot: config.repositoryRoot,
+            });
 
-                return {
-                    filePath: relative(
-                        config.repositoryRoot,
-                        decl.getSourceFile().getFilePath()
-                    ),
-                    declaration,
-                    info,
-                };
-            })
-        )
-    ).filter(isTruthy);
+            return {
+                filePath: relative(
+                    config.repositoryRoot,
+                    decl.getSourceFile().getFilePath()
+                ),
+                declaration,
+                info,
+            };
+        })
+        .filter(isTruthy);
 }
 
 export const declarationsFunction = makeTsFunction({

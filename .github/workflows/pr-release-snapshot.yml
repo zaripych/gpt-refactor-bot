@@ -1,0 +1,21 @@
+name: PR Release Snapshot
+
+on:
+    workflow_dispatch:
+        inputs:
+            release-snapshot:
+                type: boolean
+                required: true
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+    release:
+        name: Release Snapshot
+        if: ${{ inputs.release-snapshot == true }}
+        uses: ./.github/workflows/call-release.yml
+        with:
+            snapshot: true
+        secrets:
+            NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
