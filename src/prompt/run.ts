@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { mkdir, writeFile } from 'fs/promises';
 import { globby } from 'globby';
-import { orderBy } from 'lodash-es';
+import orderBy from 'lodash-es/orderBy';
 import ora, { oraPromise } from 'ora';
 import { join } from 'path';
 import prompts from 'prompts';

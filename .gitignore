@@ -5,3 +5,4 @@ src/test.ts
 .refactor-bot/refactors/*/state
 .DS_Store
 .refactor-bot/prompts/playground.md
+dist
