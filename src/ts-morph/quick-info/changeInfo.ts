@@ -58,7 +58,7 @@ export async function changeInfo(opts: {
         sourceFile.replaceWithText(oldFileContents);
     }
 
-    const oldIdentifiers = await extractIdentifiersFromPatch({
+    const oldIdentifiers = extractIdentifiersFromPatch({
         location,
         project,
         sourceFile,
@@ -68,7 +68,7 @@ export async function changeInfo(opts: {
 
     sourceFile.replaceWithText(newFileContents);
 
-    const newIdentifiers = await extractIdentifiersFromPatch({
+    const newIdentifiers = extractIdentifiersFromPatch({
         location,
         project,
         sourceFile,
@@ -233,7 +233,7 @@ function summarizeChanges(params: {
 //     return foundExports;
 // }
 
-async function extractIdentifiersFromPatch(params: {
+function extractIdentifiersFromPatch(params: {
     location: string;
     project: Project;
     sourceFile: SourceFile;
@@ -284,7 +284,7 @@ async function extractIdentifiersFromPatch(params: {
                                 )
                         ),
                     ],
-                    quickInfo: await quickInfoForNode(project, {
+                    quickInfo: quickInfoForNode(project, {
                         node: id,
                         repositoryRoot: params.location,
                     }),

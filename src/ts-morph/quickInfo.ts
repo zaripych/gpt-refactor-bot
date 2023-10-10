@@ -30,6 +30,7 @@ const resultSchema = z.object({
 
 type Result = z.infer<typeof resultSchema>;
 
+// eslint-disable-next-line @typescript-eslint/require-await
 export async function quickInfo(
     project: Project,
     config: FunctionsConfig,
@@ -43,7 +44,7 @@ export async function quickInfo(
     });
 
     return {
-        info: await quickInfoForNode(project, {
+        info: quickInfoForNode(project, {
             node,
             repositoryRoot: config.repositoryRoot,
         }),
