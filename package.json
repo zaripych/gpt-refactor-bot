@@ -37,7 +37,7 @@
     },
     "devDependencies": {
         "@jest/globals": "29.7.0",
-        "@repka-kit/ts": "0.0.0-snap-20231009070646",
+        "@repka-kit/ts": "1.0.4",
         "@types/diff": "^5.0.3",
         "@types/js-yaml": "4.0.5",
         "@types/lodash-es": "4.17.7",
