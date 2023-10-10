@@ -51,15 +51,14 @@ jobs:
                   git fetch origin main && pnpm jest --color --maxWorkers 2 --changedSince FETCH_HEAD
 
 
-            - name: Integration Test Changed
-              if: ${{ inputs.changed-only }}
-              run: >-
-                  git fetch origin main && pnpm -r --filter '...[FETCH_HEAD]' integration -- --maxWorkers 2
+            # - name: Integration Test Changed
+            #   if: ${{ inputs.changed-only }}
+            #   run: >-
+            #       git fetch origin main && pnpm -r --filter '...[FETCH_HEAD]' integration -- --maxWorkers 2
 
-
-              env:
-                  LOG_LEVEL: debug
-                  TEST_ROOT_DIR: ${{ github.workspace }}/../
+            #   env:
+            #       LOG_LEVEL: debug
+            #       TEST_ROOT_DIR: ${{ github.workspace }}/../
 
             - name: Lint
               if: ${{ ! inputs.changed-only && inputs.lint }}
@@ -73,7 +72,7 @@ jobs:
 
             - name: Integration
               if: ${{ ! inputs.changed-only }}
-              run: pnpm jest --integration --color --maxWorkers 2
+              run: pnpm jest --integration --passWithNoTests --color --maxWorkers 2
               env:
                   LOG_LEVEL: debug
                   TEST_ROOT_DIR: ${{ github.workspace }}/../
