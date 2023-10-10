@@ -1,7 +1,6 @@
 import type { CommandModule } from 'yargs';
 
 import { line } from '../text/line';
-import { runRefactor } from './runRefactor';
 
 export const refactorCommand: CommandModule<
     Record<never, never>,
@@ -35,6 +34,7 @@ export const refactorCommand: CommandModule<
                 default: true,
             }),
     handler: async (opts) => {
+        const { runRefactor } = await import('./runRefactor');
         await runRefactor(opts);
     },
 };

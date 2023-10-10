@@ -88,14 +88,7 @@ const getLogLevel = once(() => {
 
 const destination = once(() => {
     const formatter = new AsyncFormatter({
-        formatters: {
-            objective: (input) =>
-                typeof input === 'string' ? glowFormat({ input }) : input,
-            err: (input) =>
-                typeof input === 'object' && input !== null
-                    ? formatObject(input)
-                    : input,
-        },
+        formatters: () => import('./formatters'),
     });
     const stringifier = new Transform({
         objectMode: true,

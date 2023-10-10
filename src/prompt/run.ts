@@ -174,11 +174,15 @@ const text = {
             { hr, note, price }
         ),
 
-    errorNoMessagesToSend: markdown`
-        # Stop Condition
+    errorNoMessagesToSend: format(
+        markdown`
+            # Stop Condition
 
-        No messages to send, exiting ...
-    `,
+            No messages to send, exiting ... finish your message with a %hr% to
+            indicate an end of a message.
+        `,
+        { hr }
+    ),
 
     requesting: `# Requesting`,
 

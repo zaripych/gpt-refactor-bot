@@ -10,9 +10,12 @@
     "scripts": {
         "build": "repka build:node",
         "lint": "repka lint",
-        "refactor-bot": "tsx ./src/bin/refactor-bot.ts"
+        "refactor-bot": "tsx ./src/bin/refactor-bot.ts",
+        "refactor-bot-bundled": "node ./dist/bin/refactor-bot.mjs"
     },
     "dependencies": {
+        "@changesets/changelog-github": "0.4.8",
+        "@changesets/cli": "2.26.2",
         "chalk": "5.2.0",
         "chokidar": "3.5.3",
         "dedent": "1.5.1",

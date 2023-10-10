@@ -2,6 +2,8 @@ import { Transform } from 'node:stream';
 
 import type { TransformCallback } from 'stream';
 
+import { onceAsync } from '../utils/onceAsync';
+
 export type FormatterMethod = <Y>(value: Y) => string | Y | Promise<string | Y>;
 
 export type Formatters = {
@@ -29,12 +31,20 @@ const format = async (
 
 export class AsyncFormatter extends Transform {
     private promise: Promise<unknown> | null = null;
+    private formatters: () => Promise<Formatters>;
 
-    constructor(private opts: { formatters: Formatters }) {
+    constructor(opts: {
+        formatters: Formatters | (() => Promise<{ formatters: Formatters }>);
+    }) {
         super({
             objectMode: true,
             autoDestroy: true,
         });
+        this.formatters = onceAsync(() =>
+            typeof opts.formatters === 'function'
+                ? opts.formatters().then((x) => x.formatters)
+                : opts.formatters
+        );
     }
 
     override _transform(
@@ -47,7 +57,7 @@ export class AsyncFormatter extends Transform {
         }
 
         const promise = (this.promise ?? Promise.resolve())
-            .then(() => format(chunk, this.opts.formatters))
+            .then(async () => format(chunk, await this.formatters()))
             .then((result) => {
                 this.push(result);
                 callback();
