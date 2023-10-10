@@ -1,0 +1,96 @@
+name: Dependabot
+
+on:
+    pull_request:
+
+permissions:
+    contents: write
+    pull-requests: write
+
+jobs:
+    dependabot:
+        runs-on: ubuntu-latest
+        if: ${{ github.actor == 'dependabot[bot]' }}
+        steps:
+            - name: Fetch Dependabot Metadata
+              id: metadata
+              uses: dependabot/fetch-metadata@v1
+
+            - name: Checkout Repo
+              uses: actions/checkout@v4
+              with:
+                  # @note Using Personal Access Token here to ensure
+                  # the jobs below trigger Check workflows when we commit
+                  # changesets to the PR branch, because Checks are required
+                  # for the PR to be merged.
+                  token: ${{ secrets.PAT_GITHUB }}
+
+            - name: Add a changeset
+              shell: bash
+              run: |
+                  set -eu
+
+                  git fetch origin $BASE_REF
+                  CHANGES=$(git diff --name-only FETCH_HEAD -- '.changeset/*')
+
+                  if [ -z "$CHANGES" ]; then
+                    echo "No changesets found, creating changeset";
+
+                    git fetch origin $HEAD_REF
+                    git checkout -B $HEAD_REF origin/$HEAD_REF
+
+                    # Create a changeset which is just an .md file:
+                    cat << EOF > .changeset/dependabot-$(date +%s).md
+                  ---
+                  '@repka-kit/ts': patch
+                  ---
+
+                  deps: update $DEPENDENCY_NAMES from $PREVIOUS_VERSION to $NEW_VERSION
+                  EOF
+
+                    # See this on how to push changes to the PR branch:
+                    # https://stackoverflow.com/questions/57921401/push-to-origin-from-github-action/58393457#58393457
+                    git add .changeset
+                    
+                    git config --global user.email "$COMMIT_AUTHOR_EMAIL"
+                    git config --global user.name "$COMMIT_AUTHOR_NAME"
+
+                    git commit -m "chore: update $DEPENDENCY_NAMES from $PREVIOUS_VERSION to $NEW_VERSION"
+                    
+                    git push
+                  else
+                    echo "Changeset found, skipping changeset creation";
+                  fi
+
+              env:
+                  BASE_REF: ${{ github.event.pull_request.base.ref }}
+                  HEAD_REF: ${{ github.event.pull_request.head.ref }}
+                  DEPENDENCY_NAMES: ${{ steps.metadata.outputs.dependency-names }}
+                  PREVIOUS_VERSION: ${{ steps.metadata.outputs.previous-version }}
+                  NEW_VERSION: ${{ steps.metadata.outputs.new-version }}
+                  COMMIT_AUTHOR_EMAIL: zaripych@users.noreply.github.com
+                  COMMIT_AUTHOR_NAME: zaripych
+                  PR_URL: ${{github.event.pull_request.html_url}}
+
+            - name: Enable auto-merge for Dependabot PRs
+              if: ${{ steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor' }}
+              run: |
+                  gh pr merge --auto --squash "$PR_URL"
+              env:
+                  PR_URL: ${{github.event.pull_request.html_url}}
+                  # @note Using Personal Access Token here to ensure
+                  # the jobs in the main branch trigger Check workflows.
+                  GITHUB_TOKEN: ${{ secrets.PAT_GITHUB }}
+
+            - name: Approve a PR if not already approved
+              shell: bash
+              run: |
+                  gh pr checkout "$PR_URL"
+                  if [ "$(gh pr view "$PR_URL" --json latestReviews -q '.latestReviews[0].state')" != "APPROVED" ];
+                  then gh pr review --approve "$PR_URL"
+                  else echo "PR already approved, skipping additional approvals to minimize emails/notification noise.";
+                  fi
+              env:
+                  PR_URL: ${{github.event.pull_request.html_url}}
+                  # TODO: Do we need a PAT here?
+                  GITHUB_TOKEN: ${{ secrets.PAT_GITHUB }}

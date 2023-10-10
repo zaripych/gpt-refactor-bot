@@ -1,0 +1,45 @@
+name: Main Push
+
+on:
+    workflow_dispatch:
+        inputs:
+            checks:
+                type: boolean
+                required: false
+                default: true
+
+            release:
+                type: boolean
+                required: false
+                default: true
+
+    push:
+        branches:
+            - main
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+    release-checks:
+        if: ${{ github.event.inputs.checks == '' || inputs.checks == true }}
+        name: ${{ matrix.runs-on }}
+        uses: ./.github/workflows/call-checks.yml
+        strategy:
+            matrix:
+                runs-on: [ubuntu-latest, windows-latest, macos-latest]
+        with:
+            runs-on: ${{ matrix.runs-on }}
+
+    release:
+        if: ${{ !failure() && !cancelled() && (github.event.inputs.release == '' || inputs.release == true) }}
+        name: Release
+        uses: ./.github/workflows/call-release.yml
+        needs: [release-checks]
+        secrets:
+            NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+            # @note Using Personal Access Token here to ensure
+            # the creation of the PR triggers Checks workflows
+            # as was observed with this PR
+            # https://github.com/zaripych/repka/pull/34
+            # the checks wouldn't be triggered otherwise
+            PAT_GITHUB: ${{ secrets.PAT_GITHUB }}
