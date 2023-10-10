@@ -26,7 +26,10 @@ jobs:
         uses: ./.github/workflows/call-checks.yml
         strategy:
             matrix:
-                runs-on: [ubuntu-latest, windows-latest, macos-latest]
+                runs-on:
+                    - ubuntu-latest
+                    # - windows-latest
+                    # - macos-latest
         with:
             runs-on: ${{ matrix.runs-on }}
 

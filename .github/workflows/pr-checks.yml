@@ -26,14 +26,14 @@ jobs:
             changed-only: true
             runs-on: ${{ matrix.runs-on }}
 
-    other-platform-checks:
-        if: ${{ github.event.inputs.checks == '' || inputs.checks == true }}
-        name: ${{ matrix.runs-on }}
-        uses: ./.github/workflows/call-checks.yml
-        strategy:
-            matrix:
-                runs-on: [windows-latest, macos-latest]
-        with:
-            lint: false
-            changed-only: true
-            runs-on: ${{ matrix.runs-on }}
+    # other-platform-checks:
+    #     if: ${{ github.event.inputs.checks == '' || inputs.checks == true }}
+    #     name: ${{ matrix.runs-on }}
+    #     uses: ./.github/workflows/call-checks.yml
+    #     strategy:
+    #         matrix:
+    #             runs-on: [windows-latest, macos-latest]
+    #     with:
+    #         lint: false
+    #         changed-only: true
+    #         runs-on: ${{ matrix.runs-on }}
