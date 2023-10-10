@@ -72,7 +72,7 @@ jobs:
             - name: Build
               if: ${{ ! inputs.snapshot }}
               shell: bash
-              run: pnpm -r --filter @repka-kit/ts... "/build:tools|declarations/"
+              run: pnpm -r "/build|declarations/"
 
             - name: PAT Test
               if: ${{ ! inputs.snapshot }}

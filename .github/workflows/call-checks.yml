@@ -36,7 +36,7 @@ jobs:
             - name: Build Changed
               if: ${{ inputs.lint }}
               run: >-
-                  git fetch origin main && pnpm -r build:tools
+                  git fetch origin main && pnpm -r build
 
 
             - name: Lint Changed
