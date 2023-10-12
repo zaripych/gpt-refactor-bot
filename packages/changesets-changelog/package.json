@@ -1,0 +1,17 @@
+{
+    "name": "@refactor-bot/changeset-changelog",
+    "version": "0.0.0-development",
+    "private": true,
+    "type": "module",
+    "exports": "./src/bootstrap.ts",
+    "main": "./src/bootstrap.ts",
+    "types": "./src/main.ts",
+    "scripts": {
+        "lint": "repka lint"
+    },
+    "dependencies": {},
+    "devDependencies": {
+        "@changesets/changelog-github": "0.4.8",
+        "@changesets/types": "5.2.1"
+    }
+}

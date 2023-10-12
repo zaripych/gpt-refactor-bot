@@ -1,0 +1,9 @@
+{
+    "extends": "@repka-kit/ts/configs/tsconfig.base.json",
+    "compilerOptions": {
+        "outDir": ".tsc-out",
+        "tsBuildInfoFile": ".tsc-out/.tsbuildinfo",
+        "incremental": true
+    },
+    "include": ["src"]
+}
