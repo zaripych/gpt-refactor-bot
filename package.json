@@ -1,46 +1,18 @@
 {
-    "name": "refactor-bot",
+    "name": "@refactor-bot/repository",
     "version": "0.0.0-development",
     "private": true,
-    "description": "refactor-bot --help",
+    "description": "Refactor your codebase using ChatGPT, ts-morph and Plan and Execute techniques",
     "type": "module",
-    "bin": {
-        "refactor-bot": "./src/bin/refactor-bot.ts"
-    },
     "scripts": {
-        "build": "repka build:node",
-        "lint": "repka lint",
-        "refactor-bot": "tsx ./src/bin/refactor-bot.ts",
-        "refactor-bot-bundled": "node ./dist/bin/refactor-bot.mjs"
+        "refactor-bot-bundled": "node ./packages/refactor-bot/dist/bin/refactor-bot.mjs"
     },
-    "dependencies": {
-        "chalk": "5.2.0",
-        "chokidar": "3.5.3",
-        "dedent": "1.5.1",
-        "diff": "^5.1.0",
-        "dotenv": "16.3.1",
-        "globby": "13.2.2",
-        "js-yaml": "4.1.0",
-        "lodash-es": "4.17.21",
-        "micromatch": "4.0.5",
-        "object-hash": "3.0.0",
-        "ora": "6.3.1",
-        "parse-git-diff": "^0.0.13",
-        "prompts": "2.4.2",
-        "rxjs": "^7.8.1",
-        "strip-ansi": "7.1.0",
-        "ts-morph": "19.0.0",
-        "tsx": "3.12.7",
-        "undici": "5.22.1",
-        "yargs": "17.7.2",
-        "zod": "3.21.4",
-        "zod-to-json-schema": "3.21.2"
-    },
+    "dependencies": {},
     "devDependencies": {
         "@changesets/changelog-github": "0.4.8",
         "@changesets/cli": "2.26.2",
         "@jest/globals": "29.7.0",
-        "@repka-kit/ts": "1.0.4",
+        "@repka-kit/ts": "1.0.5",
         "@types/diff": "^5.0.3",
         "@types/js-yaml": "4.0.5",
         "@types/lodash-es": "4.17.7",
@@ -50,10 +22,6 @@
         "@types/prompts": "2.4.4",
         "@types/yargs": "17.0.24",
         "utility-types": "3.10.0"
-    },
-    "peerDependencies": {
-        "prettier": "3.0.3",
-        "typescript": "5.2.2"
     },
     "packageManager": "pnpm@8.9.0",
     "engines": {
