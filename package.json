@@ -14,8 +14,6 @@
         "refactor-bot-bundled": "node ./dist/bin/refactor-bot.mjs"
     },
     "dependencies": {
-        "@changesets/changelog-github": "0.4.8",
-        "@changesets/cli": "2.26.2",
         "chalk": "5.2.0",
         "chokidar": "3.5.3",
         "dedent": "1.5.1",
@@ -39,6 +37,8 @@
         "zod-to-json-schema": "3.21.2"
     },
     "devDependencies": {
+        "@changesets/changelog-github": "0.4.8",
+        "@changesets/cli": "2.26.2",
         "@jest/globals": "29.7.0",
         "@repka-kit/ts": "1.0.4",
         "@types/diff": "^5.0.3",
