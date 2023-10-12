@@ -1,7 +1,7 @@
 import { format } from 'node:util';
 
 export function replaceNewlinesWithSpaces(text: string): string {
-    return text.replaceAll(/\s*\n\s*/g, ' ').trim();
+    return text.replaceAll(/[ \t]*[\n]+[ \t]*/g, ' ').trim();
 }
 
 export function line(template: string, ...values: unknown[]): string;
