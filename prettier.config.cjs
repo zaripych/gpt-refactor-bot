@@ -3,5 +3,5 @@ module.exports = {
     tabWidth: 4,
     singleQuote: true,
     trailingComma: 'es5',
-    proseWrap: 'always',
+    proseWrap: process.env.CHANGESETS_VERSION ? 'never' : 'always',
 };
