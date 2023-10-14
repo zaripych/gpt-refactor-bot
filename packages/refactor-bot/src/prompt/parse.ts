@@ -68,7 +68,7 @@ const removeComments = (message: string) =>
     message.replaceAll(/^>.*$/gm, '').trim();
 
 const removeBackticks = (message: string) =>
-    message.replaceAll(/^```\w*$/gm, '').trim();
+    message.replaceAll(/^((```+)|(~~~+))\w*$/gm, '').trim();
 
 const splitConversationFileContents = (contents: string) =>
     contents.split(/^---\s*$/gm);

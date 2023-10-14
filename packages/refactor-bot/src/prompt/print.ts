@@ -1,10 +1,18 @@
 import type { Message } from '../chat-gpt/api';
 import { logger } from '../logger/logger';
-import { printMarkdown } from '../markdown/markdown';
+import { markdown, printMarkdown } from '../markdown/markdown';
+import { format } from '../text/format';
 import { UnreachableError } from '../utils/UnreachableError';
 
 const json = (obj: unknown) =>
-    `\`\`\`json\n${JSON.stringify(obj, undefined, '  ')}\n\`\`\``;
+    format(
+        markdown`
+            ~~~json
+            %json%
+            ~~~
+        `,
+        { json: JSON.stringify(obj, undefined, '  ') }
+    );
 
 export const formatMessage = (message: Message, prefixDivider?: boolean) => {
     const prefix = prefixDivider ? '---\n\n' : '';

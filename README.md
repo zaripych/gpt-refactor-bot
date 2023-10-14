@@ -1,8 +1,15 @@
 # refactor-bot
 
-Refactor your TypeScript codebase using OpenAI ChatGPT models. This CLI gives
-access to your codebase to the OpenAI API, which will then accomplish
-refactoring tasks using "Plan and Execute" techniques.
+`refactor-bot` is a CLI for automated code refactoring using OpenAI's LLMs.
+
+Based on the goal provided by the user the CLI will use the OpenAI API to
+generate a plan for the refactoring, and refactor one file at a time using "Plan
+and Execute" technique, at the same time making sure the code still compiles and
+passes linting and tests.
+
+The difference between `refactor-bot` and other tools is that it provides rich
+functions API based on `ts-morph` that allows it to extract TypeScript specific
+information from the codebase.
 
 ## Installation
 
