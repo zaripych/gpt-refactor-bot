@@ -287,9 +287,11 @@ export const run = async (opts: {
             if (!convo.canSend()) {
                 spinner.text = text.watchingCannotSend(price);
                 await convo.hint(stripAnsi(spinner.text));
+                await watcher.watchForChangesOnce(conversationFile);
             } else if (!convo.sendConfirmed()) {
                 spinner.text = text.watchingNoConfirmation(price);
                 await convo.hint(stripAnsi(spinner.text));
+                await watcher.watchForChangesOnce(conversationFile);
             }
         }
 
