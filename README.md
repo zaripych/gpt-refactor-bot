@@ -14,14 +14,22 @@ information from the codebase.
 ## Installation
 
 ```
-git clone git@github.com:zaripych/refactor-bot.git
+git clone git@github.com:zaripych/gpt-refactor-bot.git
 ```
 
 ```
+# Install refactor-bot dependencies
 pnpm install
-cd /path/to/your/project
-pnpm add /path/to/refactor-bot
-pnpm add tsx                    # <- at the moment tsx is required for running TypeScript directly, we can tsc/bundle the refactor-bot later, if it works
+
+# Switch back to your project's repository and add refactor-bot as a dependency
+cd ../your-project-repository
+pnpm add --save-dev file://../refactor-bot/packages/refactor-bot
+
+# At the moment `tsx` is required to run refactor-bo TypeScript
+# code directly, we can tsc/bundle the refactor-bot later
+pnpm add tsx
+
+# Run the CLI:
 pnpm refactor-bot --help
 ```
 
