@@ -5,7 +5,7 @@ import { join, relative } from 'path';
 import type { Project, SourceFile } from 'ts-morph';
 import { SyntaxKind } from 'ts-morph';
 
-import { createProject } from '../createProject';
+import { createCombinedProject } from '../project/createCombinedProject';
 import { quickInfoForNode } from './quickInfoForNode';
 
 type IdentifierInfo = {
@@ -48,7 +48,7 @@ export async function changeInfo(opts: {
      * this in the future, however, with the caching engine in place, this
      * is not a priority
      */
-    const { project } = await createProject({
+    const { project } = await createCombinedProject({
         repositoryRoot: opts.location,
     });
     const sourceFile = project.getSourceFileOrThrow(join(location, filePath));
