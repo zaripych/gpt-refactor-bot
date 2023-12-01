@@ -12,10 +12,13 @@ import type {
 } from './internalTypes';
 
 export const modelsSchema = z.enum([
+    'gpt-4-1106-preview',
+    'gpt-4-1106-vision-preview',
     'gpt-4',
     'gpt-4-0613',
     'gpt-4-32k',
     'gpt-4-32k-0613',
+    'gpt-3.5-turbo-1106',
     'gpt-3.5-turbo',
     'gpt-3.5-turbo-0613',
     'gpt-3.5-turbo-16k',
@@ -176,6 +179,14 @@ const messageFromInternal = (message: ResponseMessageShape): ResponseMessage =>
         : message;
 
 const pricing = {
+    'gpt-4-1106-preview': {
+        perKTokenInput: 0.01,
+        perKTokenOutput: 0.03,
+    },
+    'gpt-4-1106-vision-preview': {
+        perKTokenInput: 0.01,
+        perKTokenOutput: 0.03,
+    },
     'gpt-4': {
         perKTokenInput: 0.03,
         perKTokenOutput: 0.06,
@@ -185,7 +196,7 @@ const pricing = {
         perKTokenOutput: 0.12,
     },
     'gpt-3.5-turbo': {
-        perKTokenInput: 0.0015,
+        perKTokenInput: 0.001,
         perKTokenOutput: 0.002,
     },
     'gpt-3.5-turbo-16k': {
