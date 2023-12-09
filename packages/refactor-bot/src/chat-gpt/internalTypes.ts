@@ -2,7 +2,7 @@ import type { zodToJsonSchema } from 'zod-to-json-schema';
 
 export type Models =
     | 'gpt-4-1106-preview'
-    | 'gpt-4-vision-preview'
+    | 'gpt-4-1106-vision-preview'
     | 'gpt-4'
     | 'gpt-4-0613'
     | 'gpt-4-32k'

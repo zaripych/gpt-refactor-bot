@@ -17,7 +17,7 @@ export const functionsConfigSchema = z.object({
      * to `tsconfig.json`. In mono-repos scenarios this will affect the name
      * of every `tsconfig.json` file for every package.
      */
-    tsconfigJsonFileName: z.string().optional().default('tsconfig.json'),
+    tsConfigJsonFileName: z.string().optional().default('tsconfig.json'),
 
     /**
      * List of file globs to ignore when copying the repository to the
@@ -48,6 +48,14 @@ export const functionsConfigSchema = z.object({
     allowedFunctions: z
         .array(z.string())
         .default(['references', 'moduleImports', 'quickInfo', 'declarations']),
+
+    /**
+     * Whether to use a single ts-morph project for all packages in the monorepo
+     * or separate project for each package. Combining the project helps
+     * extract references across packages, but might also be more memory
+     * intensive.
+     */
+    useCombinedTsMorphProject: z.boolean().optional().default(true),
 });
 
 export type FunctionsConfig = z.input<typeof functionsConfigSchema>;

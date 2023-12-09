@@ -1,6 +1,6 @@
 import { globby } from 'globby';
 import orderBy from 'lodash-es/orderBy';
-import { basename, dirname, relative } from 'path';
+import { basename, dirname } from 'path';
 
 import { ConfigurationError } from '../../errors/configurationError';
 import { findPackageName } from '../../file-system/findPackageName';
@@ -42,8 +42,8 @@ export async function listProjects(config: FunctionsConfig) {
 
     const unsortedPackageInfo = await Promise.all(
         typescriptPackages.map(async (tsConfigFilePath) => ({
-            tsConfigFilePath: relative(repositoryRoot, tsConfigFilePath),
-            directoryPath: relative(repositoryRoot, dirname(tsConfigFilePath)),
+            tsConfigFilePath,
+            directoryPath: dirname(tsConfigFilePath),
             directoryName: basename(dirname(tsConfigFilePath)),
             packageName: await findPackageName(tsConfigFilePath),
         }))

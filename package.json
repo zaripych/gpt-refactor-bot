@@ -20,6 +20,7 @@
         "@types/object-hash": "3.0.2",
         "@types/prompts": "2.4.4",
         "@types/yargs": "17.0.24",
+        "globby": "14.0.0",
         "refactor-bot": "workspace:*",
         "tsx": "3.13.0",
         "utility-types": "3.10.0"
