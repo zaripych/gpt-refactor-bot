@@ -13,20 +13,17 @@ Which functions make use of the `makePipelineFunction` function?
 
 ---
 
-> @role assistant
+> @role assistant @function references
 
 ```json
 {
-    "name": "references",
-    "arguments": "{\n  \"identifier\": \"makePipelineFunction\"\n}"
+    "identifier": "makePipelineFunction"
 }
 ```
 
 ---
 
-> @role function
-
-> @function references
+> @role function @function references
 
 ```json
 [

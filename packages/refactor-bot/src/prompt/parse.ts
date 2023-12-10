@@ -3,9 +3,11 @@ import { z } from 'zod';
 import type { FunctionCallMessage, MessageRole } from '../chat-gpt/api';
 
 const parseRole = (message: string): MessageRole | 'function' | undefined => {
-    const match = message.match(/> @role (system|user|assistant|function)/);
+    const match = message.match(
+        /(^>)?\s*@role (system|user|assistant|function)/
+    );
     if (match) {
-        return match[1] as MessageRole | 'function';
+        return match[2] as MessageRole | 'function';
     }
     return undefined;
 };
@@ -34,20 +36,39 @@ const guessRole = (
     return result as NonNullable<typeof result>;
 };
 
-const parseFunctionCall = (
-    message: string
-): { name: string; arguments: string } | undefined => {
+const parseFunctionCall = (opts: {
+    functionName?: string;
+    message: string;
+}): { name: string; arguments: string } | undefined => {
     try {
-        const result = JSON.parse(message) as unknown;
-        const validation = z
-            .object({
-                name: z.string(),
-                arguments: z.string(),
-            })
-            .safeParse(result);
+        const nameArgsPair = z
+            .string()
+            .transform((text) => JSON.parse(text) as unknown)
+            .pipe(
+                z.object({
+                    name: z.string(),
+                    arguments: z.string(),
+                })
+            )
+            .safeParse(opts.message);
 
-        if (validation.success) {
-            return validation.data;
+        if (nameArgsPair.success) {
+            return nameArgsPair.data;
+        }
+
+        if (opts.functionName) {
+            const justArgs = z
+                .string()
+                .transform((text) => JSON.parse(text) as unknown)
+                .pipe(z.object({}).passthrough())
+                .safeParse(opts.message);
+
+            if (justArgs.success) {
+                return {
+                    name: opts.functionName,
+                    arguments: JSON.stringify(justArgs.data),
+                };
+            }
         }
 
         return undefined;
@@ -56,10 +77,36 @@ const parseFunctionCall = (
     }
 };
 
+const parseSpecialFunctionCall = (opts: {
+    role?: string;
+    functionName?: string;
+    message: string;
+}): { name: string; arguments: string } | undefined => {
+    if (opts.functionName === 'runTsMorphScript' && opts.role === 'assistant') {
+        return {
+            name: opts.functionName,
+            arguments: JSON.stringify(
+                {
+                    code: removeBackticks(removeComments(opts.message)),
+                },
+                null,
+                2
+            ),
+        };
+    } else if (opts.role === 'assistant') {
+        return parseFunctionCall({
+            functionName: opts.functionName,
+            message: removeBackticks(removeComments(opts.message)),
+        });
+    } else {
+        return undefined;
+    }
+};
+
 const parseFunctionName = (message: string): string => {
-    const match = /^> @function \s*(.+)\s*/gm.exec(message);
+    const match = /(^>)?\s*@function \s*(.+)\s*/gm.exec(message);
     if (match) {
-        return match[1] as string;
+        return match[2] as string;
     }
     return '';
 };
@@ -81,18 +128,24 @@ export const parseMessages = (contents: string) =>
             parsedRole: parseRole(message),
             message,
         }))
-        .map(({ message, parsedRole }, i, arr) => ({
-            role: guessRole(
+        .map(({ message, parsedRole }, i, arr) => {
+            const functionName = parseFunctionName(message);
+            const role = guessRole(
                 parsedRole,
                 i > 0 ? arr[i - 1]?.parsedRole : undefined,
                 i
-            ),
-            functionName: parseFunctionName(message),
-            content: removeComments(message),
-            functionCall: parseFunctionCall(
-                removeBackticks(removeComments(message))
-            ),
-        }))
+            );
+            return {
+                role,
+                functionName,
+                content: removeComments(message),
+                functionCall: parseSpecialFunctionCall({
+                    role,
+                    functionName,
+                    message,
+                }),
+            };
+        })
         .filter((message) => message.content)
         .map((message) => {
             if (

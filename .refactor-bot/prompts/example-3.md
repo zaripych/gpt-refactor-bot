@@ -24,20 +24,17 @@ Describe to me step by step how the `refactorBatch` function works.
 
 ---
 
-> @role assistant
+> @role assistant @function quickInfo
 
 ```json
 {
-    "name": "quickInfo",
-    "arguments": "{\n  \"identifier\": \"refactorBatch\"\n}"
+    "identifier": "refactorBatch"
 }
 ```
 
 ---
 
-> @role function
-
-> @function quickInfo
+> @role function @function quickInfo
 
 ```json
 {
@@ -47,20 +44,17 @@ Describe to me step by step how the `refactorBatch` function works.
 
 ---
 
-> @role assistant
+> @role assistant @function declarations
 
 ```json
 {
-    "name": "declarations",
-    "arguments": "{\n  \"identifier\": \"refactorBatch\"\n}"
+    "identifier": "refactorBatch"
 }
 ```
 
 ---
 
-> @role function
-
-> @function declarations
+> @role function @function declarations
 
 ```json
 [

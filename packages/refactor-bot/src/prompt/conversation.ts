@@ -14,10 +14,10 @@ export const conversationState = (conversationFile: string) => {
         messages = parseMessages(contents);
     };
 
-    const save = async () => {
+    const save = async (file?: string) => {
         contents = serializeMessages(messages);
         await writeFile(
-            conversationFile,
+            file ?? conversationFile,
             await prettierMarkdown({
                 md: contents,
                 repositoryRoot: process.cwd(),

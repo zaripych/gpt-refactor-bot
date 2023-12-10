@@ -13,20 +13,18 @@ Can you list all sub-classes of the `AbortError` class?
 
 ---
 
-> @role assistant
+> @role assistant @function declarations
 
 ```json
 {
-    "name": "declarations",
-    "arguments": "{\n  \"identifier\": \"AbortError\",\n  \"identifierContext\": \"class\"\n}"
+    "identifier": "AbortError",
+    "identifierContext": "class"
 }
 ```
 
 ---
 
-> @role function
-
-> @function declarations
+> @role function @function declarations
 
 ```json
 [
@@ -40,20 +38,18 @@ Can you list all sub-classes of the `AbortError` class?
 
 ---
 
-> @role assistant
+> @role assistant @function references
 
 ```json
 {
-    "name": "references",
-    "arguments": "{\n  \"identifier\": \"AbortError\",\n  \"identifierContext\": \"class\"\n}"
+    "identifier": "AbortError",
+    "identifierContext": "class"
 }
 ```
 
 ---
 
-> @role function
-
-> @function references
+> @role function @function references
 
 ```json
 [

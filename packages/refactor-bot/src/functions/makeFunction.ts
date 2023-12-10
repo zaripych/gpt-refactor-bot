@@ -1,5 +1,6 @@
 import type { z, ZodSchema } from 'zod';
 
+import { sanitizeFunctionResult } from './sanitizeFunctionResult';
 import type { FunctionsConfig } from './types';
 
 /**
@@ -20,7 +21,7 @@ export type FunctionDefinition<Name extends string, Args, Result> = {
 export const makeFunction = <
     Schema extends ZodSchema,
     R,
-    Name extends string
+    Name extends string,
 >(opts: {
     argsSchema: Schema;
     resultSchema: ZodSchema;
@@ -36,7 +37,14 @@ export const makeFunction = <
             async (args: z.infer<Schema>, config: FunctionsConfig) => {
                 const validatedArgs = opts.argsSchema.parse(args) as unknown;
                 const result = await opts.implementation(validatedArgs, config);
-                return (await opts.resultSchema.parseAsync(result)) as unknown;
+                const validatedResult = (await opts.resultSchema.parseAsync(
+                    result
+                )) as unknown;
+
+                return sanitizeFunctionResult({
+                    result: validatedResult,
+                    config,
+                });
             },
             {
                 description: opts.description,
