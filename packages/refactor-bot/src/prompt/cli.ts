@@ -16,7 +16,7 @@ export const promptCommand: CommandModule<
         yargs
             .option('model', {
                 choices: modelsSchema.options,
-                default: 'gpt-3.5-turbo' as const,
+                default: 'gpt-4-1106-preview' as const,
             })
             .option('watch', {
                 type: 'boolean',

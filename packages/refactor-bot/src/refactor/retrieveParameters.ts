@@ -91,7 +91,7 @@ export const retrieveParameters = makePipelineFunction({
                 functionsConfig: {
                     repositoryRoot: input.sandboxDirectoryPath,
                     scope: input.scope,
-                    tsconfigJsonFileName: input.tsConfigJsonFileName,
+                    tsConfigJsonFileName: input.tsConfigJsonFileName,
                     /**
                      * @note we do not want to allow any functions for this prompt
                      */

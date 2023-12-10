@@ -9,7 +9,9 @@ import { makeTsFunction } from '../functions/makeTsFunction';
 import type { FunctionsConfig } from '../functions/types';
 import { markdown } from '../markdown/markdown';
 import { firstLineOf } from '../utils/firstLineOf';
+import { hasOneElement } from '../utils/hasOne';
 import { getBuiltinLibs } from './builtinLibs.cjs';
+import { listProjects } from './project/listProjects';
 
 type Args = z.infer<typeof argsSchema>;
 
@@ -88,6 +90,10 @@ export async function moduleImports(
     config: FunctionsConfig,
     args: Args
 ): Promise<Array<FileImports>> {
+    // listing projects to determine if the module we analyzing is an internal
+    // or an external module
+    const projects = await listProjects(config);
+
     const modules = builtIns.includes(args.module)
         ? [
               args.module.trim().replaceAll(/^node:/g, ''),
@@ -95,9 +101,39 @@ export async function moduleImports(
           ]
         : [args.module.trim()];
 
-    const findImport = (node: Node<ts.Node>) =>
-        node.isKind(SyntaxKind.ImportDeclaration) &&
-        modules.includes(node.getModuleSpecifierValue().trim());
+    // does the module path we are searching for include the file name?
+    const hasSubModulePath = args.module.includes('/');
+
+    const moduleSpecifierIsPackagePath = projects.find(
+        (project) => project.packageName === args.module.trim()
+    )?.directoryPath;
+
+    const findImport = (node: Node<ts.Node>) => {
+        const moduleSpecifier =
+            node.isKind(SyntaxKind.ImportDeclaration) &&
+            node.getModuleSpecifierValue().trim();
+
+        if (!moduleSpecifier) {
+            return false;
+        }
+
+        if (hasSubModulePath) {
+            return (
+                node.isKind(SyntaxKind.ImportDeclaration) &&
+                modules.includes(moduleSpecifier)
+            );
+        }
+
+        const parts = moduleSpecifier.split('/');
+
+        if (hasOneElement(parts)) {
+            return (
+                modules.includes(moduleSpecifier) || modules.includes(parts[0])
+            );
+        }
+
+        return modules.includes(moduleSpecifier);
+    };
 
     const fullInitialFilePath = args.initialFilePath
         ? join(config.repositoryRoot, args.initialFilePath)
@@ -200,6 +236,21 @@ export async function moduleImports(
                 config.repositoryRoot,
                 sourceFile.getFilePath()
             );
+
+            if (moduleSpecifierIsPackagePath) {
+                /**
+                 * @note
+                 *
+                 * If the file is in the same package as the module
+                 * specifier - skip it. This should ensure that when we
+                 * are looking for imports of "package" where the "package"
+                 * is one of the monorepo packages - we do not include
+                 * itself importing its own internal files.
+                 */
+                if (filePath.startsWith(moduleSpecifierIsPackagePath)) {
+                    continue;
+                }
+            }
 
             const fileInfo = results.get(filePath) || {
                 filePath,

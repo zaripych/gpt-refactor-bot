@@ -68,10 +68,10 @@ export async function executeFunction(
     );
 
     try {
-        return await fn(opts.arguments as never, {
+        return (await fn(opts.arguments as never, {
             ...config,
             repositoryRoot: realRepositoryRoot,
-        });
+        })) as object;
     } catch (err: unknown) {
         if (err instanceof Error) {
             logger.debug(err);

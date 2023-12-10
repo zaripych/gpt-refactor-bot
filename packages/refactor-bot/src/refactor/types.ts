@@ -28,7 +28,7 @@ export const refactorConfigSchema = z.object({
      * to `tsconfig.json`. In mono-repos scenarios this will affect the name
      * of every `tsconfig.json` file for every package.
      */
-    tsConfigJsonFileName: functionsConfigSchema.shape.tsconfigJsonFileName,
+    tsConfigJsonFileName: functionsConfigSchema.shape.tsConfigJsonFileName,
 
     /**
      * List of package names or directory names where tsconfig.json files

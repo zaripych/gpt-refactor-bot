@@ -78,7 +78,7 @@ export const enrichObjective = makePipelineFunction({
                 functionsConfig: {
                     repositoryRoot: input.sandboxDirectoryPath,
                     scope: input.scope,
-                    tsconfigJsonFileName: input.tsConfigJsonFileName,
+                    tsConfigJsonFileName: input.tsConfigJsonFileName,
                     allowedFunctions: input.allowedFunctions,
                 },
                 ...determineModelParameters(input, persistence),
