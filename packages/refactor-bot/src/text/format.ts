@@ -21,7 +21,7 @@ export function format(
 
     const regexp = new RegExp(
         escapeRegExp(prefix) + '(\\w(\\w|\\d)*)' + escapeRegExp(suffix),
-        'i'
+        'ig'
     );
 
     let result = text;
@@ -77,8 +77,11 @@ export function format(
                 beforeWhitespace +
                 afterWhitespace +
                 after.trimStart();
+
+            regexp.lastIndex = before.length;
         } else {
             result = before + value + after;
+            regexp.lastIndex = before.length + value.length;
         }
 
         element = regexp.exec(result);
