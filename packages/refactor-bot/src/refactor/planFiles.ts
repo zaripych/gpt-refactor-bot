@@ -74,11 +74,11 @@ const planFilesPromptText = (objective: string) =>
             2. Use the tool box via OpenAI function calling to find all files
                that require editing and where the objective is not complete yet.
 
-            3. If the resulting list from step #3 is empty, respond "There are
+            3. If the resulting list from step #2 is empty, respond "There are
                no files to edit at this time". Follow it with short sentence of
                reasoning why editing is not required.
 
-            4. If the resulting list from step #3 is not empty, format it -
+            4. If the resulting list from step #2 is not empty, format it -
                return one file path per line in your response. File paths should
                be surrounded by a backtick. File paths should be relative to
                repository root. The result must be a numbered list in the
