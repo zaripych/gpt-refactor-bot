@@ -14,6 +14,9 @@ importers:
       '@jest/globals':
         specifier: 29.7.0
         version: 29.7.0
+      '@refactor-bot/changeset-changelog':
+        specifier: workspace:*
+        version: link:packages/changesets-changelog
       '@repka-kit/ts':
         specifier: 1.0.6
         version: 1.0.6
