@@ -13,7 +13,7 @@ function packageManagerFromPackageJson(packageJson: Record<string, unknown>) {
     if (!result) {
         return;
     }
-    return result[0] as 'yarn' | 'pnpm' | 'npm';
+    return result[1] as 'yarn' | 'pnpm' | 'npm';
 }
 
 async function packageManagerFromFs(directory: string) {
