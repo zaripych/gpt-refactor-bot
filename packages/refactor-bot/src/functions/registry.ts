@@ -1,6 +1,7 @@
 import { listFilesFunction } from '../discover/listFiles';
 import { readFileFunction } from '../discover/readFile';
 import { searchFunction } from '../discover/search';
+import { runTsMorphScriptFunction } from '../interpreter/runTsMorphScript';
 import { declarationsFunction } from '../ts-morph/declarations';
 import { moduleImportsFunction } from '../ts-morph/moduleImports';
 import { quickInfoFunction } from '../ts-morph/quickInfo';
@@ -14,4 +15,5 @@ export const functions = [
     listFilesFunction,
     searchFunction,
     readFileFunction,
+    runTsMorphScriptFunction,
 ];
