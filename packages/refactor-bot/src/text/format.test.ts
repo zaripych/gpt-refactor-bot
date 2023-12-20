@@ -241,3 +241,14 @@ it('should return the same string when there are no placeholders to substitute',
 
     expect(result).toBe('Hello, World!');
 });
+
+it('should not substitute recursively', () => {
+    const text = 'Hello, %recursive%';
+    const values = {
+        recursive: 'Hello again %recursive% and %recursive%',
+    };
+
+    const result = format(text, values);
+
+    expect(result).toBe('Hello, Hello again %recursive% and %recursive%');
+});
