@@ -252,3 +252,26 @@ it('should not substitute recursively', () => {
 
     expect(result).toBe('Hello, Hello again %recursive% and %recursive%');
 });
+
+it('should work when multiple empty vars are present one after another', () => {
+    const values = { total: '0', valueFirst: '', valueSecond: '' };
+
+    const result = format(
+        markdown`
+            # Cost
+
+            Total cost: %total% USD
+
+            %valueFirst%
+
+            %valueSecond%
+        `,
+        values
+    );
+
+    expect(result).toBe(`# Cost
+
+Total cost: 0 USD
+
+`);
+});
