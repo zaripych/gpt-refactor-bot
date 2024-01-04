@@ -7,6 +7,8 @@ import { gitFetch } from '../git/gitFetch';
 import { gitForceCreateBranch } from '../git/gitForceCreateBranch';
 import { gitRevParse } from '../git/gitRevParse';
 import { logger } from '../logger/logger';
+import { format } from '../text/format';
+import { line } from '../text/line';
 import { randomText } from '../utils/randomText';
 import { checkoutSandbox } from './checkoutSandbox';
 import { enrichObjective } from './enrichObjective';
@@ -78,7 +80,7 @@ async function loadRefactorState(opts: {
             enableCacheFor: opts.enableCacheFor,
         }),
         location,
-        id: opts.config.id,
+        id,
     };
 }
 
@@ -97,8 +99,27 @@ export async function refactor(opts: {
     const { execute, abort, id } = await loadRefactorState(opts);
 
     logger.info(
-        `Starting refactor with id "${id}", process id: "${process.pid}"`
+        format(
+            line`
+                Starting refactor with id "%id%", process id: "%processId%",
+                refactoring can be interrupted at any time with SIGINT and
+                restarted later, when id is passed to the cli:
+                \`npx refactor-bot refactor --id %id%\`.
+            `,
+            {
+                id,
+                processId: String(process.pid),
+            }
+        )
     );
+    if (!process.env['LOG_LEVEL']) {
+        logger.info(line`
+            Note that refactoring might take a while and by default there is not
+            much output. If you want to see more output, you can set the log
+            level to "debug" by setting the environment variable "LOG_LEVEL" to
+            "debug".
+        `);
+    }
 
     let numberOfInterrupts = 0;
     process.on('SIGINT', () => {
