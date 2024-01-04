@@ -93,14 +93,25 @@ export async function refactor(opts: {
     ) {
         throw new Error('enableCacheFor cannot be empty');
     }
+
     const { execute, abort, id } = await loadRefactorState(opts);
 
     logger.info(
         `Starting refactor with id "${id}", process id: "${process.pid}"`
     );
 
+    let numberOfInterrupts = 0;
     process.on('SIGINT', () => {
+        logger.info('Received SIGINT ... aborting');
+
         abort();
+
+        numberOfInterrupts += 1;
+
+        if (numberOfInterrupts > 5) {
+            console.log('Forcefully exiting');
+            process.exit(1);
+        }
     });
 
     const { teardown, finalizeResults } = resultsCollector();
