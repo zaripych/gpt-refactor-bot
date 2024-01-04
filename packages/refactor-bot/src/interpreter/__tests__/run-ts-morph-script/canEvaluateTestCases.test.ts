@@ -11,7 +11,10 @@ const repositoryRoot = fileURLToPath(new URL('./test-cases', import.meta.url));
 
 const testCasesRoot = fileURLToPath(new URL('./test-cases', import.meta.url));
 
-const caseNames = await globby('*.{ts,js}', { cwd: testCasesRoot });
+const caseNames = await globby('*.{ts,js}', {
+    ignore: ['*.skip.ts', '*.skip.js'],
+    cwd: testCasesRoot,
+});
 
 const cases = new Map(
     await Promise.all(
