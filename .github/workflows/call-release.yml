@@ -41,7 +41,7 @@ jobs:
               run: |
                   set -eu
 
-                  package_json_path="./packages/build-tools/ts/package.json"
+                  package_json_path="./packages/refactor-bot/package.json"
 
                   # Change package.json version to create snapshot
                   pnpm changeset version --snapshot snap
@@ -54,7 +54,7 @@ jobs:
                       echo "Found changes in package.json"
                   fi
 
-                  pnpm -r --filter @repka-kit/ts... "/build:tools|declarations/"
+                  pnpm -r --filter refactor-bot... "/build|declarations/"
 
                   echo "snapshot-version=$(jq -r .version $package_json_path)" >> \
                     "$GITHUB_OUTPUT"
@@ -64,7 +64,7 @@ jobs:
                     -r --no-git-checks --tag snap \
                     --access public --dry-run
 
-                  pnpm changeset publish --no-git-tag --tag snap
+                  # pnpm changeset publish --no-git-tag --tag snap
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
