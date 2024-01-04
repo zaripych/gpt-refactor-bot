@@ -11,6 +11,10 @@ export async function installDependencies(opts: {
                 cwd: opts.directory,
                 logOnError: 'combined',
                 exitCodes: [0],
+                env: {
+                    ...process.env,
+                    CI: 'true',
+                },
             });
             break;
         case 'npm':
