@@ -62,5 +62,9 @@
     "packageManager": "pnpm@8.9.0",
     "engines": {
         "node": "18"
+    },
+    "publishConfig": {
+        "directory": "dist",
+        "linkDirectory": false
     }
 }
