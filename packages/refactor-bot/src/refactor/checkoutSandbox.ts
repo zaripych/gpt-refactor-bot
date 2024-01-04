@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { ConfigurationError } from '../errors/configurationError';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { changedFilesHash } from '../git/changedFilesHash';
@@ -15,9 +16,9 @@ import { logger } from '../logger/logger';
 import { determinePackageManager } from '../package-manager/determinePackageManager';
 import { installDependencies } from '../package-manager/installDependencies';
 import { runPackageManagerScript } from '../package-manager/runPackageManagerScript';
-import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { createSandbox, sandboxLocation } from '../sandbox/createSandbox';
 import { ensureTruthy } from '../utils/isTruthy';
+import { checkoutComplete } from './actions/checkoutComplete';
 import { refactorConfigSchema } from './types';
 
 export const checkoutSandboxInputSchema = refactorConfigSchema
@@ -55,9 +56,11 @@ export const checkoutSandboxResultSchema = z.object({
     sandboxDirectoryPath: z.string(),
 });
 
-export const checkoutSandbox = makePipelineFunction({
+export const checkoutSandbox = makeCachedFunction({
     name: 'checkout-sandbox',
-    transform: async (config, _persistence) => {
+    inputSchema: checkoutSandboxInputSchema,
+    resultSchema: checkoutSandboxResultSchema,
+    transform: async (config, ctx) => {
         const root = await findRepositoryRoot();
 
         const { sandboxId, sandboxDirectoryPath } = sandboxLocation({
@@ -171,13 +174,15 @@ export const checkoutSandbox = makePipelineFunction({
             }, Promise.resolve());
         }
 
-        return {
+        const result = {
             startCommit: refactorStartCommit,
             originalBranch: branch,
             defaultBranch: ensureTruthy(defaultBranch),
             sandboxDirectoryPath,
         };
+
+        ctx.dispatch(checkoutComplete(result));
+
+        return result;
     },
-    inputSchema: checkoutSandboxInputSchema,
-    resultSchema: checkoutSandboxResultSchema,
 });

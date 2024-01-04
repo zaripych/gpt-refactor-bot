@@ -2,10 +2,10 @@ import hash from 'object-hash';
 import type { TypeOf } from 'zod';
 import { z } from 'zod';
 
+import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { autoFixIssuesContents } from '../eslint/autoFixIssues';
 import { logger } from '../logger/logger';
 import { markdown } from '../markdown/markdown';
-import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { prettierTypescript } from '../prettier/prettier';
 import { format } from '../text/format';
 import { hasOneElement } from '../utils/hasOne';
@@ -97,11 +97,11 @@ const promptText = (opts: { objective: string; filePath: string }) =>
         opts
     );
 
-export const edit = makePipelineFunction({
+export const edit = makeCachedFunction({
     name: 'edit',
     inputSchema: editInputSchema,
     resultSchema: editResultSchema,
-    transform: async (input, stateRef): Promise<EditResponse> => {
+    transform: async (input, ctx): Promise<EditResponse> => {
         const text = promptText({
             objective: input.objective,
             filePath: input.filePath,
@@ -119,10 +119,10 @@ export const edit = makePipelineFunction({
                     tsConfigJsonFileName: input.tsConfigJsonFileName,
                     allowedFunctions: input.allowedFunctions,
                 },
-                ...determineModelParameters(input, stateRef),
+                ...determineModelParameters(input, ctx),
                 choices: input.choices,
             },
-            stateRef
+            ctx
         );
 
         const settledChoices = await Promise.allSettled(
@@ -145,7 +145,7 @@ export const edit = makePipelineFunction({
 
                     if (noChangesRequired && codeChunks.length === 0) {
                         return {
-                            key: stateRef?.location,
+                            key: ctx.location,
                             status: 'no-changes-required' as const,
                         };
                     }
@@ -171,12 +171,18 @@ export const edit = makePipelineFunction({
                         ts: codeChunk,
                     });
                     const eslintFixed = input.eslintAutoFixScriptArgs
-                        ? await autoFixIssuesContents({
-                              eslintScriptArgs: input.eslintAutoFixScriptArgs,
-                              fileContents: formattedCodeChunk,
-                              filePath: input.filePath,
-                              location: input.sandboxDirectoryPath,
-                          })
+                        ? (
+                              await autoFixIssuesContents(
+                                  {
+                                      eslintScriptArgs:
+                                          input.eslintAutoFixScriptArgs,
+                                      fileContents: formattedCodeChunk,
+                                      filePath: input.filePath,
+                                      location: input.sandboxDirectoryPath,
+                                  },
+                                  ctx
+                              )
+                          ).contents
                         : formattedCodeChunk;
 
                     if (input.eslintAutoFixScriptArgs) {
@@ -192,13 +198,13 @@ export const edit = makePipelineFunction({
 
                     if (eslintFixed === input.fileContents) {
                         return {
-                            key: stateRef?.location,
+                            key: ctx.location,
                             status: 'no-changes-required' as const,
                         };
                     }
 
                     return {
-                        key: stateRef?.location,
+                        key: ctx.location,
                         fileContentsHash: hash(eslintFixed),
                         fileContents: eslintFixed,
                         status: 'success' as const,

@@ -5,9 +5,10 @@ import { expand, mergeAll, mergeMap, toArray } from 'rxjs/operators';
 import type { TypeOf } from 'zod';
 import { z } from 'zod';
 
+import { makeCachedFunction } from '../cache/makeCachedFunction';
 import type { Message } from '../chat-gpt/api';
 import {
-    calculatePriceCents,
+    calculatePrice,
     chatCompletions,
     functionResultMessageSchema,
     messageSchema,
@@ -16,13 +17,15 @@ import {
     responseSchema,
     systemMessageSchema,
 } from '../chat-gpt/api';
+import { GptRequestError } from '../errors/gptRequestError';
 import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
 import { executeFunction } from '../functions/executeFunction';
 import { includeFunctions } from '../functions/includeFunctions';
 import { functionsConfigSchema } from '../functions/types';
-import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { ensureHasOneElement } from '../utils/hasOne';
 import { isTruthy } from '../utils/isTruthy';
+import { gptRequestFailed } from './actions/gptRequestFailed';
+import { gptRequestSuccess } from './actions/gptRequestSuccess';
 
 export const promptInputSchema = z.object({
     preface: z.string().optional(),
@@ -56,7 +59,7 @@ export const promptResultSchema = z.object({
 
 let totalSpend = 0;
 
-const chat = makePipelineFunction({
+const chat = makeCachedFunction({
     name: 'chat',
     inputSchema: promptInputSchema
         .pick({
@@ -72,30 +75,54 @@ const chat = makePipelineFunction({
     resultSchema: z.object({
         response: responseSchema,
     }),
-    transform: async (state) => {
-        const response = await chatCompletions({
-            ...state,
-            functions: await includeFunctions(state.allowedFunctions),
-        });
+    transform: async (state, ctx) => {
+        try {
+            const response = await chatCompletions({
+                ...state,
+                functions: await includeFunctions(state.allowedFunctions),
+            });
 
-        const spentCents = calculatePriceCents({
-            ...response,
-            model: state.model,
-        });
+            ctx.dispatch(
+                gptRequestSuccess({
+                    model: state.model,
+                    key: ctx.location,
+                    response,
+                })
+            );
 
-        totalSpend += spentCents;
+            const spent = calculatePrice({
+                ...response,
+                model: state.model,
+            });
 
-        if (totalSpend > state.budgetCents) {
-            throw new Error('Spent too much');
+            totalSpend += spent.totalPrice;
+
+            if (totalSpend * 100 > state.budgetCents) {
+                throw new GptRequestError('Spent too much');
+            }
+
+            return {
+                response,
+            };
+        } catch (err) {
+            ctx.dispatch(
+                gptRequestFailed({
+                    model: state.model,
+                    key: ctx.location,
+                    error:
+                        err instanceof GptRequestError
+                            ? err
+                            : new GptRequestError('Unhandled internal error', {
+                                  cause: err,
+                              }),
+                })
+            );
+            throw err;
         }
-
-        return {
-            response,
-        };
     },
 });
 
-const exec = makePipelineFunction({
+const exec = makeCachedFunction({
     name: 'exec',
     type: 'deterministic',
     inputSchema: promptInputSchema
@@ -179,11 +206,11 @@ function removeFunctionFromState(
     });
 }
 
-export const prompt = makePipelineFunction({
+export const prompt = makeCachedFunction({
     name: 'prompt',
     inputSchema: promptInputSchema,
     resultSchema: promptResultSchema,
-    transform: async (opts, persistence) => {
+    transform: async (opts, ctx) => {
         const initialState = () => {
             const messages: Message[] = [
                 opts.preface && {
@@ -232,7 +259,7 @@ export const prompt = makePipelineFunction({
                                     choices: opts.choices,
                                 }),
                             },
-                            persistence
+                            ctx
                         );
 
                         const unique = new Map(
@@ -285,7 +312,7 @@ export const prompt = makePipelineFunction({
                                 functionCall: lastMessage.functionCall,
                                 functionsConfig: opts.functionsConfig,
                             },
-                            persistence
+                            ctx
                         );
 
                         return {

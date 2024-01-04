@@ -1,11 +1,11 @@
 import { AbortError } from '../errors/abortError';
 import { line } from '../text/line';
-import type { PipelineState } from './state';
+import type { CacheState } from './state';
 import { getPipelineState } from './state';
-import type { PipelineStateRef } from './types';
+import type { CacheStateRef } from './types';
 
-export function abortPipeline(stateRef: PipelineStateRef) {
-    const state = getPipelineState(stateRef);
+export function abortPipeline(ctx: CacheStateRef) {
+    const state = getPipelineState(ctx);
     if (state) {
         state.isAborted = true;
     } else {
@@ -21,7 +21,7 @@ export function abortPipeline(stateRef: PipelineStateRef) {
 /**
  * @internal
  */
-export function verifyIsNotAborted(state: PipelineState) {
+export function verifyIsNotAborted(state: CacheState) {
     if (state.isAborted) {
         throw new AbortError(`Pipeline has been aborted by the user`);
     }

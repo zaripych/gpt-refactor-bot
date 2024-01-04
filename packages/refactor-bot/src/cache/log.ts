@@ -1,13 +1,13 @@
 import { relative } from 'path';
 
 import { CycleDetectedError } from '../errors/cycleDetectedError';
-import { getPipelineState, type PipelineState } from './state';
-import type { PipelineStateRef } from './types';
+import { type CacheState, getPipelineState } from './state';
+import type { CacheStateRef } from './types';
 
 export function verifyExecutedOnce(opts: {
     key: string;
     name: string;
-    state: PipelineState;
+    state: CacheState;
     type: 'non-deterministic' | 'deterministic';
 }) {
     if (opts.type === 'non-deterministic') {
@@ -31,12 +31,12 @@ export function verifyExecutedOnce(opts: {
     }
 }
 
-export function addToExecutionLog(opts: { state: PipelineState; key: string }) {
+export function addToExecutionLog(opts: { state: CacheState; key: string }) {
     opts.state.log.push(opts.key);
 }
 
-export function logExecutionLog(stateRef: PipelineStateRef) {
-    const state = getPipelineState(stateRef);
+export function logExecutionLog(ctx: CacheStateRef) {
+    const state = getPipelineState(ctx);
     if (state) {
         state.deps.logger.debug(
             `Execution log:`,

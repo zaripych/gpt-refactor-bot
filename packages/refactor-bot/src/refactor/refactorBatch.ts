@@ -3,17 +3,18 @@ import { z } from 'zod';
 import { AbortError } from '../errors/abortError';
 import { CycleDetectedError } from '../errors/cycleDetectedError';
 import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
+import { dispatch } from '../event-bus';
 import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
 import { logger } from '../logger/logger';
-import { makePipelineFunction } from '../pipeline/makePipelineFunction';
+import { acceptedEdit } from './actions/acceptedEdit';
+import { discardedEdit } from './actions/discardedEdit';
 import { scriptSchema } from './check';
 import { refactorFile } from './refactorFile';
 import type { RefactorFileResult, RefactorFilesResult } from './types';
 import {
     pushRefactorFileResults,
     refactorConfigSchema,
-    refactorFilesResultSchema,
     refactorResultSchema,
 } from './types';
 
@@ -44,113 +45,109 @@ export const refactorBatchInputSchema = refactorConfigSchema
         scripts: z.array(scriptSchema),
     });
 
-export const refactorBatch = makePipelineFunction({
-    name: 'batch',
-    inputSchema: refactorBatchInputSchema,
-    resultSchema: refactorFilesResultSchema,
-    transform: async (input, persistence) => {
-        const { plannedFiles } = input;
+export const refactorBatch = async (
+    input: z.input<typeof refactorBatchInputSchema>,
+    deps = { dispatch }
+) => {
+    const { plannedFiles } = await refactorBatchInputSchema.parseAsync(input);
 
-        const shouldAcceptResult =
-            input.shouldAcceptResult ??
-            ((result) =>
-                result.status === 'success' && Boolean(result.lastCommit));
+    const shouldAcceptResult =
+        input.shouldAcceptResult ??
+        ((result) => result.status === 'success' && Boolean(result.lastCommit));
 
-        const accepted: RefactorFilesResult['accepted'] = {};
-        const discarded: RefactorFilesResult['discarded'] = {};
+    const accepted: RefactorFilesResult['accepted'] = {};
+    const discarded: RefactorFilesResult['discarded'] = {};
 
-        for (const filePath of plannedFiles) {
-            const beforeRefactorCommit = await gitRevParse({
-                location: input.sandboxDirectoryPath,
-                ref: 'HEAD',
-            });
+    for (const filePath of plannedFiles) {
+        const beforeRefactorCommit = await gitRevParse({
+            location: input.sandboxDirectoryPath,
+            ref: 'HEAD',
+        });
 
-            const { file } = await refactorFile(
-                {
+        const { file } = await refactorFile({
+            filePath,
+            ...input,
+        }).catch((err) => {
+            if (
+                err instanceof AbortError &&
+                !(err instanceof CycleDetectedError) &&
+                !(err instanceof OutOfContextBoundsError)
+            ) {
+                return Promise.reject(err);
+            }
+
+            /**
+             * @note this is temporary, ideally the refactorFile
+             * function should not throw and return a failure result
+             */
+            return {
+                file: {
+                    status: 'failure',
+                    failureDescription:
+                        err instanceof Error ? err.message : String(err),
                     filePath,
-                    ...input,
+                    issues: [],
+                    steps: [],
+                    timestamp: performance.now(),
                 },
-                persistence
-            ).catch((err) => {
-                if (
-                    err instanceof AbortError &&
-                    !(err instanceof CycleDetectedError) &&
-                    !(err instanceof OutOfContextBoundsError)
-                ) {
-                    return Promise.reject(err);
-                }
+            } as RefactorFileResult;
+        });
 
-                /**
-                 * @note this is temporary, ideally the refactorFile
-                 * function should not throw and return a failure result
-                 */
-                return {
-                    file: {
-                        status: 'failure',
-                        failureDescription:
-                            err instanceof Error ? err.message : String(err),
-                        filePath,
-                        issues: [],
-                        steps: [],
-                        timestamp: performance.now(),
-                    },
-                } as RefactorFileResult;
-            });
+        const shouldAccept = await Promise.resolve(shouldAcceptResult(file));
 
-            const shouldAccept = await Promise.resolve(
-                shouldAcceptResult(file)
-            );
-
-            if (shouldAccept) {
-                if (file.lastCommit) {
-                    const currentCommit = await gitRevParse({
-                        location: input.sandboxDirectoryPath,
-                        ref: 'HEAD',
-                    });
-
-                    if (currentCommit !== file.lastCommit) {
-                        logger.info('Resetting to', file.lastCommit);
-
-                        await gitResetHard({
-                            location: input.sandboxDirectoryPath,
-                            ref: file.lastCommit,
-                        });
-                    }
-                }
-                pushRefactorFileResults({
-                    into: accepted,
-                    result: file,
-                });
-            } else {
+        if (shouldAccept) {
+            if (file.lastCommit) {
                 const currentCommit = await gitRevParse({
                     location: input.sandboxDirectoryPath,
                     ref: 'HEAD',
                 });
 
-                if (currentCommit !== beforeRefactorCommit) {
-                    logger.warn(
-                        'Resetting to previous commit',
-                        beforeRefactorCommit
-                    );
+                if (currentCommit !== file.lastCommit) {
+                    logger.info('Resetting to', file.lastCommit);
 
                     await gitResetHard({
                         location: input.sandboxDirectoryPath,
-                        ref: beforeRefactorCommit,
-                    });
-                }
-
-                if (file.status === 'failure') {
-                    pushRefactorFileResults({
-                        into: discarded,
-                        result: file,
+                        ref: file.lastCommit,
                     });
                 }
             }
-        }
+            pushRefactorFileResults({
+                into: accepted,
+                result: file,
+            });
 
-        return {
-            accepted,
-            discarded,
-        };
-    },
-});
+            deps.dispatch(acceptedEdit(file));
+        } else {
+            const currentCommit = await gitRevParse({
+                location: input.sandboxDirectoryPath,
+                ref: 'HEAD',
+            });
+
+            if (currentCommit !== beforeRefactorCommit) {
+                logger.warn(
+                    'Resetting to previous commit',
+                    beforeRefactorCommit
+                );
+
+                await gitResetHard({
+                    location: input.sandboxDirectoryPath,
+                    ref: beforeRefactorCommit,
+                });
+            }
+
+            if (file.status === 'failure') {
+                pushRefactorFileResults({
+                    into: discarded,
+                    result: file,
+                });
+            }
+
+            deps.dispatch(discardedEdit(file));
+        }
+    }
+
+    return {
+        accepted,
+        discarded,
+    };
+};

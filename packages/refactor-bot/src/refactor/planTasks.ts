@@ -2,9 +2,9 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { z } from 'zod';
 
+import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { gitFilesDiff } from '../git/gitFilesDiff';
 import { markdown } from '../markdown/markdown';
-import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { format } from '../text/format';
 import { isTruthy } from '../utils/isTruthy';
 import { determineModelParameters } from './determineModelParameters';
@@ -149,11 +149,11 @@ const planTasksPromptText = (opts: {
         }
     );
 
-export const planTasks = makePipelineFunction({
+export const planTasks = makeCachedFunction({
     name: 'tasks',
     inputSchema: planTasksInputSchema,
     resultSchema: planTasksResultSchema,
-    transform: async (input, persistence): Promise<PlanTasksResponse> => {
+    transform: async (input, ctx): Promise<PlanTasksResponse> => {
         const userPrompt = planTasksPromptText({
             objective: input.objective,
             fileContents: await readFile(
@@ -178,9 +178,9 @@ export const planTasks = makePipelineFunction({
                     tsConfigJsonFileName: input.tsConfigJsonFileName,
                     allowedFunctions: input.allowedFunctions,
                 },
-                ...determineModelParameters(input, persistence),
+                ...determineModelParameters(input, ctx),
             },
-            persistence
+            ctx
         );
 
         const tasksRegex = /^\s*\d+\.\s*([^\n]+)\s*/gm;

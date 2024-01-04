@@ -1,10 +1,10 @@
 import assert from 'assert';
 import { z } from 'zod';
 
+import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { diffHash } from '../git/diffHash';
 import { filesDiffHash } from '../git/filesDiffHash';
 import { runCheckCommand } from '../package-manager/runCheckCommand';
-import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import type { CheckIssuesResult, Issue, RefactorConfig } from './types';
 import { checkIssuesResultSchema } from './types';
 
@@ -37,7 +37,7 @@ const checkInputSchema = z
               })),
     }));
 
-export const check = makePipelineFunction({
+export const check = makeCachedFunction({
     name: 'check',
     type: 'deterministic',
     inputSchema: checkInputSchema,
