@@ -1,9 +1,7 @@
 import { z } from 'zod';
 
 import { CycleDetectedError } from '../errors/cycleDetectedError';
-import { dispatch } from '../event-bus';
 import { logger } from '../logger/logger';
-import { planFilesComplete } from './actions/planFilesComplete';
 import { scriptSchema } from './check';
 import { planFiles, planFilesResultSchema } from './planFiles';
 import { refactorBatch } from './refactorBatch';
@@ -30,8 +28,7 @@ export const planAndRefactorResultSchema = refactorFilesResultSchema.merge(
 );
 
 export const planAndRefactor = async (
-    input: z.input<typeof planAndRefactorInputSchema>,
-    deps = { dispatch }
+    input: z.input<typeof planAndRefactorInputSchema>
 ) => {
     const files: RefactorFilesResult = {
         accepted: {},
@@ -41,9 +38,6 @@ export const planAndRefactor = async (
     const planFilesResults: Array<z.output<typeof planFilesResultSchema>> = [];
 
     const planResult = await planFiles(input);
-
-    // The above function is cached, so we need to dispatch the result here
-    deps.dispatch(planFilesComplete(planResult));
 
     planFilesResults.push({
         plannedFiles: [...planResult.plannedFiles],
@@ -89,9 +83,6 @@ export const planAndRefactor = async (
             }
             return Promise.reject(err);
         });
-
-        // The above function is cached, so we need to dispatch the result here
-        deps.dispatch(planFilesComplete(repeatedPlanResult));
 
         plannedFiles.splice(
             0,

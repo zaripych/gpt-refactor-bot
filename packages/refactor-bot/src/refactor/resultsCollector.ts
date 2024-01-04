@@ -8,10 +8,10 @@ import { ofTypes } from '../event-bus/operators';
 import { ensureHasOneElement, hasOneElement } from '../utils/hasOne';
 import { UnreachableError } from '../utils/UnreachableError';
 import { acceptedEdit } from './actions/acceptedEdit';
-import { checkoutComplete } from './actions/checkoutComplete';
+import { checkoutSandboxCompleted } from './actions/checkoutSandboxCompleted';
 import { discardedEdit } from './actions/discardedEdit';
 import { gptRequestSuccess } from './actions/gptRequestSuccess';
-import { planFilesComplete } from './actions/planFilesComplete';
+import { planFilesCompleted } from './actions/planFilesCompleted';
 import type { checkoutSandboxResultSchema } from './checkoutSandbox';
 import type { planFilesResultSchema } from './planFiles';
 import type { RefactorFilesResult } from './types';
@@ -70,10 +70,10 @@ export function resultsCollector(deps = { actions }) {
         .actions()
         .pipe(
             ofTypes(
-                checkoutComplete,
+                checkoutSandboxCompleted,
                 acceptedEdit,
                 discardedEdit,
-                planFilesComplete,
+                planFilesCompleted,
                 gptRequestSuccess,
                 executionTiming
             )
@@ -81,7 +81,7 @@ export function resultsCollector(deps = { actions }) {
         .subscribe({
             next: (event) => {
                 switch (event.type) {
-                    case 'checkoutComplete':
+                    case 'checkoutSandboxCompleted':
                         checkoutResults.push(event.data);
                         break;
                     case 'acceptedEdit':
@@ -100,7 +100,7 @@ export function resultsCollector(deps = { actions }) {
                             into: files.discarded,
                         });
                         break;
-                    case 'planFilesComplete':
+                    case 'planFilesCompleted':
                         planFilesResults.push(event.data);
                         break;
                     case 'gptRequestSuccess':

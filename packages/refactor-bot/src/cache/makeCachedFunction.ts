@@ -3,6 +3,7 @@ import { defer, lastValueFrom } from 'rxjs';
 import type { TypeOf } from 'zod';
 import { z } from 'zod';
 
+import type { ActionCreatorWithSchema } from '../event-bus';
 import { declareActionWithSchema } from '../event-bus';
 import { ofTypes } from '../event-bus/operators';
 import { captureStackTrace } from '../utils/captureStackTrace';
@@ -10,6 +11,11 @@ import { kebabCaseToLowerCamelCase } from '../utils/lowerCamelCaseToKebabCase';
 import { defaultDeps } from './dependencies';
 import { makeCachedObservable } from './makeCachedObservable';
 import type { CacheStateRef, SupportedZodSchemas } from './types';
+
+type KebabCaseToLowerCamelCase<T extends string> =
+    T extends `${infer A}-${infer B}`
+        ? `${Lowercase<A>}${Capitalize<KebabCaseToLowerCamelCase<B>>}`
+        : Lowercase<T>;
 
 /**
  * Creates a cached pipeline function.
@@ -29,11 +35,12 @@ import type { CacheStateRef, SupportedZodSchemas } from './types';
  * {@link createCachedPipeline} function and passing configuration parameters.
  */
 export function makeCachedFunction<
+    const Key extends string,
     InputSchema extends SupportedZodSchemas,
     OutputSchema extends SupportedZodSchemas,
 >(
     opts: {
-        name?: string;
+        name?: Key;
         type?: 'deterministic' | 'non-deterministic';
         enableCache?: boolean;
         inputSchema: InputSchema;
@@ -49,9 +56,12 @@ export function makeCachedFunction<
     },
     deps = defaultDeps
 ): {
-    name: string;
     inputSchema: InputSchema;
     resultSchema: OutputSchema;
+    completedEvent: ActionCreatorWithSchema<
+        `${KebabCaseToLowerCamelCase<Key>}Completed`,
+        OutputSchema
+    >;
     (
         input: z.input<InputSchema> & {
             attempt?: number;
@@ -61,10 +71,13 @@ export function makeCachedFunction<
 } {
     const fnName = kebabCaseToLowerCamelCase(opts.name ?? opts.transform.name);
 
-    const resultEvent = declareActionWithSchema(
-        fnName + 'Result',
+    const completedEvent = declareActionWithSchema(
+        fnName + 'Completed',
         opts.resultSchema
-    );
+    ) as ActionCreatorWithSchema<
+        `${KebabCaseToLowerCamelCase<Key>}Completed`,
+        OutputSchema
+    >;
 
     const cachedObservable = makeCachedObservable(
         {
@@ -72,7 +85,7 @@ export function makeCachedFunction<
             name: opts.name ?? opts.transform.name,
             type: opts.type,
             inputSchema: opts.inputSchema,
-            eventSchema: [resultEvent.schema],
+            eventSchema: [completedEvent.schema],
             captureStackTrace: false,
             cachedEventsSchema: (item) =>
                 z.array(item).refine((items) => {
@@ -82,7 +95,7 @@ export function makeCachedFunction<
                                 typeof item === 'object' &&
                                 item &&
                                 'type' in item &&
-                                item.type === resultEvent.type
+                                item.type === completedEvent.type
                         )
                     ) {
                         return false;
@@ -92,7 +105,7 @@ export function makeCachedFunction<
             factory: (input, ctx) =>
                 defer(async () => {
                     const result = await opts.transform(input, ctx);
-                    return resultEvent(result);
+                    return completedEvent(result);
                 }),
         },
         deps
@@ -108,7 +121,7 @@ export function makeCachedFunction<
             const capture = captureStackTrace();
             try {
                 const result = await lastValueFrom(
-                    cachedObservable(...args).pipe(ofTypes(resultEvent))
+                    cachedObservable(...args).pipe(ofTypes(completedEvent))
                 );
                 assert('data' in result);
                 return result.data as TypeOf<OutputSchema>;
@@ -129,5 +142,6 @@ export function makeCachedFunction<
         type: opts.type,
         inputSchema: opts.inputSchema,
         resultSchema: opts.resultSchema,
+        completedEvent,
     });
 }

@@ -33,11 +33,28 @@ export type ActionCreator<T, P> = P extends void
           (data: P): Action<T, P>;
       };
 
+export type ActionCreatorWithSchema<T, Schema extends z.ZodType<unknown>> = {
+    type: T;
+    schema: z.ZodObject<
+        {
+            type: z.ZodLiteral<T>;
+            data: Schema;
+        },
+        'passthrough' | 'strict' | 'strip',
+        z.ZodTypeAny,
+        {
+            type: T;
+            data: z.output<Schema>;
+        }
+    >;
+    (data: z.input<Schema>): Action<T, z.output<Schema>>;
+};
+
 export type TypeOfAction<T> = T extends Action<infer U, unknown>
     ? U
     : T extends ActionCreator<infer U, unknown>
-    ? U
-    : never;
+      ? U
+      : never;
 
 export type ActionOfCreator<T> = T extends AnyActionCreator
     ? ReturnType<T>

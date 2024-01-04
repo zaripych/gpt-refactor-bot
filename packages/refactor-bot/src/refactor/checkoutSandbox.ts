@@ -18,7 +18,6 @@ import { installDependencies } from '../package-manager/installDependencies';
 import { runPackageManagerScript } from '../package-manager/runPackageManagerScript';
 import { createSandbox, sandboxLocation } from '../sandbox/createSandbox';
 import { ensureTruthy } from '../utils/isTruthy';
-import { checkoutComplete } from './actions/checkoutComplete';
 import { refactorConfigSchema } from './types';
 
 export const checkoutSandboxInputSchema = refactorConfigSchema
@@ -60,7 +59,7 @@ export const checkoutSandbox = makeCachedFunction({
     name: 'checkout-sandbox',
     inputSchema: checkoutSandboxInputSchema,
     resultSchema: checkoutSandboxResultSchema,
-    transform: async (config, ctx) => {
+    transform: async (config) => {
         const root = await findRepositoryRoot();
 
         const { sandboxId, sandboxDirectoryPath } = sandboxLocation({
@@ -180,8 +179,6 @@ export const checkoutSandbox = makeCachedFunction({
             defaultBranch: ensureTruthy(defaultBranch),
             sandboxDirectoryPath,
         };
-
-        ctx.dispatch(checkoutComplete(result));
 
         return result;
     },

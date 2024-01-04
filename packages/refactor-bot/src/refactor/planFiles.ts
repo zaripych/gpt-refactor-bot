@@ -96,7 +96,7 @@ const planFilesPromptText = (objective: string) =>
     );
 
 export const planFiles = makeCachedFunction({
-    name: 'plan',
+    name: 'plan-files',
     inputSchema: planFilesInputSchema,
     resultSchema: planFilesResultSchema,
     transform: async (input, ctx): Promise<PlanFilesResponse> => {
