@@ -99,10 +99,7 @@ export const refactorConfigSchema = z.object({
     /**
      * A map of step codes to models to use for that step
      */
-    modelByStepCode: z.record(modelsSchema).optional().default({
-        '**/enrich*': 'gpt-4',
-        '**/plan*': 'gpt-4',
-    }),
+    modelByStepCode: z.record(modelsSchema).optional().default({}),
 
     /**
      * Whether to use a more expensive model when a step fails due

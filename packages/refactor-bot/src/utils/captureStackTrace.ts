@@ -1,19 +1,33 @@
 /**
- * Capture the stack trace and allow to enrich exceptions thrown in asynchronous callbacks
- * with additional stack information captured at the moment of the call of this function
+ * Capture the stack trace and allow to enrich exceptions thrown in asynchronous
+ * callbacks with additional stack information captured at the moment of the
+ * call of this function
  */
-export function captureStackTrace(remove = 0) {
+export function captureStackTrace(opts?: {
+    enabled?: boolean;
+    remove?: number;
+    limit?: number;
+}) {
+    const enabled = opts?.enabled ?? true;
+    const remove = opts?.remove ?? 0;
+    const limit = opts?.limit ?? 3;
     const stackContainer = {
         stack: '',
     };
-    Error.captureStackTrace(stackContainer);
+
+    if (enabled) {
+        Error.captureStackTrace(stackContainer);
+    }
 
     const stackTrace = stackContainer.stack
         .split('\n')
-        .slice(3 + remove)
+        .slice(3 + remove, 3 + remove + limit)
         .join('\n');
 
     const prepareForRethrow = (err: Error) => {
+        if (!enabled) {
+            return err;
+        }
         const oldStackTrace = (err.stack ?? '').split('\n').slice(1).join('\n');
         Object.assign(err, {
             stack: [
@@ -33,13 +47,13 @@ export function captureStackTrace(remove = 0) {
          */
         stackTrace,
         /**
-         * Can be called in asynchronous callback to enrich exceptions with additional information
-         * @param err Exception to enrich - it is going to have its `.stack` prop mutated
+         * Can be called in asynchronous callback to enrich exceptions with
+         * additional information
+         *
+         * @param err Exception to enrich - it is going to have its `.stack`
+         * prop mutated
          * @returns Same exception
          */
         prepareForRethrow,
-        rethrow: (err: Error) => {
-            return Promise.reject(prepareForRethrow(err));
-        },
     };
 }

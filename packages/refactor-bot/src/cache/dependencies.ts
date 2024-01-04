@@ -3,6 +3,7 @@ import { globby } from 'globby';
 import { dump as dumpYaml, load as loadYaml } from 'js-yaml';
 import hash from 'object-hash';
 
+import { actions, dispatch } from '../event-bus';
 import { logger } from '../logger/logger';
 
 export const defaultDeps = {
@@ -26,6 +27,8 @@ export const defaultDeps = {
     unlink,
     rm,
     rename,
+    dispatch,
+    actions,
 
     defaultSaveInput: true,
 };

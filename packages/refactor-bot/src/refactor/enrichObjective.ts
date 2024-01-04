@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
+import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { markdown } from '../markdown/markdown';
-import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { format } from '../text/format';
 import { determineModelParameters } from './determineModelParameters';
 import { prompt } from './prompt';
@@ -62,11 +62,11 @@ const enrichPromptText = (originalObjective: string) =>
         { originalObjective }
     );
 
-export const enrichObjective = makePipelineFunction({
+export const enrichObjective = makeCachedFunction({
     name: 'enrich-objective',
     inputSchema: enrichObjectiveInputSchema,
     resultSchema: enrichObjectiveResultSchema,
-    transform: async (input, persistence): Promise<EnrichObjectiveResponse> => {
+    transform: async (input, ctx): Promise<EnrichObjectiveResponse> => {
         const userPrompt = enrichPromptText(input.objective);
 
         const { choices } = await prompt(
@@ -81,9 +81,9 @@ export const enrichObjective = makePipelineFunction({
                     tsConfigJsonFileName: input.tsConfigJsonFileName,
                     allowedFunctions: input.allowedFunctions,
                 },
-                ...determineModelParameters(input, persistence),
+                ...determineModelParameters(input, ctx),
             },
-            persistence
+            ctx
         );
 
         return {

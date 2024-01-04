@@ -1,88 +1,65 @@
 import { join } from 'path';
 
+import { createCachedPipeline } from '../cache/state';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { gitCheckoutNewBranch } from '../git/gitCheckoutNewBranch';
 import { gitFetch } from '../git/gitFetch';
 import { gitForceCreateBranch } from '../git/gitForceCreateBranch';
 import { gitRevParse } from '../git/gitRevParse';
 import { logger } from '../logger/logger';
-import { abortPipeline } from '../pipeline/abort';
-import { cleanCache } from '../pipeline/cache';
-import { logExecutionLog } from '../pipeline/log';
-import { startPipeline } from '../pipeline/startPipeline';
 import { randomText } from '../utils/randomText';
 import { checkoutSandbox } from './checkoutSandbox';
 import { enrichObjective } from './enrichObjective';
 import { refactorGoal } from './refactorGoal';
+import { resultsCollector } from './resultsCollector';
 import { retrieveParameters } from './retrieveParameters';
 import { type RefactorConfig } from './types';
 
 const createPipeline = (opts: {
-    //
     location: string;
-    saveResult: boolean;
-}) => {
-    const state = startPipeline({
+    saveToCache: boolean;
+    enableCacheFor?: string[];
+}) =>
+    createCachedPipeline({
         location: opts.location,
-        saveInput: true,
-        saveResult: opts.saveResult,
+        enableCacheFor: opts.enableCacheFor,
+        saveToCache: opts.saveToCache,
+        pipeline: async (input: RefactorConfig) => {
+            const checkoutResult = await checkoutSandbox(input);
+
+            const retrieveParametersResult = await retrieveParameters({
+                ...input,
+                ...checkoutResult,
+            });
+
+            const enrichObjectiveResult = await enrichObjective({
+                ...input,
+                ...checkoutResult,
+                ...retrieveParametersResult,
+            });
+
+            const refactorResult = await refactorGoal({
+                ...input,
+                ...checkoutResult,
+                ...retrieveParametersResult,
+                ...enrichObjectiveResult,
+                objective: enrichObjectiveResult.enrichedObjective,
+            });
+
+            return {
+                ...input,
+                ...checkoutResult,
+                ...retrieveParametersResult,
+                ...enrichObjectiveResult,
+                ...refactorResult,
+            };
+        },
     });
-
-    return {
-        start: async (input: RefactorConfig) => {
-            try {
-                const checkoutResult = await checkoutSandbox(input, state);
-
-                const retrieveParametersResult = await retrieveParameters(
-                    {
-                        ...input,
-                        ...checkoutResult,
-                    },
-                    state
-                );
-
-                const enrichObjectiveResult = await enrichObjective(
-                    {
-                        ...input,
-                        ...checkoutResult,
-                        ...retrieveParametersResult,
-                    },
-                    state
-                );
-
-                const refactorResult = await refactorGoal(
-                    {
-                        ...input,
-                        ...checkoutResult,
-                        ...retrieveParametersResult,
-                        ...enrichObjectiveResult,
-                        objective: enrichObjectiveResult.enrichedObjective,
-                    },
-                    state
-                );
-
-                await cleanCache(state);
-
-                return {
-                    ...input,
-                    ...checkoutResult,
-                    ...retrieveParametersResult,
-                    ...enrichObjectiveResult,
-                    ...refactorResult,
-                };
-            } finally {
-                logExecutionLog(state);
-            }
-        },
-        abort: () => {
-            abortPipeline(state);
-        },
-    };
-};
 
 async function loadRefactorState(opts: {
     config: RefactorConfig;
     saveToCache?: boolean;
+    enableCacheFor?: string[];
 }) {
     const root = await findRepositoryRoot();
 
@@ -97,7 +74,8 @@ async function loadRefactorState(opts: {
     return {
         ...createPipeline({
             location,
-            saveResult: opts.saveToCache ?? true,
+            saveToCache: opts.saveToCache ?? true,
+            enableCacheFor: opts.enableCacheFor,
         }),
         location,
         id: opts.config.id,
@@ -107,21 +85,53 @@ async function loadRefactorState(opts: {
 export async function refactor(opts: {
     config: RefactorConfig;
     saveToCache?: boolean;
+    enableCacheFor?: string[];
 }) {
-    const { start, abort, id } = await loadRefactorState(opts);
+    if (
+        opts.enableCacheFor &&
+        opts.enableCacheFor.filter(Boolean).length === 0
+    ) {
+        throw new Error('enableCacheFor cannot be empty');
+    }
+
+    const { execute, abort, id } = await loadRefactorState(opts);
 
     logger.info(
         `Starting refactor with id "${id}", process id: "${process.pid}"`
     );
 
+    let numberOfInterrupts = 0;
     process.on('SIGINT', () => {
+        logger.info('Received SIGINT ... aborting');
+
         abort();
+
+        numberOfInterrupts += 1;
+
+        if (numberOfInterrupts > 5) {
+            console.log('Forcefully exiting');
+            process.exit(1);
+        }
     });
 
-    const result = await start({
-        ...opts.config,
-        id,
-    });
+    const { teardown, finalizeResults } = resultsCollector();
+
+    let error: Error | undefined = undefined;
+    try {
+        await execute({
+            ...opts.config,
+            id,
+        });
+    } catch (exc) {
+        if (!(exc instanceof Error)) {
+            throw exc;
+        }
+        error = exc;
+    } finally {
+        teardown();
+    }
+
+    const result = finalizeResults(error);
 
     const lastCommit = await gitRevParse({
         location: result.sandboxDirectoryPath,
@@ -132,14 +142,14 @@ export async function refactor(opts: {
         lastCommit !== result.startCommit &&
         Object.keys(result.accepted).length > 0
     ) {
-        const successBranch = `refactor-bot/${opts.config.name}-${result.id}`;
+        const successBranch = `refactor-bot/${opts.config.name}-${id}`;
 
         await gitCheckoutNewBranch({
             location: result.sandboxDirectoryPath,
             branchName: successBranch,
         });
 
-        if (!result.repository) {
+        if (!opts.config.repository) {
             const localRoot = await findRepositoryRoot();
 
             await gitFetch({
@@ -153,12 +163,12 @@ export async function refactor(opts: {
                 branchName: successBranch,
                 ref: 'FETCH_HEAD',
             });
-        }
 
-        return {
-            ...result,
-            successBranch,
-        };
+            return {
+                ...result,
+                successBranch,
+            };
+        }
     }
 
     return {

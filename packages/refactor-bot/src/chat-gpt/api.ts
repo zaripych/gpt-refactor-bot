@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import type zodToJsonSchema from 'zod-to-json-schema';
 
+import {
+    GptRequestError,
+    type GptResponseInfo,
+} from '../errors/gptRequestError';
 import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
 import { RateLimitExceededError } from '../errors/rateLimitExceeded';
 import { ensureHasOneElement } from '../utils/hasOne';
@@ -138,22 +142,28 @@ export const responseSchema = z.object({
 
 export type Response = z.infer<typeof responseSchema>;
 
-const errorResponseShape = z.object({
-    error: z.object({
-        message: z.string().optional(),
-        type: z.string().optional(),
-        param: z.string().optional(),
-        code: z.string().transform(
-            (code) =>
-                code as
-                    | 'context_length_exceeded'
-                    | 'rate_limit_exceeded'
-                    | (string & {
-                          _brand?: 'unknown';
-                      })
-        ),
-    }),
-});
+const errorResponseShape = z
+    .object({
+        error: z
+            .object({
+                message: z.string().optional(),
+                type: z.string().optional(),
+                param: z.string().optional(),
+                code: z.string().transform(
+                    (code) =>
+                        code as
+                            | 'context_length_exceeded'
+                            | 'rate_limit_exceeded'
+                            | (string & {
+                                  _brand?: 'unknown';
+                              })
+                ),
+            })
+            .passthrough(),
+    })
+    .passthrough();
+
+export type ErrorResponse = z.infer<typeof errorResponseShape>;
 
 const messageToInternal = (message: Message): MessageShape =>
     'functionCall' in message
@@ -207,7 +217,7 @@ const pricing = {
     Record<Models, { perKTokenInput: number; perKTokenOutput: number }>
 >;
 
-export function estimatePriceCents(
+export function estimatePrice(
     opts: Pick<Opts, 'functions' | 'messages' | 'model'>
 ): number {
     const inputTokens = opts.messages.reduce(
@@ -237,14 +247,14 @@ export function estimatePriceCents(
         throw new Error(`Unknown model ${model}`);
     }
 
-    return ((inputTokens / 1000) * price.perKTokenInput) / 100;
+    return (inputTokens / 1000) * price.perKTokenInput;
 }
 
-export function calculatePriceCents(
+export function calculatePrice(
     opts: Response & {
         model: Models;
     }
-): number {
+) {
     const model = opts.model;
 
     const pricingModels = Object.keys(pricing);
@@ -268,11 +278,15 @@ export function calculatePriceCents(
         throw new Error(`Unknown model ${model}`);
     }
 
-    const total =
-        (opts.usage.promptTokens / 1000) * price.perKTokenInput +
+    const promptPrice = (opts.usage.promptTokens / 1000) * price.perKTokenInput;
+    const completionPrice =
         (opts.usage.completionTokens / 1000) * price.perKTokenInput;
 
-    return total / 100;
+    return {
+        totalPrice: promptPrice + completionPrice,
+        promptPrice,
+        completionPrice,
+    };
 }
 
 export async function chatCompletions(opts: Opts): Promise<Response> {
@@ -309,42 +323,82 @@ export async function chatCompletions(opts: Opts): Promise<Response> {
             }),
         } satisfies BodyShape),
         signal: opts.abortSignal,
+    }).catch((err) => {
+        throw new GptRequestError(
+            `Failed to fetch OpenAI chat completions API`,
+            {
+                cause: err,
+            }
+        );
     });
 
     if (!response.ok) {
+        const info: Omit<GptResponseInfo, 'text' | 'json'> = {
+            url: response.url,
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries()),
+        };
         if (
             response.headers.get('content-type')?.startsWith('application/json')
         ) {
             const result = errorResponseShape.safeParse(await response.json());
             if (result.success) {
+                const jsonInfo = {
+                    ...info,
+                    json: result.data,
+                };
                 switch (result.data.error.code) {
                     case 'context_length_exceeded':
                         throw new OutOfContextBoundsError(
-                            result.data.error.message ?? 'Out of context bounds'
+                            result.data.error.message ??
+                                'Out of context bounds',
+                            {
+                                model,
+                                response: jsonInfo,
+                            }
                         );
                     case 'rate_limit_exceeded':
                         throw new RateLimitExceededError(
-                            result.data.error.message ?? 'Rate limit exceeded'
+                            result.data.error.message ?? 'Rate limit exceeded',
+                            {
+                                model,
+                                response: jsonInfo,
+                            }
                         );
                     default:
-                        throw new Error(
-                            `Unknown OpenAI API error: ${
-                                result.data.error.code
-                            }\n${
-                                result.data.error.message ??
-                                JSON.stringify(result.data.error, undefined, 2)
-                            }`
+                        throw new GptRequestError(
+                            `Unknown OpenAI API error: ${result.data.error.code}`,
+                            {
+                                model,
+                                response: jsonInfo,
+                            }
                         );
                 }
             }
         }
         const text = await response.text().catch(() => '');
-        throw new Error(
-            `Failed to fetch chat completions: ${response.statusText}\n${text}`
+        throw new GptRequestError(
+            `Failed to fetch chat completions: ${response.statusText}`,
+            {
+                model,
+                response: {
+                    ...info,
+                    text,
+                },
+            }
         );
     }
 
-    const data = (await response.json()) as ResponseShape;
+    const data = (await response.json().catch((err) => {
+        throw new GptRequestError(
+            `Failed to fetch OpenAI chat completions response as JSON`,
+            {
+                model,
+                cause: err,
+            }
+        );
+    })) as ResponseShape;
 
     return {
         id: data.id,

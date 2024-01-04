@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
+import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { diffHash } from '../git/diffHash';
 import { markdown } from '../markdown/markdown';
-import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { format } from '../text/format';
 import { determineModelParameters } from './determineModelParameters';
 import { validateAndParseListOfFiles } from './parsers/validateAndParseListOfFiles';
@@ -46,7 +46,7 @@ export const planFilesResultSchema = z.object({
      * When the list of files is empty, this field contains a short reasoning
      * provided by the bot.
      */
-    reasoning: z.string().optional(),
+    rawResponse: z.string(),
 });
 
 export type PlanFilesResponse = z.infer<typeof planFilesResultSchema>;
@@ -89,16 +89,17 @@ const planFilesPromptText = (objective: string) =>
             #. \`path/to/another/file.ts\`
 
             The number of each entry must be followed by a period. Do not prefix
-            the list of files with any text.
+            the list of files with any text. Follow it with short sentence of
+            reasoning why editing is required.
         `,
         { objective }
     );
 
-export const planFiles = makePipelineFunction({
-    name: 'plan',
+export const planFiles = makeCachedFunction({
+    name: 'plan-files',
     inputSchema: planFilesInputSchema,
     resultSchema: planFilesResultSchema,
-    transform: async (input, persistence): Promise<PlanFilesResponse> => {
+    transform: async (input, ctx): Promise<PlanFilesResponse> => {
         const plannedFilesResult = await prompt(
             {
                 preface: systemPrompt,
@@ -119,9 +120,9 @@ export const planFiles = makePipelineFunction({
                     });
                     return true as const;
                 },
-                ...determineModelParameters(input, persistence),
+                ...determineModelParameters(input, ctx),
             },
-            persistence
+            ctx
         );
 
         const plannedFiles = await validateAndParseListOfFiles({
@@ -137,12 +138,11 @@ export const planFiles = makePipelineFunction({
                   )
                 : plannedFiles;
 
-        return {
+        const result = {
             plannedFiles: filesRequiredToEdit,
-            ...(filesRequiredToEdit.length === 0 && {
-                reasoning:
-                    plannedFilesResult.choices[0].resultingMessage.content,
-            }),
+            rawResponse: plannedFilesResult.choices[0].resultingMessage.content,
         };
+
+        return result;
     },
 });

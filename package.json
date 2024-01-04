@@ -24,7 +24,7 @@
         "@types/yargs": "17.0.24",
         "globby": "14.0.0",
         "refactor-bot": "workspace:*",
-        "tsx": "4.6.2",
+        "tsx": "4.7.0",
         "utility-types": "3.10.0"
     },
     "packageManager": "pnpm@8.9.0",

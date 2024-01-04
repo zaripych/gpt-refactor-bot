@@ -1,12 +1,12 @@
 import { join } from 'path';
 
-import type { PipelineState } from './state';
+import type { CacheState } from './state';
 
 export function determineKey(opts: {
     validatedInput: unknown;
     name: string;
     location?: string;
-    state: PipelineState;
+    state: CacheState;
 }): {
     valueHash: string;
     key: string;

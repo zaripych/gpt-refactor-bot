@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
+import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { markdown } from '../markdown/markdown';
-import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import { format } from '../text/format';
 import { determineModelParameters } from './determineModelParameters';
 import { validateAndParseListOfFiles } from './parsers/validateAndParseListOfFiles';
@@ -77,11 +77,11 @@ const listFilesToEditPromptText = (objective: string) =>
         }
     );
 
-export const retrieveParameters = makePipelineFunction({
+export const retrieveParameters = makeCachedFunction({
     name: 'retrieve-parameters',
     inputSchema: retrieveParametersInputSchema,
     resultSchema: retrieveParametersResultSchema,
-    transform: async (input, persistence) => {
+    transform: async (input, ctx) => {
         const allowedFilesResult = await prompt(
             {
                 preface: systemPrompt,
@@ -97,7 +97,7 @@ export const retrieveParameters = makePipelineFunction({
                      */
                     allowedFunctions: [],
                 },
-                ...determineModelParameters(input, persistence),
+                ...determineModelParameters(input, ctx),
                 shouldStop: async (message) => {
                     await validateAndParseListOfFiles({
                         sandboxDirectoryPath: input.sandboxDirectoryPath,
@@ -107,7 +107,7 @@ export const retrieveParameters = makePipelineFunction({
                     return true as const;
                 },
             },
-            persistence
+            ctx
         );
 
         const filesToEdit = await validateAndParseListOfFiles({

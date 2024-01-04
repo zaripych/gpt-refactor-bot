@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'fs/promises';
 import { globby } from 'globby';
+import orderBy from 'lodash-es/orderBy';
 import { basename, dirname } from 'path';
 import prompts from 'prompts';
 import { z } from 'zod';
@@ -12,6 +13,7 @@ import { glowFormat } from '../markdown/glowFormat';
 import { markdown } from '../markdown/markdown';
 import { goToEndOfFile } from '../prompt/editor';
 import { format } from '../text/format';
+import { line } from '../text/line';
 import { hasOneElement } from '../utils/hasOne';
 import { loadRefactorConfigs } from './loadRefactors';
 import { refactor } from './refactor';
@@ -358,9 +360,9 @@ const currentRepositoryFailedRefactoringReport = async (
 const currentRepositoryPlanningEmptyReasonReport = async (
     opts: RefactorResult
 ) => {
-    const { planning, sandboxDirectoryPath } = opts;
+    const { planFilesResults, sandboxDirectoryPath } = opts;
 
-    const emptyPlanReason = planning[0]?.reasoning || '';
+    const emptyPlanReason = planFilesResults[0]?.rawResponse || '';
 
     return format(
         await glowFormat({
@@ -393,10 +395,183 @@ const currentRepositoryPlanningEmptyReasonReport = async (
     );
 };
 
+const unhandledErrorReport = async (opts: { error: Error }) => {
+    console.log(
+        await glowFormat({
+            input: format(
+                markdown`
+                    # Unhandled error
+
+                    ~~~
+                    %errorDetails%
+                    ~~~
+                `,
+                {
+                    errorDetails: formatObject(extractErrorInfo(opts.error), {
+                        indent: '',
+                    }),
+                }
+            ),
+        })
+    );
+};
+
+const configurationErrorReport = async (opts: {
+    error: ConfigurationError;
+}) => {
+    console.log(
+        await glowFormat({
+            input: format(
+                markdown`
+                    # Configuration error
+
+                    %errorMessage%
+
+                    ~~~
+                    %errorDetails%
+                    ~~~
+                `,
+                {
+                    errorMessage: opts.error.message,
+                    errorDetails: formatObject(extractErrorInfo(opts.error), {
+                        indent: '',
+                    }),
+                }
+            ),
+        })
+    );
+};
+
+const analyticsReport = async (opts: {
+    result: Awaited<ReturnType<typeof refactor>>;
+    costs: boolean;
+    performance: boolean;
+}) => {
+    if (opts.costs) {
+        const total = opts.result.costsByStep.total.totalPrice;
+        const costs = Object.entries(opts.result.costsByStep)
+            .map(([step, costs]) => ({
+                step,
+                costs,
+            }))
+            .filter((data) => data.step !== 'total' && data.step !== 'unknown');
+
+        const orderedCosts = orderBy(costs, ['costs.totalPrice'], ['desc']);
+
+        const warning =
+            total === 0
+                ? '\n' +
+                  line`
+                      **NOTE** The costs cannot be collected if we cache high
+                      level steps. Try running the refactor with following
+                      options: \`--enable-cache-for chat exec check auto-fix\`
+                  `
+                : ``;
+
+        console.log(
+            await glowFormat({
+                input: format(
+                    markdown`
+                        # Cost
+
+                        Total cost: %total% USD
+
+                        %costByStep%
+
+                        %warning%
+                    `,
+                    {
+                        total: total.toFixed(3),
+                        costByStep: orderedCosts
+                            .filter(
+                                /**
+                                 * Exclude low level steps which are used by all
+                                 * other steps
+                                 */
+                                (data) =>
+                                    !['prompt', 'chat', 'edit'].includes(
+                                        data.step
+                                    )
+                            )
+                            .map((data) =>
+                                format(`- %step% - %price% USD`, {
+                                    step: data.step.padEnd(20, ' '),
+                                    price: data.costs.totalPrice.toFixed(3),
+                                })
+                            )
+                            .join('\n'),
+                        warning,
+                    }
+                ),
+            })
+        );
+    }
+
+    if (opts.performance) {
+        const perf = opts.result.performance;
+
+        const perfEntries = Object.entries(perf.durationByStep)
+            .map(([step, data]) => ({
+                step,
+                duration: data.duration,
+            }))
+            .filter((data) => data.step !== 'total' && data.step !== 'unknown');
+
+        const orderedDurations = orderBy(perfEntries, ['duration'], ['desc']);
+
+        console.log(
+            await glowFormat({
+                input: format(
+                    markdown`
+                        # Performance
+
+                        Duration: %totalDuration%
+
+                        %durationByStep%
+                    `,
+                    {
+                        totalDuration:
+                            (perf.totalDuration / 1000).toFixed(3) + ' sec',
+
+                        measuredDuration:
+                            (perf.durationByStep.total.duration / 1000).toFixed(
+                                3
+                            ) + ' sec',
+
+                        durationByStep: orderedDurations
+                            .filter(
+                                /**
+                                 * Exclude low level steps which are used by all
+                                 * other steps
+                                 */
+                                (data) =>
+                                    !['prompt', 'chat', 'edit'].includes(
+                                        data.step
+                                    )
+                            )
+                            .map((data) =>
+                                format(`- %step% - %duration%`, {
+                                    step: data.step.padEnd(20, ' '),
+                                    duration:
+                                        (data.duration / 1000).toFixed(3) +
+                                        ' sec',
+                                })
+                            )
+                            .join('\n'),
+                    }
+                ),
+            })
+        );
+    }
+};
+
 export async function runRefactor(opts: {
     id?: string;
     name?: string;
     saveToCache?: boolean;
+    enableCacheFor?: string[];
+    costs?: boolean;
+    performance?: boolean;
     //
 }) {
     try {
@@ -410,67 +585,44 @@ export async function runRefactor(opts: {
         const result = await refactor({
             config,
             saveToCache: opts.saveToCache,
+            enableCacheFor: opts.enableCacheFor,
         });
 
-        if (!result.repository) {
-            if (result.successBranch) {
-                console.log(await currentRepositoryRefactoringReport(result));
-            } else {
-                if (result.planning[0]?.plannedFiles.length === 0) {
-                    console.log(
-                        await currentRepositoryPlanningEmptyReasonReport(result)
-                    );
-                } else {
-                    console.log(
-                        await currentRepositoryFailedRefactoringReport(result)
-                    );
-                }
+        if (result.status === 'failure') {
+            await unhandledErrorReport({
+                error: result.error,
+            });
+        }
+
+        if (result.successBranch) {
+            console.log(await currentRepositoryRefactoringReport(result));
+        } else {
+            if (result.planFilesResults[0]?.plannedFiles.length === 0) {
+                console.log(
+                    await currentRepositoryPlanningEmptyReasonReport(result)
+                );
+            } else if (Object.keys(result.discarded).length > 0) {
+                console.log(
+                    await currentRepositoryFailedRefactoringReport(result)
+                );
             }
         }
-    } catch (err) {
-        if (err instanceof ConfigurationError) {
-            console.log(
-                await glowFormat({
-                    input: format(
-                        markdown`
-                            # Configuration error
-
-                            %errorMessage%
-
-                            ~~~
-                            %errorDetails%
-                            ~~~
-                        `,
-                        {
-                            errorMessage: err.message,
-                            errorDetails: formatObject(extractErrorInfo(err), {
-                                indent: '',
-                            }),
-                        }
-                    ),
-                })
-            );
-        } else if (err instanceof Error) {
-            console.log(
-                await glowFormat({
-                    input: format(
-                        markdown`
-                            # Unhandled error
-
-                            ~~~
-                            %errorDetails%
-                            ~~~
-                        `,
-                        {
-                            errorDetails: formatObject(extractErrorInfo(err), {
-                                indent: '',
-                            }),
-                        }
-                    ),
-                })
-            );
+        await analyticsReport({
+            result,
+            costs: opts.costs ?? true,
+            performance: opts.performance ?? true,
+        });
+    } catch (error) {
+        if (error instanceof ConfigurationError) {
+            await configurationErrorReport({
+                error,
+            });
+        } else if (error instanceof Error) {
+            await unhandledErrorReport({
+                error,
+            });
         } else {
-            throw err;
+            throw error;
         }
     }
 }

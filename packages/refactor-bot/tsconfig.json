@@ -2,7 +2,8 @@
     "extends": "@repka-kit/ts/configs/tsconfig.base.json",
     "compilerOptions": {
         "outDir": ".tsc-out",
-        "tsBuildInfoFile": ".tsc-out/.tsbuildinfo"
+        "tsBuildInfoFile": ".tsc-out/.tsbuildinfo",
+        "noErrorTruncation": true
     },
     "include": ["src/**/*.ts", "src/ts-morph/builtinLibs.cjs"]
 }

@@ -4,6 +4,7 @@ import orderBy from 'lodash-es/orderBy';
 import { basename, join } from 'path';
 import { z } from 'zod';
 
+import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { AbortError } from '../errors/abortError';
 import { CycleDetectedError } from '../errors/cycleDetectedError';
 import { gitDiffRange } from '../git/gitDiffRange';
@@ -12,7 +13,6 @@ import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
 import { logger } from '../logger/logger';
 import { determinePackageManager } from '../package-manager/determinePackageManager';
-import { makePipelineFunction } from '../pipeline/makePipelineFunction';
 import type { IdentifierChange } from '../ts-morph/quick-info/changeInfo';
 import { changeInfo } from '../ts-morph/quick-info/changeInfo';
 import { ensureHasOneElement, hasTwoElements } from '../utils/hasOne';
@@ -156,11 +156,11 @@ function fixLocalIssuesPromptText(opts: {
         .join('\n\n');
 }
 
-export const refactorFile = makePipelineFunction({
+export const refactorFile = makeCachedFunction({
     name: 'file',
     inputSchema: refactorFileInputSchema,
     resultSchema: refactorFileResultSchema,
-    transform: async (input, persistence) => {
+    transform: async (input, ctx) => {
         const { filePath, sandboxDirectoryPath } = input;
 
         const packageManager = await determinePackageManager({
@@ -185,7 +185,7 @@ export const refactorFile = makePipelineFunction({
                 filePaths: [filePath],
                 scripts: input.scripts,
             },
-            persistence
+            ctx
         );
         if (initialCheck.issues.length > 0) {
             throw new AbortError(
@@ -309,20 +309,22 @@ export const refactorFile = makePipelineFunction({
                         objective,
                         fileContents,
                     },
-                    persistence
+                    ctx
                 );
 
                 const editResult = choices[0];
 
                 if (editResult.status !== 'success') {
                     if (issues.length > 0) {
+                        const file = {
+                            status: 'failure' as const,
+                            failureDescription:
+                                'The model has failed to fix the issues in the file',
+                            ...buildResult(),
+                        };
+
                         return {
-                            file: {
-                                status: 'failure' as const,
-                                failureDescription:
-                                    'The model has failed to fix the issues in the file',
-                                ...buildResult(),
-                            },
+                            file,
                         };
                     }
                     continue;
@@ -358,7 +360,7 @@ export const refactorFile = makePipelineFunction({
                         startCommit: input.startCommit,
                         scripts: input.scripts,
                     },
-                    persistence
+                    ctx
                 );
 
                 const checkSummary = checksSummary({
@@ -500,11 +502,13 @@ export const refactorFile = makePipelineFunction({
             }
         } while (issues.length > 0);
 
+        const file = {
+            status: 'success' as const,
+            ...buildResult(),
+        };
+
         return {
-            file: {
-                status: 'success' as const,
-                ...buildResult(),
-            },
+            file,
         };
     },
 });

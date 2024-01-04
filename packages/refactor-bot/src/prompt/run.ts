@@ -14,9 +14,9 @@ import type {
     Response,
 } from '../chat-gpt/api';
 import {
-    calculatePriceCents,
+    calculatePrice,
     chatCompletions,
-    estimatePriceCents,
+    estimatePrice,
 } from '../chat-gpt/api';
 import { spawnResult } from '../child-process/spawnResult';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
@@ -254,7 +254,7 @@ export const run = async (opts: {
 
     const watcher = createWatcher();
 
-    let totalCents = 0;
+    let totalPrice = 0;
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -270,13 +270,11 @@ export const run = async (opts: {
                 );
             }
 
-            const price = (
-                estimatePriceCents({
-                    model: opts.model ?? 'gpt-3.5-turbo',
-                    messages: convo.messages,
-                    functions,
-                }) * 100
-            ).toFixed(4);
+            const price = estimatePrice({
+                model: opts.model ?? 'gpt-3.5-turbo',
+                messages: convo.messages,
+                functions,
+            }).toFixed(4);
 
             await oraPromise(watcher.watchForChangesOnce(conversationFile), {
                 text: spinner.text || text.watchingSpinnerText(price),
@@ -313,10 +311,10 @@ export const run = async (opts: {
                     text: text.requestingSpinnerText,
                 }
             );
-            totalCents += calculatePriceCents({
+            totalPrice += calculatePrice({
                 model: opts.model ?? 'gpt-3.5-turbo',
                 ...response,
-            });
+            }).totalPrice;
 
             if (response.choices.length > 1) {
                 throw new Error(line`
@@ -354,7 +352,7 @@ export const run = async (opts: {
             }
         }
 
-        await printMarkdown(text.totalSpend((totalCents * 100).toFixed(4)));
+        await printMarkdown(text.totalSpend(totalPrice.toFixed(4)));
 
         if (isManual) {
             let result = await promptForNextAction(
