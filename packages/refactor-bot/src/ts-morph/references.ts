@@ -13,7 +13,15 @@ export async function references(
     config: FunctionsConfig,
     args: Args
 ): Promise<Array<FileReferences>> {
-    const initialRefs = await languageServiceReferences(project, config, args);
+    const initialRefs = await languageServiceReferences(project, config, {
+        ...args,
+        /**
+         * If we filter out files at this stage we might accidentally
+         * filter out node-builtin references, which we want to keep, so
+         * we filter them out later at the end
+         */
+        includeFilePaths: undefined,
+    });
 
     /**
      * This workaround is required as node builtins cause references to only
@@ -44,12 +52,23 @@ export async function references(
                     module: moduleName,
                     alreadyFoundFiles: initialRefs,
                 });
-                return Array.from(result.values()).map((entry) => entry);
+                return Array.from(result.values())
+                    .filter(
+                        (entry) =>
+                            !args.includeFilePaths ||
+                            args.includeFilePaths.includes(entry.filePath)
+                    )
+                    .map((entry) => entry);
             }
         }
     }
 
     const finalResult = Array.from(initialRefs.values())
+        .filter(
+            (entry) =>
+                !args.includeFilePaths ||
+                args.includeFilePaths.includes(entry.filePath)
+        )
         .map((entry) => entry)
         .filter((entry) => !entry.isInNodeModules);
 

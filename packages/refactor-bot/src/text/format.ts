@@ -72,13 +72,9 @@ export function format(
                 }
             }
 
-            result =
-                before.trimEnd() +
-                beforeWhitespace +
-                afterWhitespace +
-                after.trimStart();
-
-            regexp.lastIndex = before.length;
+            const newBefore = before.trimEnd() + beforeWhitespace;
+            result = newBefore + afterWhitespace + after.trimStart();
+            regexp.lastIndex = newBefore.length;
         } else {
             result = before + value + after;
             regexp.lastIndex = before.length + value.length;
