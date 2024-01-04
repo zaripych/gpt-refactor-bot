@@ -13,7 +13,7 @@
         "@changesets/cli": "2.26.2",
         "@jest/globals": "29.7.0",
         "@refactor-bot/changeset-changelog": "workspace:*",
-        "@repka-kit/ts": "1.0.6",
+        "@repka-kit/ts": "0.0.0-snap-20240104134538",
         "@types/diff": "^5.0.3",
         "@types/js-yaml": "4.0.5",
         "@types/lodash-es": "4.17.7",

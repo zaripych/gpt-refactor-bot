@@ -1,7 +1,6 @@
 {
     "name": "refactor-bot",
     "version": "0.0.0-development",
-    "private": true,
     "description": "refactor-bot --help",
     "type": "module",
     "bin": {
