@@ -12,19 +12,13 @@ functions API based on `ts-morph` that allows it to extract TypeScript specific
 information from the codebase. This deeper insight into the codebase allows the
 CLI to perform more complex refactoring tasks that span across multiple files.
 
-## Installation
+# Installation
 
 ```
 pnpm add refactor-bot
 ```
 
-# Run the CLI:
-
-```
-pnpm refactor-bot --help
-```
-
-## Installation from source
+## From source
 
 Don't you want to tinker with the code yourself? Off-course you do. Then you can
 install the CLI from source, and it should be quite easy to do so - no build
@@ -49,7 +43,11 @@ pnpm add tsx
 pnpm refactor-bot --help
 ```
 
-## Usage
+# Run the CLI:
+
+```
+pnpm refactor-bot --help
+```
 
 Create `.env` file in current directory:
 
