@@ -1,7 +1,6 @@
 {
     "name": "refactor-bot",
     "version": "0.0.0-development",
-    "private": true,
     "description": "refactor-bot --help",
     "type": "module",
     "bin": {
@@ -63,5 +62,9 @@
     "packageManager": "pnpm@8.9.0",
     "engines": {
         "node": "18"
+    },
+    "publishConfig": {
+        "directory": "dist",
+        "linkDirectory": false
     }
 }

@@ -5,7 +5,6 @@
     "description": "Refactor your codebase using ChatGPT, ts-morph and Plan and Execute techniques",
     "type": "module",
     "scripts": {
-        "ci:version": "changeset version && pnpm install",
         "refactor-bot-bundled": "node ./packages/refactor-bot/dist/bin/refactor-bot.mjs"
     },
     "dependencies": {},
@@ -13,7 +12,7 @@
         "@changesets/cli": "2.26.2",
         "@jest/globals": "29.7.0",
         "@refactor-bot/changeset-changelog": "workspace:*",
-        "@repka-kit/ts": "1.0.6",
+        "@repka-kit/ts": "1.0.8",
         "@types/diff": "^5.0.3",
         "@types/js-yaml": "4.0.5",
         "@types/lodash-es": "4.17.7",

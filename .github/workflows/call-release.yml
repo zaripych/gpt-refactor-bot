@@ -41,7 +41,7 @@ jobs:
               run: |
                   set -eu
 
-                  package_json_path="./packages/build-tools/ts/package.json"
+                  package_json_path="./packages/refactor-bot/package.json"
 
                   # Change package.json version to create snapshot
                   pnpm changeset version --snapshot snap
@@ -54,17 +54,14 @@ jobs:
                       echo "Found changes in package.json"
                   fi
 
-                  pnpm -r --filter @repka-kit/ts... "/build:tools|declarations/"
+                  pnpm -r --filter refactor-bot... "/build|declarations/"
 
                   echo "snapshot-version=$(jq -r .version $package_json_path)" >> \
                     "$GITHUB_OUTPUT"
 
-                  # Dry run publish to print files to be published
                   pnpm publish \
                     -r --no-git-checks --tag snap \
-                    --access public --dry-run
-
-                  pnpm changeset publish --no-git-tag --tag snap
+                    --access public
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -92,8 +89,8 @@ jobs:
               with:
                   commit: 'chore: update versions'
                   title: 'chore: update versions'
-                  version: pnpm run ci:version
-                  publish: pnpm publish -r --access public --no-git-checks --dry-run
+                  version: pnpm changeset version && pnpm install
+                  publish: pnpm publish -r --access public --no-git-checks
               env:
                   # @note Using Personal Access Token here to ensure
                   # the creation of the PR triggers Checks workflows
