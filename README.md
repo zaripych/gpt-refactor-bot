@@ -138,6 +138,9 @@ happening.
 
 ![Example output](https://media.githubusercontent.com/media/zaripych/gpt-refactor-bot/main/.refactor-bot/refactors/replace-read-file-sync/example-report.png 'Example output')
 
+For more information about how refactoring works see
+[./DOCUMENTATION.md](https://github.com/zaripych/gpt-refactor-bot/blob/main/DOCUMENTATION.md).
+
 ## Expectations
 
 -   Source code is TypeScript
