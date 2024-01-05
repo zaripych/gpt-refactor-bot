@@ -3,6 +3,20 @@
     "version": "0.0.0-development",
     "private": true,
     "description": "Refactor your codebase using ChatGPT, ts-morph and Plan and Execute techniques",
+    "keywords": [
+        "gpt",
+        "refactor",
+        "TypeScript",
+        "ts",
+        "monorepo",
+        "LLM",
+        "OpenAI"
+    ],
+    "license": "MIT",
+    "author": {
+        "name": "Rinat Zaripov",
+        "url": "https://github.com/zaripych"
+    },
     "type": "module",
     "scripts": {
         "refactor-bot-bundled": "node ./packages/refactor-bot/dist/bin/refactor-bot.mjs"
