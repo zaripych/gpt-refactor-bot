@@ -59,9 +59,12 @@ jobs:
                   echo "snapshot-version=$(jq -r .version $package_json_path)" >> \
                     "$GITHUB_OUTPUT"
 
+                  # Dry run publish to print files to be published
                   pnpm publish \
                     -r --no-git-checks --tag snap \
-                    --access public
+                    --access public --dry-run
+
+                  pnpm changeset publish --no-git-tag --tag snap
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -89,7 +92,7 @@ jobs:
               with:
                   commit: 'chore: update versions'
                   title: 'chore: update versions'
-                  publish: pnpm publish -r --access public --no-git-checks
+                  publish: pnpm changeset publish
               env:
                   # @note Using Personal Access Token here to ensure
                   # the creation of the PR triggers Checks workflows
