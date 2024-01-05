@@ -1,5 +1,11 @@
 # refactor-bot
 
+## 0.0.1
+
+### Patch Changes
+
+-   [`1666830`](https://github.com/zaripych/gpt-refactor-bot/commit/1666830c524a80f8811d6f55bc643420f28368b4) Thanks [@zaripych](https://github.com/zaripych)! - docs: updated the README.md to make them compatible with npm
+
 ## 0.0.0
 
 ### Patch Changes
