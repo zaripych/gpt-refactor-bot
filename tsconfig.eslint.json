@@ -11,5 +11,5 @@
         "outDir": ".tsc-out",
         "tsBuildInfoFile": ".tsc-out/.tsbuildinfo"
     },
-    "include": ["*.ts"]
+    "include": ["*.ts", "packages/*/*.ts"]
 }
