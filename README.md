@@ -26,6 +26,10 @@ pnpm refactor-bot --help
 
 ## Installation from source
 
+Don't you want to tinker with the code yourself? Off-course you do. Then you can
+install the CLI from source, and it should be quite easy to do so - no build
+process is required. It will just run TypeScript.
+
 ```
 git clone git@github.com:zaripych/gpt-refactor-bot.git
 ```
@@ -38,7 +42,7 @@ pnpm install
 cd ../your-project-repository pnpm add --save-dev
 file://../refactor-bot/packages/refactor-bot
 
-# Use `tsx` to run refactor-bot TypeScript code directly
+# Use `tsx` to run refactor-bot TypeScript code directly without building it
 pnpm add tsx
 
 # Run the CLI:
