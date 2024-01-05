@@ -98,7 +98,7 @@ After creating the `goal` description file, we can run the CLI again with the
 name of the file to start the process.
 
 ```sh
-npx refactor-bot refactor --name xx-yy-zz
+pnpm refactor-bot refactor --name xx-yy-zz
 ```
 
 Refactoring is considered a success if none of the changed files lead to
