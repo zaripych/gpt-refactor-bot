@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { expect, it } from '@jest/globals';
+import { expect, it, jest } from '@jest/globals';
 import { globby } from 'globby';
 
 import { startInterpreterRpc } from '../../rpc/startInterpreterRpc';
@@ -25,6 +25,12 @@ const cases = new Map(
         )
     )
 );
+
+/**
+ * Experiencing timeouts on CI, so increasing timeout to see if this is just
+ * slow CI or something else.
+ */
+jest.setTimeout(10_000);
 
 it.concurrent.each([...cases.entries()])(
     'should work for %s case',
