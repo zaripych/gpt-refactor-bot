@@ -89,8 +89,8 @@ jobs:
               with:
                   commit: 'chore: update versions'
                   title: 'chore: update versions'
-                  version: pnpm run ci:version
-                  publish: pnpm publish -r --access public --no-git-checks --dry-run
+                  version: pnpm changeset version && pnpm install
+                  publish: pnpm publish -r --access public --no-git-checks
               env:
                   # @note Using Personal Access Token here to ensure
                   # the creation of the PR triggers Checks workflows

@@ -5,7 +5,6 @@
     "description": "Refactor your codebase using ChatGPT, ts-morph and Plan and Execute techniques",
     "type": "module",
     "scripts": {
-        "ci:version": "changeset version && pnpm install",
         "refactor-bot-bundled": "node ./packages/refactor-bot/dist/bin/refactor-bot.mjs"
     },
     "dependencies": {},
