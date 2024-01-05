@@ -58,7 +58,7 @@ OPENAI_API_KEY="your-key"
 Supports commands at the moment:
 
 ```sh
-pnpm refactor-bot <command>
+➜  pnpm refactor-bot <command>
 
 Commands:
   pnpm refactor-bot prompt      Sends a prompt to the ChatGPT API to generate a
@@ -80,11 +80,20 @@ Options:
 Performs a refactoring using Plan and Execute technique
 
 Options:
-  --help     Show help                                                 [boolean]
-  --version  Show version number                                       [boolean]
-  --name     Name of the refactoring to run                             [string]
-  --id       Unique id of the refactoring that was previously run but didn't fin
-             ish to start from last successful point                    [string]
+  --help              Show help                                        [boolean]
+  --version           Show version number                              [boolean]
+  --name              Name of the refactoring to run                    [string]
+  --id                Unique id of the refactoring that was previously run but d
+                      idn't finish to start from last successful point  [string]
+  --save-to-cache     Whether to enable saving results to the cache, by default
+                      it's enabled                     [boolean] [default: true]
+  --enable-cache-for  Enable cache for specific steps only, can be useful if we
+                      want to disable cache for all other steps and replay them
+                                                                         [array]
+  --costs             Whether to print the total costs of OpenAI requests, by de
+                      fault it's disabled             [boolean] [default: false]
+  --performance       Whether to print performance metrics, by default it's disa
+                      bled                            [boolean] [default: false]
 ```
 
 At first it will create a file for you with description of the refactor. Open
@@ -98,7 +107,7 @@ After creating the `goal` description file, we can run the CLI again with the
 name of the file to start the process.
 
 ```sh
-pnpm refactor-bot refactor --name xx-yy-zz
+➜  pnpm refactor-bot refactor --name xx-yy-zz
 ```
 
 Refactoring is considered a success if none of the changed files lead to
