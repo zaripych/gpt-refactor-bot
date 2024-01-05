@@ -94,7 +94,7 @@ the file, edit it in your editor providing as much relevant information as you
 think is needed, then rerun the command.
 
 For an example,
-[have a look here](https://github.com/zaripych/refactor-bot/blob/5374a8381edb5b7adb431ff4847f826872221756/.refactor-bot/refactors/replace-read-file-sync/goal.md#L9).
+[have a look here](https://github.com/zaripych/gpt-refactor-bot/blob/main/.refactor-bot/refactors/replace-read-file-sync/goal.md?plain=1#L9).
 
 After creating the `goal` description file, we can run the CLI again with the
 name of the file to start the process.
@@ -136,7 +136,7 @@ it will start from the last successful step.
 Use `LOG_LEVEL=debug` environment variable to see more information about what's
 happening.
 
-![Example output](.refactor-bot/refactors/replace-read-file-sync/example-report.png?raw=true 'Example output')
+![Example output](https://media.githubusercontent.com/media/zaripych/gpt-refactor-bot/main/.refactor-bot/refactors/replace-read-file-sync/example-report.png 'Example output')
 
 ## Expectations
 
@@ -164,7 +164,7 @@ Select a file, and then you will be prompted to enter a message using your
 editor. Save the message with `---` at the end to send it.
 
 See example conversation at
-[`.refactor-bot/prompts/example-1.md`](.refactor-bot/prompts/example-1.md).
+[`.refactor-bot/prompts/example-1.md`](https://github.com/zaripych/gpt-refactor-bot/blob/main/.refactor-bot/prompts/example-1.md).
 
 ## Roadmap
 
@@ -242,7 +242,7 @@ it is only allowed to write TypeScript scripts, which are validated by rollup
 bundling procedure and allowed to access only `ts-morph` library. The use case
 for the interpreter is to allow the LLM to generate code which can perform
 advanced analytics or aggregation using `ts-morph` API. For an example, see
-[`.refactor-bot/prompts/example-5.md`](.refactor-bot/prompts/example-5.md).
+[`.refactor-bot/prompts/example-5.md`](https://github.com/zaripych/gpt-refactor-bot/blob/main/.refactor-bot/prompts/example-5.md).
 
 This capability is experimental and not exposed to the `refactor` command, but
 is available when `prompt` command is used.
