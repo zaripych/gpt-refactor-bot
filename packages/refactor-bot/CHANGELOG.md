@@ -1,5 +1,15 @@
 # refactor-bot
 
+## 0.0.2
+
+### Patch Changes
+
+-   [#12](https://github.com/zaripych/gpt-refactor-bot/pull/12) [`9131738`](https://github.com/zaripych/gpt-refactor-bot/commit/9131738de755f931fb02b21167bd500ff5ecf05c) Thanks [@zaripych](https://github.com/zaripych)! - fix: sanitize results of the function calls when they fail removing full paths to repository
+
+-   [#12](https://github.com/zaripych/gpt-refactor-bot/pull/12) [`9131738`](https://github.com/zaripych/gpt-refactor-bot/commit/9131738de755f931fb02b21167bd500ff5ecf05c) Thanks [@zaripych](https://github.com/zaripych)! - fix: default to gpt-3.5-turbo-1106 in the config
+
+-   [#12](https://github.com/zaripych/gpt-refactor-bot/pull/12) [`9131738`](https://github.com/zaripych/gpt-refactor-bot/commit/9131738de755f931fb02b21167bd500ff5ecf05c) Thanks [@zaripych](https://github.com/zaripych)! - fix: fail at the start of the refactor when prettier cannot be found
+
 ## 0.0.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
     "name": "refactor-bot",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "Refactor your codebase using ChatGPT, ts-morph and Plan and Execute techniques",
     "keywords": [
         "gpt",
