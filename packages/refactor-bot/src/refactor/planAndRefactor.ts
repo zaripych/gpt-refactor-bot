@@ -18,6 +18,7 @@ export const planAndRefactorInputSchema = refactorConfigSchema.augment({
     startCommit: z.string(),
     sandboxDirectoryPath: z.string(),
     scripts: z.array(scriptSchema),
+    prettierScriptLocation: z.string().optional(),
     filesToEdit: z.array(z.string()),
 });
 

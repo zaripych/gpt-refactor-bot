@@ -30,6 +30,7 @@ export const editInputSchema = refactorConfigSchema
         fileContents: z.string(),
         sandboxDirectoryPath: z.string(),
         eslintAutoFixScriptArgs: z.array(z.string()).nonempty().optional(),
+        prettierScriptLocation: z.string().optional(),
         choices: z.number().optional(),
     });
 
@@ -166,10 +167,11 @@ export const edit = makeCachedFunction({
                     const codeChunk = codeChunks[0];
 
                     const formattedCodeChunk = await prettierTypescript({
-                        prettierLocation: input.sandboxDirectoryPath,
+                        prettierScriptLocation: input.prettierScriptLocation,
                         repositoryRoot: input.sandboxDirectoryPath,
                         ts: codeChunk,
                     });
+
                     const eslintFixed = input.eslintAutoFixScriptArgs
                         ? (
                               await autoFixIssuesContents(

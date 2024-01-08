@@ -1,11 +1,13 @@
 import { z } from 'zod';
 
 import { ConfigurationError } from '../errors/configurationError';
+import { findRefactorBotPackageRoot } from '../file-system/findRefactorBotPackageRoot';
 import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
 import { gitStatus } from '../git/gitStatus';
 import { logger } from '../logger/logger';
 import { determinePackageManager } from '../package-manager/determinePackageManager';
+import { findPrettierScriptLocation } from '../prettier/prettier';
 import { line } from '../text/line';
 import { check, checkScriptsFromConfig } from './check';
 import { discoverCheckDependencies } from './discoverDependencies';
@@ -35,6 +37,31 @@ export const refactorGoal = async (
         throw new ConfigurationError(
             `Cannot find TypeScript dependencies in the repository, ` +
                 ` The refactor bot only supports TypeScript at the moment`
+        );
+    }
+
+    let prettierScriptLocation = await findPrettierScriptLocation({
+        location: input.sandboxDirectoryPath,
+    });
+    if (!prettierScriptLocation) {
+        prettierScriptLocation = await findPrettierScriptLocation({
+            location: findRefactorBotPackageRoot(),
+        });
+        if (!prettierScriptLocation) {
+            throw new Error(line`
+                Cannot find prettier script location, this might mean the
+                dependencies are not installed
+            `);
+        }
+        logger.warn(
+            line`
+                Cannot find prettier script location in the sandbox repository
+                root "${input.sandboxDirectoryPath}" - this means that we might
+                use a different version of prettier than the one used in the
+                sandbox repository. This can lead to unexpected formatting
+                changes. To fix this, please add prettier to the repository
+                dependencies before using the refactor-bot.
+            `
         );
     }
 
@@ -90,6 +117,7 @@ export const refactorGoal = async (
     const result = await planAndRefactor({
         ...input,
         scripts,
+        prettierScriptLocation,
     });
 
     await resetToLastAcceptedCommit({

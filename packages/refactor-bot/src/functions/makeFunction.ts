@@ -41,7 +41,7 @@ export const makeFunction = <
                     result
                 )) as unknown;
 
-                return sanitizeFunctionResult({
+                return await sanitizeFunctionResult({
                     result: validatedResult,
                     config,
                 });

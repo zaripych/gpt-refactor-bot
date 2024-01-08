@@ -48,6 +48,7 @@ export const refactorFileInputSchema = refactorConfigSchema
         startCommit: z.string(),
         sandboxDirectoryPath: z.string(),
         scripts: z.array(scriptSchema),
+        prettierScriptLocation: z.string().optional(),
     })
     .transform(async (input) => ({
         ...input,
@@ -202,6 +203,7 @@ export const refactorFile = makeCachedFunction({
             eslintAutoFixScriptArgs: input.scripts.find((script) =>
                 script.args.includes('eslint')
             )?.args,
+            prettierScriptLocation: input.prettierScriptLocation,
         };
 
         const advice: string[] = [];
