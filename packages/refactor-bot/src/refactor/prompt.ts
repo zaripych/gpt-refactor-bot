@@ -21,6 +21,7 @@ import { GptRequestError } from '../errors/gptRequestError';
 import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
 import { executeFunction } from '../functions/executeFunction';
 import { includeFunctions } from '../functions/includeFunctions';
+import { sanitizeFunctionResult } from '../functions/sanitizeFunctionResult';
 import { functionsConfigSchema } from '../functions/types';
 import { ensureHasOneElement } from '../utils/hasOne';
 import { isTruthy } from '../utils/isTruthy';
@@ -171,7 +172,10 @@ const exec = makeCachedFunction({
             return {
                 message: {
                     role: 'system' as const,
-                    content: e instanceof Error ? e.message : String(e),
+                    content: await sanitizeFunctionResult({
+                        result: e instanceof Error ? e.message : String(e),
+                        config: functionsConfig,
+                    }),
                 },
             };
         }

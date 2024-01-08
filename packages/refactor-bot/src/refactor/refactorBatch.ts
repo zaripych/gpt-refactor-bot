@@ -43,6 +43,7 @@ export const refactorBatchInputSchema = refactorConfigSchema
             )
             .optional(),
         scripts: z.array(scriptSchema),
+        prettierScriptLocation: z.string().optional(),
     });
 
 export const refactorBatch = async (

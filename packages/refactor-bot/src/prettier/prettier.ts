@@ -7,8 +7,9 @@ import { z } from 'zod';
 import { spawnResult } from '../child-process/spawnResult';
 import { findRefactorBotPackageRoot } from '../file-system/findRefactorBotPackageRoot';
 import { logger } from '../logger/logger';
+import { line } from '../text/line';
 
-async function findPrettierScriptLocation(opts: { location: string }) {
+export async function findPrettierScriptLocation(opts: { location: string }) {
     const { location } = opts;
 
     const npmPackage = join(location, 'node_modules', 'prettier');
@@ -32,9 +33,15 @@ async function findPrettierScriptLocation(opts: { location: string }) {
 
         return join(npmPackage, pkg.bin);
     } catch (err) {
-        throw new Error(`Could not find prettier package at "${npmPackage}"`, {
-            cause: err,
-        });
+        if (
+            typeof err === 'object' &&
+            err &&
+            'code' in err &&
+            err.code === 'ENOENT'
+        ) {
+            return undefined;
+        }
+        throw err;
     }
 }
 
@@ -47,16 +54,31 @@ const defaultDeps = {
 
 const prettierFormat = async (
     opts: {
-        prettierLocation?: string;
+        prettierScriptLocation?: string;
         repositoryRoot: string;
         input: string;
         filePath: string;
     },
     deps = defaultDeps
 ) => {
-    const scriptLocation = await findPrettierScriptLocation({
-        location: opts.prettierLocation ?? findRefactorBotPackageRoot(),
-    });
+    const scriptLocation = opts.prettierScriptLocation
+        ? opts.prettierScriptLocation
+        : (await findPrettierScriptLocation({
+              location: opts.repositoryRoot,
+          })) ||
+          (await findPrettierScriptLocation({
+              location: findRefactorBotPackageRoot(),
+          }));
+
+    if (!scriptLocation) {
+        throw new Error(
+            line`
+                Cannot find prettier script location in the sandbox repository
+                root "${opts.repositoryRoot}" or in the refactor-bot package
+                root "${findRefactorBotPackageRoot()}
+            `
+        );
+    }
 
     const child = spawn(
         process.execPath,
@@ -97,7 +119,7 @@ const prettierFormat = async (
 
 export async function prettierMarkdown(
     opts: {
-        prettierLocation?: string;
+        prettierScriptLocation?: string;
         repositoryRoot: string;
         filePath?: string;
         md: string;
@@ -107,7 +129,7 @@ export async function prettierMarkdown(
     return await prettierFormat(
         {
             filePath: opts.filePath ?? 'output.md',
-            prettierLocation: opts.prettierLocation,
+            prettierScriptLocation: opts.prettierScriptLocation,
             repositoryRoot: opts.repositoryRoot,
             input: opts.md,
         },
@@ -117,7 +139,7 @@ export async function prettierMarkdown(
 
 export async function prettierTypescript(
     opts: {
-        prettierLocation?: string;
+        prettierScriptLocation?: string;
         repositoryRoot: string;
         filePath?: string;
         ts: string;
@@ -127,7 +149,7 @@ export async function prettierTypescript(
     return await prettierFormat(
         {
             filePath: opts.filePath ?? 'output.ts',
-            prettierLocation: opts.prettierLocation,
+            prettierScriptLocation: opts.prettierScriptLocation,
             repositoryRoot: opts.repositoryRoot,
             input: opts.ts,
         },

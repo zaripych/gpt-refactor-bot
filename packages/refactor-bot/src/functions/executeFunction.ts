@@ -3,6 +3,7 @@ import { realpath } from 'fs/promises';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { logger } from '../logger/logger';
 import type { functions } from './registry';
+import { sanitizeFunctionResult } from './sanitizeFunctionResult';
 import type { FunctionsConfig } from './types';
 
 type FunctionNames = (typeof functions)[number]['name'];
@@ -67,19 +68,24 @@ export async function executeFunction(
         () => repositoryRoot
     );
 
+    const initializedConfig = {
+        ...config,
+        repositoryRoot: realRepositoryRoot,
+    };
+
     try {
-        return (await fn(opts.arguments as never, {
-            ...config,
-            repositoryRoot: realRepositoryRoot,
-        })) as object;
+        return (await fn(opts.arguments as never, initializedConfig)) as object;
     } catch (err: unknown) {
         if (err instanceof Error) {
             logger.debug(err);
-            return {
-                error: {
-                    message: err.message,
+            return await sanitizeFunctionResult({
+                result: {
+                    error: {
+                        message: err.message,
+                    },
                 },
-            };
+                config: initializedConfig,
+            });
         }
         throw err;
     }

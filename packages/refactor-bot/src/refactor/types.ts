@@ -94,7 +94,7 @@ export const refactorConfigSchema = z.object({
     /**
      * The default model to use for the refactor
      */
-    model: modelsSchema.optional().default('gpt-3.5-turbo'),
+    model: modelsSchema.optional().default('gpt-3.5-turbo-1106'),
 
     /**
      * A map of step codes to models to use for that step
@@ -110,6 +110,7 @@ export const refactorConfigSchema = z.object({
         .optional()
         .default({
             'gpt-3.5-turbo': 'gpt-4',
+            'gpt-3.5-turbo-1106': 'gpt-4-1106-preview',
         }),
 
     /**

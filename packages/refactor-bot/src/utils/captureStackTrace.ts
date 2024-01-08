@@ -9,7 +9,7 @@ export function captureStackTrace(opts?: {
     limit?: number;
 }) {
     const enabled = opts?.enabled ?? true;
-    const remove = opts?.remove ?? 0;
+    const remove = opts?.remove ?? 3;
     const limit = opts?.limit ?? 3;
     const stackContainer = {
         stack: '',
@@ -21,14 +21,14 @@ export function captureStackTrace(opts?: {
 
     const stackTrace = stackContainer.stack
         .split('\n')
-        .slice(3 + remove, 3 + remove + limit)
+        .slice(remove, remove + limit)
         .join('\n');
 
     const prepareForRethrow = (err: Error) => {
         if (!enabled) {
             return err;
         }
-        const oldStackTrace = (err.stack ?? '').split('\n').slice(1).join('\n');
+        const oldStackTrace = err.stack ?? '';
         Object.assign(err, {
             stack: [
                 oldStackTrace,
