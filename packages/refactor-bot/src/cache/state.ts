@@ -1,5 +1,4 @@
 import { AsyncLocalStorage } from 'async_hooks';
-import { relative } from 'path';
 
 import type { AnyAction } from '../event-bus';
 import { line } from '../text/line';
@@ -40,11 +39,26 @@ export type CacheState = {
     readonly saveToCache: boolean;
 
     /**
-     * Whether to load the cache for the given function or not, this allows us
-     * to disable the cache for certain functions only for debugging and testing
-     * purposes.
+     * Enable cache for specific steps - you can specify the name of the step
+     * or a name followed by a hash of the cache entry.
      */
     readonly enableCacheFor?: string[];
+
+    /**
+     * Disable cache for specific steps - you can specify the name of the step
+     * or a name followed by a hash of the cache entry.
+     */
+    readonly disableCacheFor?: string[];
+
+    /**
+     * For debugging purposes, if set to `true` the pipeline will ignore the
+     * hierarchy of the pipeline and will attempt to look for any cached
+     * entries in the cache store, regardless of the parent function.
+     *
+     * This is useful when we want to refactor function names or introduce new
+     * hierarchy, but also do not want to loose the cache state.
+     */
+    readonly internal_unboundCacheLookup?: boolean;
 
     /**
      * If set to `true` the pipeline will stop executing and throw
@@ -65,6 +79,7 @@ export const initializeCacheState = (
         saveToCache?: boolean;
         saveInput?: boolean;
         enableCacheFor?: string[];
+        disableCacheFor?: string[];
     },
     depsRaw: Partial<typeof defaultDeps> = defaultDeps
 ) => {
@@ -83,7 +98,7 @@ export const initializeCacheState = (
     let state = withSymbol?.[pipelineState];
 
     if (!state) {
-        const location = relative(process.cwd(), ctx?.location || '.');
+        const location = ctx?.location || '.';
 
         if (location) {
             logger.debug('Initializing new pipeline state', {
@@ -104,6 +119,8 @@ export const initializeCacheState = (
             log: [],
             saveToCache: ctx?.saveToCache ?? true,
             enableCacheFor: ctx?.enableCacheFor,
+            disableCacheFor: ctx?.disableCacheFor,
+            internal_unboundCacheLookup: false,
             deps,
         };
     }
@@ -142,6 +159,7 @@ export function createCachedPipeline<Input, Output>(opts: {
      * Location of the cache
      */
     location: string;
+
     /**
      * Whether to save the results of the pipeline to the cache or not, this
      * allows disabling modifications to the cache to ensure currently cached
@@ -151,27 +169,48 @@ export function createCachedPipeline<Input, Output>(opts: {
      * get the hit.
      */
     saveToCache: boolean;
+
     /**
-     * Whether to load the cache for the given function or not, this allows us
-     * to disable the cache for certain functions only for debugging and testing
-     * purposes.
+     * Enable cache for specific steps - you can specify the name of the step
+     * or a name followed by a hash of the cache entry.
      */
     enableCacheFor?: string[];
 
-    pipeline: (input: Input) => Promise<Output>;
+    /**
+     * Disable cache for specific steps - you can specify the name of the step
+     * or a name followed by a hash of the cache entry.
+     */
+    disableCacheFor?: string[];
+
+    /**
+     * Whether to clean the cache at the end of the execution or not, this is
+     * disabled by default
+     */
+    cleanCache?: boolean;
+
+    /**
+     * Whether to clean the root directory as well, or only the subdirectories
+     * that appeared in the log
+     */
+    cleanRoot?: boolean;
+
+    pipeline: (input: Input, ctx: CacheStateRef) => Promise<Output>;
 }) {
     const ctx = {
         location: opts.location,
         saveToCache: opts.saveToCache,
         enableCacheFor: opts.enableCacheFor,
+        disableCacheFor: opts.disableCacheFor,
     };
 
     initializeCacheState(ctx);
 
-    const executePipeline = async (input: Input) => {
+    const executePipeline = async (input: Input, ctx: CacheStateRef) => {
         try {
-            const result = await opts.pipeline(input);
-            await cleanCache(ctx);
+            const result = await opts.pipeline(input, ctx);
+            if (opts.cleanCache) {
+                await cleanCache({ cleanRoot: opts.cleanRoot ?? false }, ctx);
+            }
             return result;
         } finally {
             logExecutionLog(ctx);
@@ -180,7 +219,7 @@ export function createCachedPipeline<Input, Output>(opts: {
 
     const execute = async (input: Input) => {
         return asyncLocalStorage.run(ctx, () => {
-            return executePipeline(input);
+            return executePipeline(input, ctx);
         });
     };
 

@@ -53,7 +53,11 @@ export const check = makeCachedFunction({
         );
         return {
             location: opts.location,
-            issues: results.reduce((acc, result) => acc.concat(result), []),
+            commands: results.map((result) => result.args.join(' ')),
+            issues: results.reduce(
+                (acc, result) => acc.concat(result.issues),
+                [] as (typeof results)[number]['issues']
+            ),
             checkedFiles: opts.filePaths,
         };
     },
@@ -140,6 +144,7 @@ export const checksSummary = (opts: {
         newIssues,
         remainingIssues,
         resolvedIssues,
+        commands: opts.checkResult.commands,
         totalNumberOfIssues: newIssues.length + remainingIssues.length,
     };
 };

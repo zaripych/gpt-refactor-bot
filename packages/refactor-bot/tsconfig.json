@@ -3,7 +3,7 @@
     "compilerOptions": {
         "outDir": ".tsc-out",
         "tsBuildInfoFile": ".tsc-out/.tsbuildinfo",
-        "noErrorTruncation": true
+        "noErrorTruncation": false
     },
     "include": ["src/**/*.ts", "src/ts-morph/builtinLibs.cjs"]
 }

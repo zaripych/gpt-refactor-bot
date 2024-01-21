@@ -28,14 +28,14 @@ export function hasTwoElements(arr: unknown[] | readonly unknown[]): boolean {
 }
 
 export function ensureHasTwoElements<
-    Arr extends unknown[] | readonly unknown[]
+    Arr extends unknown[] | readonly unknown[],
 >(arr: Arr): [Arr[0], Arr[1], ...Arr[number][]];
 export function ensureHasTwoElements<Arr extends readonly unknown[]>(
     arr: Arr
 ): readonly [Arr[0], Arr[1], ...Arr[number][]];
 export function ensureHasTwoElements<
-    Arr extends unknown[] | readonly unknown[]
+    Arr extends unknown[] | readonly unknown[],
 >(arr: Arr) {
-    assert(hasOneElement<Arr[number]>(arr));
+    assert(hasTwoElements<Arr[number]>(arr));
     return arr;
 }

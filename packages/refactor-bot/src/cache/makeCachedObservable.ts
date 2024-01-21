@@ -93,6 +93,8 @@ export function makeCachedObservable<
             },
             ctx: CacheStateRef & {
                 dispatch: (action: AnyAction) => void;
+                actions: (typeof defaultDeps)['actions'];
+                skipSavingToCache: (err: unknown) => void;
             }
         ) => Observable<TypeOf<EventSchema> | AnyAction>;
     },
@@ -235,7 +237,7 @@ export function makeCachedObservable<
                     `,
                     {
                         ...(location && {
-                            location: relative(process.cwd(), location),
+                            location,
                         }),
                     }
                 );
@@ -252,12 +254,21 @@ export function makeCachedObservable<
                     key,
                 });
 
+                let savingToCacheWasSkippedByTheFunctionCall = false;
+
+                const skipSavingToCache = () => {
+                    deps.logger.trace(`Saving events has been skipped`, {
+                        location: location || '.',
+                    });
+                    savingToCacheWasSkippedByTheFunctionCall = true;
+                };
+
                 const resultingEvents = concat(
                     of(
                         executionStarted({
                             name,
                             key,
-                            input,
+                            input: validatedInput,
                         })
                     ),
                     opts.factory(validatedInput, {
@@ -266,6 +277,8 @@ export function makeCachedObservable<
                             location: join(location, basename(key)),
                         }),
                         dispatch: recordAndDispatch,
+                        actions: deps.actions,
+                        skipSavingToCache,
                     }) as Observable<AnyAction>,
                     of(
                         executionSuccess({
@@ -291,6 +304,10 @@ export function makeCachedObservable<
                 );
 
                 const saveResultingEvents = defer(async () => {
+                    if (savingToCacheWasSkippedByTheFunctionCall) {
+                        return;
+                    }
+
                     await saveEventsToCache({
                         events,
                         eventsSchema,

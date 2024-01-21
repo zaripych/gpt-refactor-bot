@@ -80,20 +80,15 @@ Options:
 Performs a refactoring using Plan and Execute technique
 
 Options:
-  --help              Show help                                        [boolean]
-  --version           Show version number                              [boolean]
-  --name              Name of the refactoring to run                    [string]
-  --id                Unique id of the refactoring that was previously run but d
-                      idn't finish to start from last successful point  [string]
-  --save-to-cache     Whether to enable saving results to the cache, by default
-                      it's enabled                     [boolean] [default: true]
-  --enable-cache-for  Enable cache for specific steps only, can be useful if we
-                      want to disable cache for all other steps and replay them
-                                                                         [array]
-  --costs             Whether to print the total costs of OpenAI requests, by de
-                      fault it's disabled             [boolean] [default: false]
-  --performance       Whether to print performance metrics, by default it's disa
-                      bled                            [boolean] [default: false]
+  --help         Show help                                             [boolean]
+  --version      Show version number                                   [boolean]
+  --name         Name of the refactoring to run                         [string]
+  --id           Unique id of the refactoring that was previously run but didn't
+                  finish - use this to start from last successful step  [string]
+  --costs        Whether to print the total costs of OpenAI requests, by default
+                  it's disabled                       [boolean] [default: false]
+  --performance  Whether to print performance metrics, by default it's disabled
+                                                      [boolean] [default: false]
 ```
 
 At first it will create a file for you with description of the refactor. Open
@@ -183,7 +178,7 @@ further, but there is no way to measure how much we improved it. So the next
 step is to add a way to measure the quality of the refactor for benchmarking
 purposes.
 
--   [ ] ability to evaluate result of the refactor to benchmark the quality of
+-   [x] ability to evaluate result of the refactor to benchmark the quality of
         the refactor, so we can asses how different changes affect the quality
         and performance of the refactor-bot
 -   [ ] add Chain Of Thoughts to try to recover from failed attempts to fix

@@ -22,24 +22,37 @@ export const refactorCommand: CommandModule<
                 type: 'string',
                 describe: line`
                     Unique id of the refactoring that was previously run but
-                    didn't finish to start from last successful point
+                    didn't finish - use this to start from last successful step
                 `,
             })
             .option('save-to-cache', {
                 type: 'boolean',
                 describe: line`
                     Whether to enable saving results to the cache, by default
-                    it's enabled
+                    it's enabled.
                 `,
                 default: true,
+                hidden: true,
             })
             .option('enable-cache-for', {
                 type: 'string',
                 array: true,
                 describe: line`
-                    Enable cache for specific steps only, can be useful if we
-                    want to disable cache for all other steps and replay them
+                    Enable cache for specific steps - you can specify the name
+                    of the step or a name followed by a hash of the cache entry.
+                    This is for debugging purposes only.
                 `,
+                hidden: true,
+            })
+            .option('disable-cache-for', {
+                type: 'string',
+                array: true,
+                describe: line`
+                    Disable cache for specific steps - you can specify the name
+                    of the step or a name followed by a hash of the cache entry.
+                    This is for debugging purposes only.
+                `,
+                hidden: true,
             })
             .option('costs', {
                 type: 'boolean',

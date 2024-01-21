@@ -1,0 +1,22 @@
+refactorConfig:
+    name: test-refactoring
+    ref: 8f1a3da55caeee3df75853042e57978c45513f18
+    budgetCents: 100
+    model: gpt-4-1106-preview
+    objective:
+        Replace all usages of `readFile` from `fs/promises` module with
+        `readFileSync` from `fs` module in
+        `packages/refactor-bot/src/refactor/planTasks.ts`,
+        `packages/refactor-bot/src/refactor/loadRefactors.ts` and
+        `packages/refactor-bot/src/refactor/discoverDependencies.ts`.
+
+numberOfRuns: 2
+
+variants:
+    - name: 'A'
+      ids:
+          - VRixXEwC
+          - k0FmgQjU
+          - IpSOtP7d
+          - xqydSrSU
+    - name: 'B'

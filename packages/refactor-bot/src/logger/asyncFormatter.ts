@@ -4,7 +4,7 @@ import type { TransformCallback } from 'stream';
 
 import { onceAsync } from '../utils/onceAsync';
 
-export type FormatterMethod = <Y>(value: Y) => string | Y | Promise<string | Y>;
+export type FormatterMethod = (value: unknown) => unknown;
 
 export type Formatters = {
     [key: string]: FormatterMethod;

@@ -29,6 +29,12 @@ export const promptCommand: CommandModule<
                 describe:
                     'Prompt for next action confirmation when new messages are received',
                 default: false,
+            })
+            .option('functions', {
+                type: 'string',
+                array: true,
+                describe:
+                    'Names of functions to allow in the prompt. If not specified, all functions are allowed.',
             }),
     handler: async (opts) => {
         try {

@@ -17,6 +17,7 @@ import { refactorConfigSchema } from './types';
 
 export const refactorGoalInputSchema = refactorConfigSchema.augment({
     objective: z.string(),
+    requirements: z.array(z.string()).nonempty(),
     sandboxDirectoryPath: z.string(),
     startCommit: z.string(),
     filesToEdit: z.array(z.string()),

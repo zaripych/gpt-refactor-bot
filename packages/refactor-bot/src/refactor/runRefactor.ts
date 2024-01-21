@@ -12,12 +12,14 @@ import { formatObject } from '../logger/formatObject';
 import { glowFormat } from '../markdown/glowFormat';
 import { markdown } from '../markdown/markdown';
 import { goToEndOfFile } from '../prompt/editor';
+import { formatFencedCodeBlock } from '../prompt-formatters/formatFencedCodeBlock';
+import { formatOptional } from '../prompt-formatters/formatOptional';
 import { format } from '../text/format';
-import { line } from '../text/line';
 import { hasOneElement } from '../utils/hasOne';
+import { summarizeLlmUsagePrice } from './collectLlmUsage';
 import { loadRefactorConfigs } from './loadRefactors';
 import { refactor } from './refactor';
-import type { RefactorConfig } from './types';
+import { type RefactorConfig, summarizeRefactorFilesResult } from './types';
 
 const validateUsingSchema =
     <T extends z.ZodType>(schema: T) =>
@@ -128,6 +130,15 @@ async function determineConfig(opts: {
             );
         }
 
+        if (opts.id) {
+            return {
+                config: {
+                    ...config,
+                    id: opts.id,
+                },
+            };
+        }
+
         return {
             config,
         };
@@ -177,14 +188,19 @@ const currentRepositoryRefactoringReport = async (
         successBranch: string;
     }
 ) => {
-    const { accepted, discarded, successBranch, sandboxDirectoryPath } = opts;
+    const { successBranch, sandboxDirectoryPath } = opts;
 
-    const perFile = Object.entries(accepted)
+    const { accepted, discarded } = summarizeRefactorFilesResult(opts);
+
+    const perFile = Object.entries(accepted.resultsByFilePaths)
         .flatMap(([file, results]) => {
-            const firstCommit = results[0]?.steps[0]?.commit?.substring(0, 7);
+            const firstCommit = results[0]?.file.steps[0]?.commit?.substring(
+                0,
+                7
+            );
             const lastCommit = results[
                 results.length - 1
-            ]?.lastCommit?.substring(0, 7);
+            ]?.file.lastCommit?.substring(0, 7);
             if (!firstCommit || !lastCommit) {
                 return [];
             }
@@ -194,22 +210,25 @@ const currentRepositoryRefactoringReport = async (
         })
         .join('\n');
 
-    const firstCommits = Object.entries(discarded)
+    const firstCommits = Object.entries(discarded.resultsByFilePaths)
         .flatMap(([file, results]) => {
-            const firstCommit = results[0]?.steps[0]?.commit?.substring(0, 7);
+            const firstCommit = results[0]?.file.steps[0]?.commit?.substring(
+                0,
+                7
+            );
             if (!firstCommit) {
-                return [`# ${file}\n# No commits found for this file`];
+                return [];
             }
             return [`# ${file}\ngit cherry-pick -n ${firstCommit}`];
         })
         .join('\n');
 
     const failedToRefactor =
-        Object.keys(discarded).length > 0
+        Object.keys(discarded.resultsByFilePaths).length > 0
             ? markdown`
-                Failed to refactor:
+                Attempted to refactor:
 
-                ${Object.keys(discarded)
+                ${Object.keys(discarded.resultsByFilePaths)
                     .map((file, i) => `${i + 1}. \`${file}\``)
                     .join('\n')}
             `
@@ -219,9 +238,9 @@ const currentRepositoryRefactoringReport = async (
     if (Object.keys(discarded).length > 0 && firstCommits) {
         firstCommitsOfFailures = format(
             markdown`
-                ## First commits of failed files
+                ## Change attempts that failed
 
-                These are least invasive commits focused on the goal which
+                These should be least invasive commits focused on the goal which
                 didn't pass checks. You can try to fix them manually.
 
                 ~~~sh
@@ -232,7 +251,7 @@ const currentRepositoryRefactoringReport = async (
         );
     }
 
-    const successfullyRefactored = Object.keys(accepted)
+    const successfullyRefactored = Object.keys(accepted.resultsByFilePaths)
         .map((file, i) => `${i + 1}. \`${file}\``)
         .join('\n');
 
@@ -300,20 +319,45 @@ const currentRepositoryRefactoringReport = async (
 const currentRepositoryFailedRefactoringReport = async (
     opts: RefactorResult
 ) => {
-    const { discarded, sandboxDirectoryPath } = opts;
+    const { sandboxDirectoryPath } = opts;
 
-    const firstCommits = Object.entries(discarded)
+    const { discarded } = summarizeRefactorFilesResult(opts);
+
+    const firstCommits = Object.entries(discarded.resultsByFilePaths)
         .flatMap(([file, results]) => {
-            const firstCommit = results[0]?.steps[0]?.commit?.substring(0, 7);
+            const firstCommit = results[0]?.file.steps[0]?.commit?.substring(
+                0,
+                7
+            );
             if (!firstCommit) {
-                return [`# ${file}\n# No commits found for this file`];
+                return [];
             }
             return [`# ${file}\ngit cherry-pick -n ${firstCommit}`];
         })
         .join('\n');
 
-    const failedToRefactor = Object.keys(discarded)
-        .map((file, i) => `${i + 1}. \`${file}\``)
+    const failedToRefactor = Object.entries(discarded.resultsByFilePaths)
+        .map(([file, results], i) => {
+            const lastResult = results[results.length - 1]?.file;
+            if (lastResult?.status === 'failure') {
+                return `${i + 1}. \`${file}\` - ${
+                    lastResult.failureDescription
+                }`;
+            } else if (lastResult?.status === 'success') {
+                if (
+                    lastResult.steps.length === 1 &&
+                    !lastResult.steps[0]?.commit
+                ) {
+                    return `${
+                        i + 1
+                    }. \`${file}\` - the file appears to not require any changes`;
+                } else {
+                    return `${i + 1}. \`${file}\``;
+                }
+            } else {
+                return `${i + 1}. \`${file}\``;
+            }
+        })
         .join('\n');
 
     return format(
@@ -326,22 +370,27 @@ const currentRepositoryFailedRefactoringReport = async (
 
                     \`$sandboxDirectoryPath$\`
 
-                    Failed to refactor:
+                    Attempted to refactor:
 
                     %failedToRefactor%
 
-                    ## First commits of failed files
-
-                    These are least invasive commits focused on the goal which
-                    didn't pass checks. You can try to fix them manually.
-
-                    ~~~sh
                     %firstCommits%
-                    ~~~
                 `,
                 {
                     failedToRefactor,
-                    firstCommits,
+                    firstCommits: formatOptional({
+                        text: formatFencedCodeBlock({
+                            code: firstCommits,
+                            language: 'sh',
+                        }),
+                        heading: markdown`
+                            ## Change attempts that failed
+
+                            These should be least invasive commits focused on
+                            the goal which didn't pass checks. You can try to
+                            fix them manually.
+                        `,
+                    }),
                 }
             ),
         }),
@@ -395,7 +444,7 @@ const currentRepositoryPlanningEmptyReasonReport = async (
     );
 };
 
-const unhandledErrorReport = async (opts: { error: Error }) => {
+const unhandledErrorReport = async (opts: { error: unknown }) => {
     console.log(
         await glowFormat({
             input: format(
@@ -407,9 +456,14 @@ const unhandledErrorReport = async (opts: { error: Error }) => {
                     ~~~
                 `,
                 {
-                    errorDetails: formatObject(extractErrorInfo(opts.error), {
-                        indent: '',
-                    }),
+                    errorDetails: formatObject(
+                        opts.error instanceof Error
+                            ? extractErrorInfo(opts.error)
+                            : (opts.error as object),
+                        {
+                            indent: '',
+                        }
+                    ),
                 }
             ),
         })
@@ -448,25 +502,17 @@ const analyticsReport = async (opts: {
     performance: boolean;
 }) => {
     if (opts.costs) {
-        const total = opts.result.costsByStep.total.totalPrice;
-        const costs = Object.entries(opts.result.costsByStep)
-            .map(([step, costs]) => ({
+        const totalCost = summarizeLlmUsagePrice({
+            usage: opts.result.usage,
+        });
+        const costs = Array.from(totalCost.priceBySteps).map(
+            ([step, costs]) => ({
                 step,
                 costs,
-            }))
-            .filter((data) => data.step !== 'total' && data.step !== 'unknown');
+            })
+        );
 
         const orderedCosts = orderBy(costs, ['costs.totalPrice'], ['desc']);
-
-        const warning =
-            total === 0
-                ? '\n' +
-                  line`
-                      **NOTE** The costs cannot be collected if we cache high
-                      level steps. Try running the refactor with following
-                      options: \`--enable-cache-for chat exec check auto-fix\`
-                  `
-                : ``;
 
         console.log(
             await glowFormat({
@@ -477,11 +523,9 @@ const analyticsReport = async (opts: {
                         Total cost: %total% USD
 
                         %costByStep%
-
-                        %warning%
                     `,
                     {
-                        total: total.toFixed(3),
+                        total: totalCost.totalPrice.toFixed(3),
                         costByStep: orderedCosts
                             .filter(
                                 /**
@@ -500,7 +544,6 @@ const analyticsReport = async (opts: {
                                 })
                             )
                             .join('\n'),
-                        warning,
                     }
                 ),
             })
@@ -510,14 +553,14 @@ const analyticsReport = async (opts: {
     if (opts.performance) {
         const perf = opts.result.performance;
 
-        const perfEntries = Object.entries(perf.durationByStep)
+        const perfEntries = Object.entries(perf.durationMsByStep)
             .map(([step, data]) => ({
                 step,
-                duration: data.duration,
+                durationMs: data.durationMs,
             }))
             .filter((data) => data.step !== 'total' && data.step !== 'unknown');
 
-        const orderedDurations = orderBy(perfEntries, ['duration'], ['desc']);
+        const orderedDurations = orderBy(perfEntries, ['durationMs'], ['desc']);
 
         console.log(
             await glowFormat({
@@ -531,12 +574,7 @@ const analyticsReport = async (opts: {
                     `,
                     {
                         totalDuration:
-                            (perf.totalDuration / 1000).toFixed(3) + ' sec',
-
-                        measuredDuration:
-                            (perf.durationByStep.total.duration / 1000).toFixed(
-                                3
-                            ) + ' sec',
+                            (perf.totalDurationMs / 1000).toFixed(3) + ' sec',
 
                         durationByStep: orderedDurations
                             .filter(
@@ -553,7 +591,7 @@ const analyticsReport = async (opts: {
                                 format(`- %step% - %duration%`, {
                                     step: data.step.padEnd(20, ' '),
                                     duration:
-                                        (data.duration / 1000).toFixed(3) +
+                                        (data.durationMs / 1000).toFixed(3) +
                                         ' sec',
                                 })
                             )
@@ -570,9 +608,9 @@ export async function runRefactor(opts: {
     name?: string;
     saveToCache?: boolean;
     enableCacheFor?: string[];
+    disableCacheFor?: string[];
     costs?: boolean;
     performance?: boolean;
-    //
 }) {
     try {
         const configs = await loadRefactorConfigs();
@@ -586,6 +624,7 @@ export async function runRefactor(opts: {
             config,
             saveToCache: opts.saveToCache,
             enableCacheFor: opts.enableCacheFor,
+            disableCacheFor: opts.disableCacheFor,
         });
 
         if (result.status === 'failure') {
@@ -607,6 +646,7 @@ export async function runRefactor(opts: {
                 );
             }
         }
+
         await analyticsReport({
             result,
             costs: opts.costs ?? true,

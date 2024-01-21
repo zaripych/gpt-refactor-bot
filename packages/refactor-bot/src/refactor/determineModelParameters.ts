@@ -1,18 +1,29 @@
 import micromatch from 'micromatch';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import { logger } from '../logger/logger';
 import { hasOneElement } from '../utils/hasOne';
-import type { refactorConfigSchema } from './types';
+import { refactorConfigSchema } from './types';
 
-type ModelOpts = Pick<
-    z.output<typeof refactorConfigSchema>,
-    'model' | 'modelByStepCode' | 'useMoreExpensiveModelsOnRetry'
-> & {
-    attempt?: number;
-};
+export const refactorConfigModelParamsSchema = refactorConfigSchema
+    .pick({
+        model: true,
+        modelByStepCode: true,
+        useMoreExpensiveModelsOnRetry: true,
+    })
+    .augment({
+        attempt: z.number().optional(),
+    });
 
-function determineModel(input: ModelOpts, ctx?: { location?: string }) {
+export type RefactorConfigModelParams = z.input<
+    typeof refactorConfigModelParamsSchema
+>;
+
+function determineModel(
+    inputRaw: RefactorConfigModelParams,
+    ctx?: { location?: string }
+) {
+    const input = refactorConfigModelParamsSchema.parse(inputRaw);
     if (ctx?.location) {
         const location = ctx.location;
         const matchingKeys = [...Object.keys(input.modelByStepCode)].filter(
@@ -30,9 +41,10 @@ function determineModel(input: ModelOpts, ctx?: { location?: string }) {
 }
 
 export function determineModelParameters(
-    input: ModelOpts,
+    inputRaw: RefactorConfigModelParams,
     ctx?: { location?: string }
 ) {
+    const input = refactorConfigModelParamsSchema.parse(inputRaw);
     const model = determineModel(input, ctx);
 
     const result =
