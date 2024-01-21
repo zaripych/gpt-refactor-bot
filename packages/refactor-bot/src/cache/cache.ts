@@ -56,7 +56,19 @@ export async function lookupEventsInCache<
 
     if (
         opts.state.enableCacheFor &&
-        !opts.state.enableCacheFor.includes(opts.name)
+        !opts.state.enableCacheFor.includes(opts.name) &&
+        !opts.state.enableCacheFor.includes(basename(opts.key))
+    ) {
+        return {
+            foundLocation: undefined,
+            foundEvents: undefined,
+        };
+    }
+
+    if (
+        opts.state.disableCacheFor &&
+        (opts.state.disableCacheFor.includes(opts.name) ||
+            opts.state.disableCacheFor.includes(basename(opts.key)))
     ) {
         return {
             foundLocation: undefined,
@@ -73,14 +85,21 @@ export async function lookupEventsInCache<
     }
 
     try {
-        const cwd = opts.location;
+        const cwd = opts.state.internal_unboundCacheLookup
+            ? opts.state.location ?? opts.location
+            : opts.location;
         /**
          * @note to simplify mocking there is only fg dependency, but
          * what we really needed here is fs.stats, but let's use the fg
          * so we don't have to mock fs.stats and sync it with the fg.
          */
         const entries = await opts.state.deps.fg(
-            [`${basename(opts.key)}.yaml`],
+            opts.state.internal_unboundCacheLookup
+                ? [
+                      `${basename(opts.key)}.yaml`,
+                      `**/${basename(opts.key)}.yaml`,
+                  ]
+                : [`${basename(opts.key)}.yaml`],
             {
                 cwd,
                 ignore: [],
@@ -156,6 +175,9 @@ export async function saveEventsToCache<
 }
 
 export async function cleanCache(
+    opts: {
+        cleanRoot?: boolean;
+    },
     ctx: { location?: string },
     deps = defaultDeps
 ) {
@@ -183,7 +205,9 @@ export async function cleanCache(
         return;
     }
 
-    logger.trace('Cleaning', relative(process.cwd(), location));
+    logger.trace('Cleaning', {
+        location,
+    });
 
     /**
      * Filter out any directory or file that appears in the log
@@ -218,17 +242,17 @@ export async function cleanCache(
         ),
     ];
 
-    const filesAndDirs = await fg([`*.yaml`, `*`, ...include], {
-        cwd: location,
-        ignore,
-        onlyFiles: false,
-    });
+    const filesAndDirs = await fg(
+        [...(opts.cleanRoot ? [`*.yaml`, `*`] : []), ...include],
+        {
+            cwd: location,
+            ignore,
+            onlyFiles: false,
+        }
+    );
 
     for (const entry of filesAndDirs) {
-        logger.trace(
-            `Deleting`,
-            relative(process.cwd(), join(location, entry))
-        );
+        logger.trace(`Deleting`, join(location, entry));
 
         if (entry.endsWith('.yaml')) {
             await unlink(join(location, entry));

@@ -1,6 +1,7 @@
 import assert from 'assert';
 
 import { logger } from '../logger/logger';
+import { ensureHasOneElement } from '../utils/hasOne';
 import { UnreachableError } from '../utils/UnreachableError';
 import type { SpawnParameterMix, SpawnToPromiseOpts } from './spawnToPromise';
 import { spawnToPromise, spawnWithSpawnParameters } from './spawnToPromise';
@@ -25,6 +26,7 @@ export type SpawnResultReturn = {
     status: number | null;
     signal: NodeJS.Signals | null;
     error?: Error | undefined;
+    args: [string, ...string[]];
 };
 
 export async function spawnResult(
@@ -85,6 +87,9 @@ export async function spawnResult(
         pid: child.pid,
         signal: child.signalCode,
         status: child.exitCode,
+        get args(): [string, ...string[]] {
+            return ensureHasOneElement(child.spawnargs);
+        },
         get output() {
             return combinedData;
         },

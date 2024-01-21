@@ -199,6 +199,7 @@ export const run = async (opts: {
     model?: Models;
     watch?: boolean;
     manual?: boolean;
+    functions?: string[];
 }) => {
     const spinner = ora();
 
@@ -246,7 +247,7 @@ export const run = async (opts: {
     const convo = conversationState(conversationFile);
     await convo.load();
 
-    const functions = await includeFunctions('all');
+    const functions = await includeFunctions(opts.functions ?? 'all');
 
     await goToEndOfFile(conversationFile);
 

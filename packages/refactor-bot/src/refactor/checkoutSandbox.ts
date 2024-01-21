@@ -78,11 +78,6 @@ export const checkoutSandbox = makeCachedFunction({
         } else {
             logger.trace(`Creating sandbox from "${root}"`);
 
-            /**
-             * @todo: this might copy some files that might be
-             * sensitive, we should probably introduce a way to
-             * ignore some files (ie .env)
-             */
             await createSandbox({
                 tag: config.name,
                 source: root,

@@ -11,10 +11,8 @@ export async function resetToLastAcceptedCommit(opts: {
     result: RefactorFilesResult;
 }) {
     const accepted = orderBy(
-        Object.entries(opts.result.accepted).flatMap(([_, entry]) =>
-            entry.filter((file) => file.lastCommit).map((file) => file)
-        ),
-        ['timestamp'],
+        opts.result.accepted.filter((entry) => entry.file.lastCommit),
+        ['file.timestamp'],
         ['desc']
     );
 
@@ -29,7 +27,8 @@ export async function resetToLastAcceptedCommit(opts: {
         location: opts.location,
         ref: 'HEAD',
     });
-    const lastCommit = accepted[0].lastCommit;
+
+    const lastCommit = accepted[0].file.lastCommit;
 
     if (lastCommit && lastCommit !== currentCommit) {
         logger.info(`Resetting to last successful commit ${lastCommit}`);

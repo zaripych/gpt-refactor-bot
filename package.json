@@ -19,6 +19,7 @@
     },
     "type": "module",
     "scripts": {
+        "benchmark": "pnpm tsx packages/refactor-bot/src/benchmark/cli.ts",
         "refactor-bot-bundled": "node ./packages/refactor-bot/dist/bin/refactor-bot.mjs"
     },
     "dependencies": {},

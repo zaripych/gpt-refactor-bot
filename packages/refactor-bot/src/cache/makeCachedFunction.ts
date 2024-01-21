@@ -51,6 +51,8 @@ export function makeCachedFunction<
             },
             ctx: CacheStateRef & {
                 dispatch: (typeof defaultDeps)['dispatch'];
+                actions: (typeof defaultDeps)['actions'];
+                skipSavingToCache: (err: unknown) => void;
             }
         ) => Promise<TypeOf<OutputSchema>>;
     },

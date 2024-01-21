@@ -1,11 +1,20 @@
 import hash from 'object-hash';
 import type { Observable } from 'rxjs';
-import { defer, EMPTY, from, lastValueFrom } from 'rxjs';
-import { expand, mergeAll, mergeMap, toArray } from 'rxjs/operators';
+import { defer, EMPTY, from, lastValueFrom, of } from 'rxjs';
+import {
+    catchError,
+    expand,
+    map,
+    mergeAll,
+    mergeMap,
+    switchMap,
+    toArray,
+} from 'rxjs/operators';
 import type { TypeOf } from 'zod';
 import { z } from 'zod';
 
 import { makeCachedFunction } from '../cache/makeCachedFunction';
+import type { CacheStateRef } from '../cache/types';
 import type { Message } from '../chat-gpt/api';
 import {
     calculatePrice,
@@ -27,6 +36,11 @@ import { ensureHasOneElement } from '../utils/hasOne';
 import { isTruthy } from '../utils/isTruthy';
 import { gptRequestFailed } from './actions/gptRequestFailed';
 import { gptRequestSuccess } from './actions/gptRequestSuccess';
+import {
+    determineModelParameters,
+    refactorConfigModelParamsSchema,
+} from './determineModelParameters';
+import { refactorConfigSchema } from './types';
 
 export const promptInputSchema = z.object({
     preface: z.string().optional(),
@@ -46,9 +60,12 @@ export const promptInputSchema = z.object({
         .optional(),
     model: modelsSchema.optional().default('gpt-3.5-turbo'),
     choices: z.number().optional(),
+    dedupe: z.boolean().optional(),
+    seed: z.string().optional(),
 });
 
 export const promptResultSchema = z.object({
+    key: z.string().optional(),
     choices: z
         .array(
             z.object({
@@ -210,6 +227,39 @@ function removeFunctionFromState(
     });
 }
 
+export type RefactorConfigPromptOpts = z.input<
+    typeof refactorConfigPromptOptsSchema
+>;
+
+export const refactorConfigPromptOptsSchema = refactorConfigSchema
+    .pick({
+        budgetCents: true,
+        scope: true,
+        tsConfigJsonFileName: true,
+        allowedFunctions: true,
+    })
+    .merge(refactorConfigModelParamsSchema)
+    .augment({
+        sandboxDirectoryPath: z.string(),
+    });
+
+export const promptParametersFrom = (
+    inputRaw: RefactorConfigPromptOpts,
+    ctx?: CacheStateRef
+): Omit<z.input<typeof promptInputSchema>, 'temperature' | 'prompt'> => {
+    const input = refactorConfigPromptOptsSchema.parse(inputRaw);
+    return {
+        budgetCents: input.budgetCents,
+        functionsConfig: {
+            repositoryRoot: input.sandboxDirectoryPath,
+            scope: input.scope,
+            tsConfigJsonFileName: input.tsConfigJsonFileName,
+            allowedFunctions: input.allowedFunctions,
+        },
+        ...determineModelParameters(input, ctx),
+    };
+};
+
 export const prompt = makeCachedFunction({
     name: 'prompt',
     inputSchema: promptInputSchema,
@@ -234,7 +284,7 @@ export const prompt = makeCachedFunction({
         };
 
         const stream = from([initialState()]).pipe(
-            expand((state, i) => {
+            expand((state) => {
                 const lastMessage = state.messages[state.messages.length - 1];
                 if (!lastMessage) {
                     throw new Error('Invalid state, no last message found');
@@ -254,17 +304,12 @@ export const prompt = makeCachedFunction({
                                     opts.functionsConfig.allowedFunctions,
                                 model: opts.model,
                                 temperature: opts.temperature,
-                                /**
-                                 * @note if this is the first prompt, we
-                                 * ask for multiple choices answer to start
-                                 * multiple branches of conversation
-                                 */
-                                ...(i === 0 && {
-                                    choices: opts.choices,
-                                }),
+                                choices: opts.choices,
                             },
                             ctx
                         );
+
+                        const shouldDedupe = opts.dedupe ?? false;
 
                         const unique = new Map(
                             result.response.choices.map(
@@ -273,12 +318,15 @@ export const prompt = makeCachedFunction({
                             )
                         );
 
-                        const nextStateChoices = [...unique.values()].map(
-                            (choice) => ({
-                                status: choice.finishReason,
-                                messages: [...state.messages, choice.message],
-                            })
-                        );
+                        const nextStateChoices = shouldDedupe
+                            ? [...unique.values()].map((choice) => ({
+                                  status: choice.finishReason,
+                                  messages: [...state.messages, choice.message],
+                              }))
+                            : result.response.choices.map((choice) => ({
+                                  status: choice.finishReason,
+                                  messages: [...state.messages, choice.message],
+                              }));
 
                         if (
                             nextStateChoices.length === 1 &&
@@ -337,9 +385,9 @@ export const prompt = makeCachedFunction({
                         );
 
                         return defer(async () => {
-                            const result = await Promise.resolve(
-                                shouldStop(lastMessage)
-                            ).catch((e) =>
+                            const result = await new Promise((resolve) => {
+                                resolve(shouldStop(lastMessage));
+                            }).catch((e) =>
                                 e instanceof Error ? e.message : String(e)
                             );
 
@@ -370,24 +418,52 @@ export const prompt = makeCachedFunction({
                 }
             }),
             mergeMap((state) => {
-                // everything that gets into expand gets out of it, so we must
-                // filter out the initial state
+                // everything that gets into expand and what gets out of it
+                // will be result of the expand operator, so we must
+                // filter out only the stop messages that are not failed
                 if (state.status !== 'stop') {
                     return EMPTY;
                 }
 
-                return [
-                    {
-                        resultingMessage: regularAssistantMessageSchema.parse(
+                const shouldStop = opts.shouldStop;
+                if (shouldStop) {
+                    // we also need to filter out the stop messages that are
+                    // failed when shouldStop was called with their content
+                    return defer(async () => {
+                        const lastMessage = regularAssistantMessageSchema.parse(
                             state.messages[state.messages.length - 1],
                             {
                                 errorMap: () => ({
                                     message: `Invalid algorithm, the last message in conversation doesn't conform to the expected schema`,
                                 }),
                             }
-                        ),
-                    },
-                ];
+                        );
+
+                        const shouldUseStopMessage =
+                            await shouldStop(lastMessage);
+
+                        return shouldUseStopMessage === true;
+                    }).pipe(
+                        catchError(() => of(false)),
+                        switchMap((shouldUseStopMessage) =>
+                            shouldUseStopMessage ? of(state) : EMPTY
+                        )
+                    );
+                }
+
+                return of(state);
+            }),
+            map((state) => {
+                return {
+                    resultingMessage: regularAssistantMessageSchema.parse(
+                        state.messages[state.messages.length - 1],
+                        {
+                            errorMap: () => ({
+                                message: `Invalid algorithm, the last message in conversation doesn't conform to the expected schema`,
+                            }),
+                        }
+                    ),
+                };
             }),
             toArray()
         );
@@ -395,6 +471,7 @@ export const prompt = makeCachedFunction({
         const choices = ensureHasOneElement(await lastValueFrom(stream));
 
         return {
+            key: ctx.location,
             choices,
         };
     },

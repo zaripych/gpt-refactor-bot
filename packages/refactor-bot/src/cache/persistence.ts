@@ -1,4 +1,4 @@
-import { dirname, relative } from 'path';
+import { dirname } from 'path';
 import type { z, ZodType } from 'zod';
 import { type TypeOf } from 'zod';
 
@@ -54,9 +54,9 @@ export const saveEvents = async <
 ) => {
     const { logger } = deps;
 
-    logger.trace(
-        `Saving events to "${relative(process.cwd(), opts.location)}"`
-    );
+    logger.trace(`Saving events`, {
+        location: opts.location,
+    });
 
     await save(
         {
@@ -79,9 +79,9 @@ export const loadEvents = async <
     },
     deps = defaultDeps
 ) => {
-    deps.logger.trace(
-        `Loading events from "${relative(process.cwd(), opts.location)}"`
-    );
+    deps.logger.trace(`Loading events`, {
+        location: opts.location,
+    });
 
     const events = await load(
         {

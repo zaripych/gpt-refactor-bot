@@ -2,19 +2,17 @@ import { z } from 'zod';
 
 import { CycleDetectedError } from '../errors/cycleDetectedError';
 import { logger } from '../logger/logger';
+import { line } from '../text/line';
 import { scriptSchema } from './check';
 import { planFiles, planFilesResultSchema } from './planFiles';
 import { refactorBatch } from './refactorBatch';
 import { resetToLastAcceptedCommit } from './resetToLastAcceptedCommit';
 import type { RefactorFilesResult } from './types';
-import {
-    mutateToMergeRefactorFilesResults,
-    refactorConfigSchema,
-    refactorFilesResultSchema,
-} from './types';
+import { refactorConfigSchema, refactorFilesResultSchema } from './types';
 
 export const planAndRefactorInputSchema = refactorConfigSchema.augment({
     objective: z.string(),
+    requirements: z.array(z.string()).nonempty(),
     startCommit: z.string(),
     sandboxDirectoryPath: z.string(),
     scripts: z.array(scriptSchema),
@@ -32,8 +30,8 @@ export const planAndRefactor = async (
     input: z.input<typeof planAndRefactorInputSchema>
 ) => {
     const files: RefactorFilesResult = {
-        accepted: {},
-        discarded: {},
+        accepted: [],
+        discarded: [],
     };
 
     const planFilesResults: Array<z.output<typeof planFilesResultSchema>> = [];
@@ -45,7 +43,7 @@ export const planAndRefactor = async (
         rawResponse: planResult.rawResponse,
     });
 
-    const { plannedFiles } = planResult;
+    const plannedFiles = [...planResult.plannedFiles];
 
     while (plannedFiles.length > 0) {
         const result = await refactorBatch({
@@ -58,10 +56,8 @@ export const planAndRefactor = async (
             result,
         });
 
-        mutateToMergeRefactorFilesResults({
-            from: result,
-            into: files,
-        });
+        files.accepted.push(...result.accepted);
+        files.discarded.push(...result.discarded);
 
         const repeatedPlanResult = await planFiles(input).catch((err) => {
             if (err instanceof CycleDetectedError) {
@@ -71,7 +67,11 @@ export const planAndRefactor = async (
                  * list instead.
                  */
                 logger.warn(
-                    'Cycle detected when planning files to change, this is likely result of the last batch of changes not producing any changes.',
+                    line`
+                        Cycle detected when planning files to change, this is
+                        likely result of the last batch of file edits not
+                        producing any changes
+                    `,
                     {
                         error: err,
                         result,

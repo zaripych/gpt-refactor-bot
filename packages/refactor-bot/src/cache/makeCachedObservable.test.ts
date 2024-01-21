@@ -102,7 +102,7 @@ const setup = () => {
             return makeCachedObservableToTest(...params);
         }) satisfies typeof makeCachedObservableToTest,
         cleanCache: ((...params) => {
-            params[1] = deps;
+            params[2] = deps;
             return cleanCacheToTest(...params);
         }) satisfies typeof cleanCache,
     };
@@ -922,7 +922,7 @@ it('should delete old cached files when clean is called', async () => {
         'add-660e.yaml': expect.arrayContaining([addResult({ value: 1 })]),
     });
 
-    await cleanCache(ctx);
+    await cleanCache({ cleanRoot: true }, ctx);
 
     expect(Object.fromEntries(files.entries())).toEqual({
         'add-10bb.yaml': expect.arrayContaining([addResult({ value: 3 })]),
@@ -955,7 +955,7 @@ it('should clean only on executed levels', async () => {
         'multiply-26e7'
     );
 
-    await cleanCache(ctx, deps);
+    await cleanCache({ cleanRoot: true }, ctx, deps);
 
     /**
      * @note note that files with xxxx hash deleted but not files with xxyy hash
@@ -974,7 +974,7 @@ it('should clean only on executed levels', async () => {
         'sub-pipe-51ea/multiply-b956'
     );
 
-    await cleanCache(ctx, deps);
+    await cleanCache({ cleanRoot: true }, ctx, deps);
 
     /**
      * @note note that files with xxyy hash deleted now

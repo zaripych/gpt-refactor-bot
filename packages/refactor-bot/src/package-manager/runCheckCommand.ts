@@ -123,7 +123,7 @@ export async function runCheckCommandWithParser(opts: {
     outputParser: (output: string) => Issue[];
     location: string;
 }) {
-    const { stdout, stderr } = await runPackageManagerScript({
+    const { stdout, stderr, args } = await runPackageManagerScript({
         packageManager: opts.packageManager,
         script: opts.script.args[0],
         args: opts.script.args.slice(1),
@@ -151,16 +151,19 @@ export async function runCheckCommandWithParser(opts: {
         () => opts.location
     );
 
-    return opts.outputParser(chooseOutput()).map((data) => {
-        const issue = data.issue.replaceAll(parentDirectoryRegex, '');
-        return {
-            ...data,
-            issue,
-            filePath: isAbsolute(data.filePath)
-                ? relative(realLocation, data.filePath)
-                : data.filePath,
-        };
-    });
+    return {
+        args,
+        issues: opts.outputParser(chooseOutput()).map((data) => {
+            const issue = data.issue.replaceAll(parentDirectoryRegex, '');
+            return {
+                ...data,
+                issue,
+                filePath: isAbsolute(data.filePath)
+                    ? relative(realLocation, data.filePath)
+                    : data.filePath,
+            };
+        }),
+    };
 }
 
 export async function runCheckCommand(opts: {

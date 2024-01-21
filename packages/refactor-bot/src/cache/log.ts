@@ -1,5 +1,3 @@
-import { relative } from 'path';
-
 import { CycleDetectedError } from '../errors/cycleDetectedError';
 import { type CacheState, getPipelineState } from './state';
 import type { CacheStateRef } from './types';
@@ -38,9 +36,8 @@ export function addToExecutionLog(opts: { state: CacheState; key: string }) {
 export function logExecutionLog(ctx: CacheStateRef) {
     const state = getPipelineState(ctx);
     if (state) {
-        state.deps.logger.debug(
-            `Execution log:`,
-            state.log.map((entry) => relative(process.cwd(), entry))
-        );
+        state.deps.logger.debug(`Execution log:`, {
+            executionLog: state.log.map((entry) => entry),
+        });
     }
 }

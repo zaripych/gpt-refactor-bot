@@ -24,6 +24,18 @@ export const refactorConfigSchema = z.object({
     objective: z.string(),
 
     /**
+     * List of files to edit or refactor - the refactoring will be done in the
+     * same order as the files are specified here. File names should be relative
+     * to the repository root.
+     *
+     * When not explicitly specified, the files are determined from the
+     * objective. When the objective doesn't explicitly state the files to be
+     * edited or refactored, the files are determined automatically by the LLM
+     * by analyzing the objective and contents of the repository.
+     */
+    filesToEdit: z.array(z.string()).nonempty().optional(),
+
+    /**
      * Name of the `tsconfig.json` file to use for the refactor, defaults
      * to `tsconfig.json`. In mono-repos scenarios this will affect the name
      * of every `tsconfig.json` file for every package.
@@ -169,6 +181,22 @@ export const refactorConfigSchema = z.object({
         .optional(),
 
     /**
+     * Whether to evaluate every file before accepting it as success and
+     * committing it to the repository.
+     *
+     * This will lead to a slower refactor, but will ensure that the files
+     * reported as refactored are actually valid and lead to a reported outcome
+     * that we can rely on.
+     */
+    evaluate: z.boolean().optional().default(true),
+
+    /**
+     * Minimal score to accept a file as refactored, only used when the
+     * `evaluate` option is enabled. Defaults to 0.5.
+     */
+    evaluateMinScore: z.number().optional().default(0.5),
+
+    /**
      * Unique identifier of the refactor, used to identify and restore
      * the refactor state and finding the right sandbox when running
      * multiple times.
@@ -178,15 +206,6 @@ export const refactorConfigSchema = z.object({
 
 export type RefactorConfig = z.input<typeof refactorConfigSchema>;
 
-export const refactorStepResultSchema = z.object({
-    task: z.string(),
-    fileContents: z.string(),
-    commit: z.string(),
-    timestamp: z.number(),
-});
-
-export type RefactorStepResult = z.infer<typeof refactorStepResultSchema>;
-
 export const issueSchema = z.object({
     command: z.string(),
     issue: z.string(),
@@ -194,6 +213,31 @@ export const issueSchema = z.object({
     commit: z.string(),
     code: z.string().optional(),
 });
+
+export const checkSummarySchema = z.object({
+    newIssues: z.array(issueSchema),
+    remainingIssues: z.array(issueSchema),
+    resolvedIssues: z.array(issueSchema),
+    totalNumberOfIssues: z.number(),
+});
+
+export const refactorStepResultSchema = z.object({
+    task: z.string(),
+    key: z.string().optional(),
+    fileContents: z.string(),
+    commit: z.string().optional(),
+    timestamp: z.number(),
+    checkSummary: checkSummarySchema.optional(),
+});
+
+export const refactorStepEmptyResultSchema = z.object({
+    task: z.string(),
+    commit: z.string(),
+    timestamp: z.number(),
+    checkSummary: checkSummarySchema,
+});
+
+export type RefactorStepResult = z.infer<typeof refactorStepResultSchema>;
 
 export const refactorSuccessResultSchema = z.object({
     status: z.literal('success'),
@@ -221,107 +265,70 @@ export const refactorResultSchema = z.discriminatedUnion('status', [
 
 export type RefactorResult = z.infer<typeof refactorResultSchema>;
 
+export const llmUsageEntrySchema = z.object({
+    model: z.string(),
+    steps: z.array(z.string()),
+    usage: z.object({
+        promptTokens: z.number(),
+        completionTokens: z.number(),
+        totalTokens: z.number(),
+    }),
+});
+
+export const evaluateFileScoreSchema = z.object({
+    key: z.string().optional(),
+    score: z.number(),
+});
+
 export const refactorFileResultSchema = z.object({
+    /**
+     * Optional key to identify the file in the cache - for diagnostic
+     * purposes only.
+     */
+    key: z.string().optional(),
     file: refactorResultSchema,
+    usage: z.array(llmUsageEntrySchema),
+    evaluation: evaluateFileScoreSchema.optional(),
 });
 
 export type RefactorFileResult = z.infer<typeof refactorFileResultSchema>;
 
-export const refactorFilesRecordSchema = z.record(
-    z.string(),
-    z.array(refactorResultSchema)
-);
-
-export type RefactorResultByFilePathRecord = z.infer<
-    typeof refactorFilesRecordSchema
->;
-
 export const refactorFilesResultSchema = z.object({
-    accepted: z.record(z.string(), z.array(refactorResultSchema)),
-    discarded: z.record(z.string(), z.array(refactorResultSchema)),
+    accepted: z.array(refactorFileResultSchema),
+    discarded: z.array(refactorFileResultSchema),
 });
 
 export type RefactorFilesResult = z.infer<typeof refactorFilesResultSchema>;
 
-export const lastCommit = <T extends { commit: string }>(steps: T[]) => {
-    return steps[steps.length - 1]?.commit;
+export const firstCommit = <T extends { commit: string }>(steps: T[]) => {
+    const first = steps[0];
+    if (!first) {
+        return undefined;
+    }
+    return first.commit;
+};
+
+export const lastCommit = <T extends { commit?: string; lastCommit?: string }>(
+    steps: T[]
+) => {
+    const last = steps.filter((step) => step.commit || step.lastCommit)[
+        steps.length - 1
+    ];
+    if (!last) {
+        return undefined;
+    }
+    return last.commit || last.lastCommit;
 };
 
 export const lastTimestamp = <T extends { timestamp: number }>(steps: T[]) => {
     return steps[steps.length - 1]?.timestamp;
 };
 
-export const pushRefactorFileResults = (opts: {
-    result: RefactorResult;
-    into: RefactorResultByFilePathRecord;
-}) => {
-    const array = opts.into[opts.result.filePath];
-    if (array) {
-        array.push(opts.result);
-    } else {
-        opts.into[opts.result.filePath] = [opts.result];
-    }
-};
-
-export const mutateToMergeRefactorRecords = (opts: {
-    from: RefactorResultByFilePathRecord;
-    into: RefactorResultByFilePathRecord;
-}) => {
-    for (const [file, tasks] of Object.entries(opts.from)) {
-        const existing = opts.into[file];
-        if (existing) {
-            opts.into[file] = existing.concat(tasks);
-        } else {
-            opts.into[file] = tasks;
-        }
-    }
-};
-
-const moveRefactorFileResults = (opts: {
-    filePath: string;
-    into: RefactorResultByFilePathRecord;
-    from: RefactorResultByFilePathRecord;
-}) => {
-    opts.into[opts.filePath] = (opts.from[opts.filePath] || []).concat(
-        opts.into[opts.filePath] || []
-    );
-    delete opts.from[opts.filePath];
-};
-
-export const mutateToMergeRefactorFilesResults = (opts: {
-    from: RefactorFilesResult;
-    into: RefactorFilesResult;
-}) => {
-    mutateToMergeRefactorRecords({
-        from: opts.from.accepted,
-        into: opts.into.accepted,
-    });
-    mutateToMergeRefactorRecords({
-        from: opts.from.discarded,
-        into: opts.into.discarded,
-    });
-
-    /**
-     * @note if we get a file in discarded list after previously
-     * getting a file in accepted list, we move the file to the
-     * discarded list
-     */
-    for (const filePath of Object.keys(opts.into.discarded)) {
-        const accepted = opts.into.accepted[filePath];
-        if (accepted) {
-            moveRefactorFileResults({
-                filePath,
-                from: opts.into.accepted,
-                into: opts.into.discarded,
-            });
-        }
-    }
-};
-
 export type Issue = z.infer<typeof issueSchema>;
 
 export const checkIssuesResultSchema = z.object({
     checkedFiles: z.array(z.string()).optional(),
+    commands: z.array(z.string()),
     issues: z.array(
         z.object({
             command: z.string(),
@@ -333,3 +340,64 @@ export const checkIssuesResultSchema = z.object({
 });
 
 export type CheckIssuesResult = z.infer<typeof checkIssuesResultSchema>;
+
+export const summarizeRefactorFileResultArray = (
+    results: Array<RefactorFileResult>
+) => {
+    const filePaths = results.map((result) => result.file.filePath);
+    return {
+        resultsByFilePaths: Object.fromEntries(
+            filePaths.map((filePath) => [
+                filePath,
+                results.filter((result) => result.file.filePath === filePath),
+            ])
+        ),
+        usageByFilePaths: Object.fromEntries(
+            filePaths.map((filePath) => [
+                filePath,
+                results
+                    .filter((result) => result.file.filePath === filePath)
+                    .flatMap((result) => result.usage),
+            ])
+        ),
+    };
+};
+
+export const summarizeRefactorFilesResult = (
+    results: RefactorFilesResult,
+    opts?: {
+        filterOutDuplicatesFromDiscarded?: boolean;
+    }
+) => {
+    const accepted = summarizeRefactorFileResultArray(results.accepted);
+    const discarded = summarizeRefactorFileResultArray(results.discarded);
+
+    /**
+     * The algorithm is built in a way that it relies on "planFiles" to
+     * return a list of files to be refactored. This means that if a file
+     * was already refactored, but for some reason the refactoring produced
+     * an outcome that "planFiles" wants to still refactor, the file will
+     * be refactored again - which will cause an infinite loop, which will be
+     * safely detected by the algorithm and the refactoring for that file will
+     * be aborted.
+     *
+     * This will cause some "accepted" files to be duplicated in the "discarded"
+     * list, which we filter out here for cleaner UX purposes - the users do not
+     * see the "discarded" commits anyway.
+     */
+    if (opts?.filterOutDuplicatesFromDiscarded ?? true) {
+        const discardedFilePaths = Object.keys(discarded.resultsByFilePaths);
+        const duplicatedFilePaths = discardedFilePaths.filter(
+            (filePath) => filePath in accepted.resultsByFilePaths
+        );
+        duplicatedFilePaths.forEach((filePath) => {
+            delete discarded.resultsByFilePaths[filePath];
+            delete discarded.usageByFilePaths[filePath];
+        });
+    }
+
+    return {
+        accepted,
+        discarded,
+    };
+};

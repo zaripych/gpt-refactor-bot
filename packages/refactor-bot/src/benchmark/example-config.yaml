@@ -1,0 +1,22 @@
+refactorConfig:
+    name: 'refactor-this-or-that'
+    objective: 'Refactor this or that'
+    model: 'gpt-4-1106-preview'
+
+evaluationConfig:
+    model: 'gpt-4-1106-preview'
+    choices: 3
+
+numberOfRuns: 3
+
+variants:
+    - name: 'A'
+      ref: 'HEAD'
+
+    - name: 'B'
+      ref: 'HEAD'
+      command:
+          - pnpm
+          - refactor-bot
+          - refactor
+          - --name refactor-this-or-that

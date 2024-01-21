@@ -1,3 +1,5 @@
+import { writeFile } from 'fs/promises';
+import { dump } from 'js-yaml';
 import { join } from 'path';
 
 import { createCachedPipeline } from '../cache/state';
@@ -13,19 +15,41 @@ import { randomText } from '../utils/randomText';
 import { checkoutSandbox } from './checkoutSandbox';
 import { enrichObjective } from './enrichObjective';
 import { refactorGoal } from './refactorGoal';
-import { resultsCollector } from './resultsCollector';
+import {
+    collectedRefactorResultSchema,
+    resultsCollector,
+} from './resultsCollector';
 import { retrieveParameters } from './retrieveParameters';
 import { type RefactorConfig } from './types';
 
-const createPipeline = (opts: {
-    location: string;
-    saveToCache: boolean;
+export async function refactor(opts: {
+    config: RefactorConfig;
+    saveToCache?: boolean;
     enableCacheFor?: string[];
-}) =>
-    createCachedPipeline({
-        location: opts.location,
+    disableCacheFor?: string[];
+}) {
+    if (
+        opts.enableCacheFor &&
+        opts.enableCacheFor.filter(Boolean).length === 0
+    ) {
+        throw new Error('enableCacheFor cannot be empty');
+    }
+
+    const root = process.env['CACHE_ROOT'] ?? (await findRepositoryRoot());
+
+    const id = opts.config.id ?? randomText(8);
+
+    const location = join(
+        root,
+        `.refactor-bot/refactors/${opts.config.name}/state/`,
+        id
+    );
+
+    const { execute, abort } = createCachedPipeline({
+        location,
         enableCacheFor: opts.enableCacheFor,
-        saveToCache: opts.saveToCache,
+        saveToCache: opts.saveToCache ?? true,
+        disableCacheFor: opts.disableCacheFor,
         pipeline: async (input: RefactorConfig) => {
             const checkoutResult = await checkoutSandbox(input);
 
@@ -57,46 +81,6 @@ const createPipeline = (opts: {
             };
         },
     });
-
-async function loadRefactorState(opts: {
-    config: RefactorConfig;
-    saveToCache?: boolean;
-    enableCacheFor?: string[];
-}) {
-    const root = await findRepositoryRoot();
-
-    const id = opts.config.id ?? randomText(8);
-
-    const location = join(
-        root,
-        `.refactor-bot/refactors/${opts.config.name}/state/`,
-        id
-    );
-
-    return {
-        ...createPipeline({
-            location,
-            saveToCache: opts.saveToCache ?? true,
-            enableCacheFor: opts.enableCacheFor,
-        }),
-        location,
-        id,
-    };
-}
-
-export async function refactor(opts: {
-    config: RefactorConfig;
-    saveToCache?: boolean;
-    enableCacheFor?: string[];
-}) {
-    if (
-        opts.enableCacheFor &&
-        opts.enableCacheFor.filter(Boolean).length === 0
-    ) {
-        throw new Error('enableCacheFor cannot be empty');
-    }
-
-    const { execute, abort, id } = await loadRefactorState(opts);
 
     logger.info(
         format(
@@ -152,7 +136,13 @@ export async function refactor(opts: {
         teardown();
     }
 
-    const result = finalizeResults(error);
+    const result = finalizeResults(opts.config, error);
+
+    await writeFile(
+        join(location, 'result.yaml'),
+        dump(collectedRefactorResultSchema.parse(result)),
+        'utf-8'
+    );
 
     const lastCommit = await gitRevParse({
         location: result.sandboxDirectoryPath,

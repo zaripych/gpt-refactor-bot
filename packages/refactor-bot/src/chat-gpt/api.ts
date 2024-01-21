@@ -251,8 +251,8 @@ export function estimatePrice(
 }
 
 export function calculatePrice(
-    opts: Response & {
-        model: Models;
+    opts: Pick<Response, 'usage'> & {
+        model: string;
     }
 ) {
     const model = opts.model;
@@ -312,13 +312,13 @@ export async function chatCompletions(opts: Opts): Promise<Response> {
             ...(opts.functionCall && {
                 function_call: opts.functionCall,
             }),
-            ...(opts.maxTokens && {
+            ...(typeof opts.maxTokens === 'number' && {
                 max_tokens: opts.maxTokens,
             }),
-            ...(opts.temperature && {
+            ...(typeof opts.temperature === 'number' && {
                 temperature: opts.temperature,
             }),
-            ...(opts.choices && {
+            ...(typeof opts.choices === 'number' && {
                 n: opts.choices,
             }),
         } satisfies BodyShape),
