@@ -7,11 +7,18 @@ import { line } from '../text/line';
 import { isFileNotFoundError } from '../utils/isFileNotFoundError';
 import { refactorResultSchema } from './refactorResultSchema';
 
+export type LoadedRefactorResult = NonNullable<
+    Awaited<ReturnType<typeof loadRefactorResult>>
+>;
+
 export async function loadRefactorResult(opts: { resultFilePath: string }) {
     try {
-        return refactorResultSchema.parse(
-            load(await readFile(opts.resultFilePath, 'utf-8'))
-        );
+        return {
+            ...refactorResultSchema.parse(
+                load(await readFile(opts.resultFilePath, 'utf-8'))
+            ),
+            resultFilePath: opts.resultFilePath,
+        };
     } catch (err) {
         if (isFileNotFoundError(err)) {
             return undefined;

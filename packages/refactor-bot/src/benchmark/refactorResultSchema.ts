@@ -16,6 +16,7 @@ import {
  */
 export const refactorResultSchema = z
     .object({
+        id: z.string().optional(),
         objective: z.string(),
         status: z.enum(['success', 'failure']),
         error: z.record(z.unknown()).optional(),
@@ -27,10 +28,19 @@ export const refactorResultSchema = z
         usage: z.array(llmUsageEntrySchema),
         performance: z.object({
             totalDurationMs: z.number(),
-            durationMsByStep: z.record(
-                z.object({
-                    durationMs: z.number(),
-                })
-            ),
+            timeToReplayMs: z.number().optional(),
+            durationMsByStep: z
+                .record(
+                    z.object({
+                        durationMs: z.number(),
+                    })
+                )
+                .and(
+                    z.object({
+                        total: z.object({
+                            durationMs: z.number(),
+                        }),
+                    })
+                ),
         }),
     });

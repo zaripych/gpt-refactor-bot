@@ -118,6 +118,8 @@ export function summarizeLlmUsageTokens(params: { usage: Array<Usage> }) {
     >();
 
     let totalTokens = 0;
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
 
     for (const { usage, steps } of params.usage) {
         for (const step of steps) {
@@ -136,10 +138,14 @@ export function summarizeLlmUsageTokens(params: { usage: Array<Usage> }) {
         }
 
         totalTokens += usage.totalTokens;
+        totalPromptTokens += usage.promptTokens;
+        totalCompletionTokens += usage.completionTokens;
     }
 
     return {
         tokensBySteps,
         totalTokens,
+        totalPromptTokens,
+        totalCompletionTokens,
     };
 }

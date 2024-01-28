@@ -1,21 +1,24 @@
-import type { z } from 'zod';
-
-import { avg } from '../evaluate/utils/avg';
-import type { refactorResultSchema } from './refactorResultSchema';
+import { outliers } from '../math/outliers';
+import type { LoadedRefactorResult } from './loadRefactorResult';
 
 export function summarizePerformance(opts: {
-    results: Array<z.output<typeof refactorResultSchema>>;
+    results: Array<LoadedRefactorResult>;
 }) {
     const summaries = opts.results.map((result) => {
         return {
-            totalDurationMs: result.performance.totalDurationMs,
+            durationMs: result.performance.durationMsByStep.total.durationMs,
+            result,
         };
     });
+
+    const durationMs = outliers(summaries, (summary) => summary.durationMs);
 
     return {
         /**
          * Average duration of the refactor
          */
-        durationMs: avg(summaries.map((summary) => summary.totalDurationMs)),
+        durationMs: durationMs.average,
+
+        outliers: [...new Set([...durationMs.outliers])],
     };
 }

@@ -1,11 +1,10 @@
-import type { z } from 'zod';
-
-import { avg } from '../evaluate/utils/avg';
+import { avg } from '../math/avg';
+import { outliers } from '../math/outliers';
 import { summarizeRefactorFilesResult } from '../refactor/types';
-import type { refactorResultSchema } from './refactorResultSchema';
+import type { LoadedRefactorResult } from './loadRefactorResult';
 
 export function summarizeOutcomeScore(opts: {
-    results: Array<z.output<typeof refactorResultSchema>>;
+    results: Array<LoadedRefactorResult>;
 }) {
     const summaries = opts.results.map((result) => {
         const { accepted, discarded } = summarizeRefactorFilesResult(result);
@@ -17,6 +16,7 @@ export function summarizeOutcomeScore(opts: {
             return {
                 score: 0,
                 acceptedRatio: 0,
+                result,
             };
         }
 
@@ -34,8 +34,11 @@ export function summarizeOutcomeScore(opts: {
             acceptedRatio:
                 acceptedFileNames.length /
                 (acceptedFileNames.length + discardedFileNames.length),
+            result,
         };
     });
+
+    const score = outliers(summaries, (summary) => summary.score);
 
     return {
         /**
@@ -45,12 +48,18 @@ export function summarizeOutcomeScore(opts: {
          * complete or not. Value of 1 means that all requirements were met,
          * value of 0 means that none of the requirements were met.
          */
-        score: avg(summaries.map((summary) => summary.score)),
+        score: score.average,
 
         /**
          * Average ratio of accepted file changes to the total number of
          * files we attempted to refactor
          */
         acceptedRatio: avg(summaries.map((summary) => summary.acceptedRatio)),
+
+        outliers: [...new Set([...score.outliers])],
+
+        lowScores: summaries
+            .filter((summary) => summary.score <= 0.34)
+            .map((summary) => summary),
     };
 }

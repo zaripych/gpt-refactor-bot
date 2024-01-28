@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 
+import dedent from 'dedent';
 import { join } from 'path';
 import { z } from 'zod';
 
@@ -58,6 +59,7 @@ const prettierFormat = async (
         repositoryRoot: string;
         input: string;
         filePath: string;
+        throwOnParseError: boolean;
     },
     deps = defaultDeps
 ) => {
@@ -111,6 +113,14 @@ const prettierFormat = async (
 
     if (result.stderr) {
         deps.warn('Prettier failed to format', { stderr: result.stderr });
+        if (opts.throwOnParseError) {
+            throw new Error(
+                dedent`
+                    Prettier failed to format:
+                    ${result.stderr}
+                `
+            );
+        }
         return opts.input;
     }
 
@@ -123,6 +133,7 @@ export async function prettierMarkdown(
         repositoryRoot: string;
         filePath?: string;
         md: string;
+        throwOnParseError?: boolean;
     },
     deps = defaultDeps
 ) {
@@ -132,6 +143,7 @@ export async function prettierMarkdown(
             prettierScriptLocation: opts.prettierScriptLocation,
             repositoryRoot: opts.repositoryRoot,
             input: opts.md,
+            throwOnParseError: opts.throwOnParseError ?? false,
         },
         deps
     );
@@ -143,6 +155,7 @@ export async function prettierTypescript(
         repositoryRoot: string;
         filePath?: string;
         ts: string;
+        throwOnParseError?: boolean;
     },
     deps = defaultDeps
 ) {
@@ -152,6 +165,29 @@ export async function prettierTypescript(
             prettierScriptLocation: opts.prettierScriptLocation,
             repositoryRoot: opts.repositoryRoot,
             input: opts.ts,
+            throwOnParseError: opts.throwOnParseError ?? false,
+        },
+        deps
+    );
+}
+
+export async function prettierYaml(
+    opts: {
+        prettierScriptLocation?: string;
+        repositoryRoot: string;
+        filePath?: string;
+        yaml: string;
+        throwOnParseError?: boolean;
+    },
+    deps = defaultDeps
+) {
+    return await prettierFormat(
+        {
+            filePath: opts.filePath ?? 'output.yaml',
+            prettierScriptLocation: opts.prettierScriptLocation,
+            repositoryRoot: opts.repositoryRoot,
+            input: opts.yaml,
+            throwOnParseError: opts.throwOnParseError ?? false,
         },
         deps
     );

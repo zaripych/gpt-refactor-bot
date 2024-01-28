@@ -8,6 +8,7 @@ import { ancestorDirectories } from '../utils/ancestorDirectories';
 import { hasOneElement } from '../utils/hasOne';
 import { defaultDeps } from './dependencies';
 import { loadEvents, saveEvents } from './persistence';
+import { shouldDisableCache } from './shouldDisableCache';
 import { type CacheState, getPipelineState } from './state';
 
 export function explainCacheKey(key?: string) {
@@ -55,21 +56,20 @@ export async function lookupEventsInCache<
     }
 
     if (
-        opts.state.enableCacheFor &&
-        !opts.state.enableCacheFor.includes(opts.name) &&
-        !opts.state.enableCacheFor.includes(basename(opts.key))
+        shouldDisableCache({
+            name: opts.name,
+            key: opts.key,
+            enableCacheFor: opts.state.enableCacheFor,
+            disableCacheFor: opts.state.disableCacheFor,
+        })
     ) {
-        return {
-            foundLocation: undefined,
-            foundEvents: undefined,
-        };
-    }
+        opts.state.deps.logger.trace('Cache disabled by user request', {
+            name: opts.name,
+            key: opts.key,
+            enableCacheFor: opts.state.enableCacheFor,
+            disableCacheFor: opts.state.disableCacheFor,
+        });
 
-    if (
-        opts.state.disableCacheFor &&
-        (opts.state.disableCacheFor.includes(opts.name) ||
-            opts.state.disableCacheFor.includes(basename(opts.key)))
-    ) {
         return {
             foundLocation: undefined,
             foundEvents: undefined,
