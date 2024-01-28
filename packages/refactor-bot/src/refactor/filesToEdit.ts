@@ -52,8 +52,8 @@ const promptText = (opts: { objective: string }) =>
                appear in the objective.
 
             <example>
-            #. \`path/to/file.ts\`
-            #. \`path/to/another/file.ts\`
+            1. \`path/to/file.ts\`
+            2. \`path/to/another/file.ts\`
             </example>
         `,
         {

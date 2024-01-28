@@ -32,6 +32,7 @@ import { executeFunction } from '../functions/executeFunction';
 import { includeFunctions } from '../functions/includeFunctions';
 import { sanitizeFunctionResult } from '../functions/sanitizeFunctionResult';
 import { functionsConfigSchema } from '../functions/types';
+import { line } from '../text/line';
 import { ensureHasOneElement } from '../utils/hasOne';
 import { isTruthy } from '../utils/isTruthy';
 import { gptRequestFailed } from './actions/gptRequestFailed';
@@ -62,6 +63,18 @@ export const promptInputSchema = z.object({
     choices: z.number().optional(),
     dedupe: z.boolean().optional(),
     seed: z.string().optional(),
+
+    /**
+     * Number of times we allow the `shouldStop` function to throw an exception
+     * before we re-throw it and fail the whole prompt execution
+     */
+    maxExceptions: z.number().default(3),
+
+    /**
+     * Number of times we allow the `shouldStop` function to continue the prompt
+     * before we stop it and fail the whole prompt execution
+     */
+    maxBounceBacks: z.number().default(3),
 });
 
 export const promptResultSchema = z.object({
@@ -280,6 +293,8 @@ export const prompt = makeCachedFunction({
             return {
                 status: 'initial-state' as const,
                 messages,
+                exceptions: 0,
+                bounceBacks: 0,
             };
         };
 
@@ -288,6 +303,26 @@ export const prompt = makeCachedFunction({
                 const lastMessage = state.messages[state.messages.length - 1];
                 if (!lastMessage) {
                     throw new Error('Invalid state, no last message found');
+                }
+
+                if (state.bounceBacks > opts.maxBounceBacks) {
+                    throw new Error(
+                        line`
+                            ${opts.maxBounceBacks} bounce backs reached - the
+                            LLM cannot satisfy validation conditions for the
+                            prompt
+                        `
+                    );
+                }
+
+                if (state.exceptions > opts.maxExceptions) {
+                    throw new Error(
+                        line`
+                            ${opts.maxExceptions} exceptions reached - the
+                            LLM cannot satisfy validation conditions for the
+                            prompt
+                        `
+                    );
                 }
 
                 if (
@@ -337,7 +372,11 @@ export const prompt = makeCachedFunction({
                             );
                         }
 
-                        return nextStateChoices;
+                        return nextStateChoices.map((choice) => ({
+                            ...choice,
+                            exceptions: state.exceptions,
+                            bounceBacks: state.bounceBacks,
+                        }));
                     }).pipe(mergeAll());
                 } else if ('functionCall' in lastMessage) {
                     const functionCall = lastMessage.functionCall;
@@ -385,15 +424,28 @@ export const prompt = makeCachedFunction({
                         );
 
                         return defer(async () => {
-                            const result = await new Promise((resolve) => {
-                                resolve(shouldStop(lastMessage));
-                            }).catch((e) =>
-                                e instanceof Error ? e.message : String(e)
-                            );
+                            const [result] = await Promise.allSettled([
+                                new Promise((resolve) => {
+                                    resolve(shouldStop(lastMessage));
+                                }),
+                            ]);
 
-                            if (result === true) {
+                            if (
+                                result.status === 'fulfilled' &&
+                                result.value === true
+                            ) {
                                 return [];
                             }
+
+                            const exceptions =
+                                result.status === 'rejected' ? 1 : 0;
+
+                            const content =
+                                result.status === 'rejected'
+                                    ? result.reason instanceof Error
+                                        ? result.reason.message
+                                        : String(result.reason)
+                                    : result.value;
 
                             return [
                                 {
@@ -402,9 +454,11 @@ export const prompt = makeCachedFunction({
                                         ...state.messages,
                                         {
                                             role: 'system',
-                                            content: result,
+                                            content,
                                         },
                                     ],
+                                    exceptions: state.exceptions + exceptions,
+                                    bounceBacks: state.bounceBacks + 1,
                                 },
                             ];
                         }).pipe(mergeAll());

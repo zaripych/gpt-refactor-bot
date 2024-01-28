@@ -20,6 +20,7 @@ import { ensureHasOneElement, hasTwoElements } from '../utils/hasOne';
 import { UnreachableError } from '../utils/UnreachableError';
 import { applyChanges } from './applyChanges';
 import { check, checksSummary, scriptSchema } from './check';
+import { chunkyEdit } from './chunkyEdit';
 import { startCollectingLlmUsage } from './collectLlmUsage';
 import { edit } from './edit';
 import { formatCommitMessage } from './prompts/formatCommitMessage';
@@ -315,7 +316,13 @@ export const refactorFile = makeCachedFunction({
                             throw new UnreachableError(task);
                     }
 
-                    const { choices } = await edit(
+                    const chosenEdit = process.argv.includes(
+                        '--experiment-chunky-edit-strategy'
+                    )
+                        ? chunkyEdit
+                        : edit;
+
+                    const { choices } = await chosenEdit(
                         {
                             ...commonEditOpts,
                             objective,
