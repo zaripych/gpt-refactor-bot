@@ -136,7 +136,13 @@ export async function refactor(opts: {
         teardown();
     }
 
-    const result = finalizeResults(opts.config, error);
+    const result = finalizeResults(
+        {
+            id,
+            ...opts.config,
+        },
+        error
+    );
 
     await writeFile(
         join(location, 'result.yaml'),

@@ -1,6 +1,7 @@
 import type { ArgumentsCamelCase, Argv, CommandModule } from 'yargs';
 import yargs from 'yargs';
 
+import { flush, logger } from '../logger/logger';
 import { line } from '../text/line';
 
 const builder = (yargs: Argv) =>
@@ -74,7 +75,10 @@ const opts = await builder(yargs(process.argv.slice(2)))
     .usage(benchmarkCommand.describe)
     .parseAsync();
 
-await benchmarkCommand.handler(opts).catch((err) => {
-    console.error(err);
-    process.exitCode = 1;
-});
+await benchmarkCommand
+    .handler(opts)
+    .catch((err) => {
+        logger.error(err);
+        process.exitCode = 1;
+    })
+    .then(() => flush());

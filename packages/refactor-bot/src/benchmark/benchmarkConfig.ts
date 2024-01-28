@@ -23,10 +23,12 @@ export const appVariantSchema = z.object({
     ref: z.string().optional(),
     repository: z.string().optional(),
     ids: z.array(z.string()).optional(),
+    excludeIds: z.array(z.string()).optional(),
     command: z
         .array(z.string())
         .nonempty()
         .default(['pnpm', 'refactor-bot', 'refactor']),
+    args: z.array(z.string()).optional(),
     refactorConfig: partialRefactorConfigSchema.optional(),
 });
 
@@ -42,7 +44,7 @@ export const benchConfigSchema = z
             .transform((variants) => ensureHasTwoElements(variants)),
         refactorConfig: passthroughRefactorConfigSchema,
         evaluationConfig: evaluationConfigSchema.default({
-            model: 'gpt-4-1106-preview',
+            model: 'gpt-4-turbo-preview',
             choices: 3,
         }),
         numberOfRuns: z.number().default(1),

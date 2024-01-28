@@ -53,10 +53,17 @@ export function findIdentifier(
 
     const node = sourceFile.getFirstDescendantOrThrow(
         findIdentifierInternal,
-        () =>
-            args.initialFilePath
-                ? `Cannot find identifier "${args.identifier}" in file "${args.initialFilePath}"`
-                : `Cannot find identifier "${args.identifier}"`
+        () => {
+            const parts = [
+                `Cannot find identifier "${args.identifier}"`,
+                args.initialFilePath && `in file "${args.initialFilePath}"`,
+                args.identifierContext && `of type "${args.identifierContext}"`,
+                '- try reducing the specificity of your search',
+            ]
+                .filter(Boolean)
+                .join(' ');
+            return parts;
+        }
     );
 
     return node;

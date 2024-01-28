@@ -18,10 +18,10 @@ import { refactorResultSchema } from '../benchmark/refactorResultSchema';
 import { makeCachedFunction } from '../cache/makeCachedFunction';
 import type { CacheStateRef } from '../cache/types';
 import { modelsSchema } from '../chat-gpt/api';
+import { avg } from '../math/avg';
 import { summarizeRefactorFilesResult } from '../refactor/types';
 import { evaluateFileScore } from './evaluateFileScore';
 import { extractRequirements } from './extractRequirements';
-import { avg } from './utils/avg';
 
 const evaluateRefactorResultOptsSchema = z.object({
     /**

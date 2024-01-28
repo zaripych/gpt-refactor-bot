@@ -1,15 +1,12 @@
-import type { z } from 'zod';
-
-import { avg } from '../evaluate/utils/avg';
-import { sum } from '../evaluate/utils/sum';
+import { outliers } from '../math/outliers';
+import { sum } from '../math/sum';
 import { summarizeLlmUsageTokens } from '../refactor/collectLlmUsage';
-import type { refactorResultSchema } from './refactorResultSchema';
+import type { LoadedRefactorResult } from './loadRefactorResult';
 
-export function summarizeCosts(opts: {
-    results: Array<z.output<typeof refactorResultSchema>>;
-}) {
+export function summarizeCosts(opts: { results: Array<LoadedRefactorResult> }) {
     const summaries = opts.results.map((result) => {
-        const { totalTokens } = summarizeLlmUsageTokens(result);
+        const { totalTokens, totalCompletionTokens, totalPromptTokens } =
+            summarizeLlmUsageTokens(result);
 
         const wastedTokens = sum(
             result.discarded.map((result) =>
@@ -19,22 +16,46 @@ export function summarizeCosts(opts: {
 
         return {
             totalTokens,
+            totalPromptTokens,
+            totalCompletionTokens,
             wastedTokensRatio: wastedTokens / totalTokens,
+            result,
         };
     });
+
+    const totalTokens = outliers(summaries, (summary) => summary.totalTokens);
+    const totalPromptTokens = outliers(
+        summaries,
+        (summary) => summary.totalPromptTokens
+    );
+    const totalCompletionTokens = outliers(
+        summaries,
+        (summary) => summary.totalCompletionTokens
+    );
+    const wastedTokensRatio = outliers(
+        summaries,
+        (summary) => summary.wastedTokensRatio
+    );
 
     return {
         /**
          * Average number of tokens used in the refactor
          */
-        totalTokens: avg(summaries.map((summary) => summary.totalTokens)),
+        totalTokens: totalTokens.average,
+        totalPromptTokens: totalPromptTokens.average,
+        totalCompletionTokens: totalCompletionTokens.average,
 
         /**
          * Average ratio of tokens used to produce results which were discarded
          * during the refactor
          */
-        wastedTokensRatio: avg(
-            summaries.map((summary) => summary.wastedTokensRatio)
-        ),
+        wastedTokensRatio: wastedTokensRatio.average,
+
+        outliers: [
+            ...new Set([
+                ...totalTokens.outliers,
+                ...wastedTokensRatio.outliers,
+            ]),
+        ],
     };
 }

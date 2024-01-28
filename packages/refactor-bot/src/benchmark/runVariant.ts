@@ -10,7 +10,9 @@ import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { spawnResult } from '../child-process/spawnResult';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { logger } from '../logger/logger';
+import { prettierMarkdown } from '../prettier/prettier';
 import { checkoutSandbox } from '../refactor/checkoutSandbox';
+import { ensureHasOneElement } from '../utils/hasOne';
 import { randomText } from '../utils/randomText';
 import {
     appVariantSchema,
@@ -20,11 +22,85 @@ import {
 
 export const runVariantSchema = z.object({
     id: z.string(),
-    variant: appVariantSchema,
+    variant: appVariantSchema.omit({
+        ids: true,
+        excludeIds: true,
+    }),
     refactorConfig: passthroughRefactorConfigSchema,
     evaluationConfig: evaluationConfigSchema,
     numberOfRuns: z.number(),
     maxConcurrentRefactors: z.number(),
+
+    ids: z
+        .function(
+            z.tuple([]),
+            z.object({
+                preEvaluatedIds: z.array(z.string()),
+                newIds: z.array(z.string()),
+            })
+        )
+        .optional(),
+});
+
+const runRefactor = makeCachedFunction({
+    name: 'run',
+    inputSchema: z.object({
+        name: z.string(),
+        refactorId: z.string(),
+        cacheRoot: z.string(),
+        sandboxDirectoryPath: z.string(),
+        command: z.array(z.string()).nonempty(),
+    }),
+    resultSchema: z.object({
+        resultFilePath: z.string(),
+    }),
+    transform: async (input) => {
+        const result = await spawnResult(
+            input.command[0],
+            input.command
+                .slice(1)
+                .concat(['--name', input.name, '--id', input.refactorId]),
+            {
+                cwd: input.sandboxDirectoryPath,
+                output: [],
+                exitCodes: 'any',
+                stdio: 'inherit',
+                env: {
+                    ...process.env,
+                    LOG_RELATIVE_TO_CWD: process.cwd(),
+                    CACHE_ROOT: input.cacheRoot,
+                },
+            }
+        );
+
+        logger.debug('Process finished', {
+            command: input.command.join(' '),
+            pid: result.pid,
+            ...(result.error && {
+                error: result.error,
+            }),
+            ...(typeof result.status === 'number' && {
+                status: result.status,
+            }),
+            ...(typeof result.signal === 'string' && {
+                signal: result.signal,
+            }),
+        });
+
+        assert(!result.signal, 'Failed to run refactor command');
+
+        return {
+            resultFilePath: join(
+                input.cacheRoot,
+                '.refactor-bot',
+                'refactors',
+                input.name,
+                'state',
+                input.refactorId,
+                'result.yaml'
+            ),
+        };
+    },
 });
 
 export const runVariant = makeCachedFunction({
@@ -36,26 +112,33 @@ export const runVariant = makeCachedFunction({
     transform: async (input, ctx) => {
         const repoRoot = await findRepositoryRoot();
 
-        const newRuns = input.numberOfRuns - (input.variant.ids?.length ?? 0);
+        const preEvaluatedIds = input.ids?.()?.preEvaluatedIds ?? [];
+        const newIds = input.ids?.()?.newIds ?? [];
 
-        if (newRuns === 0) {
+        if (
+            Math.max(0, input.numberOfRuns - preEvaluatedIds.length) !==
+            newIds.length
+        ) {
+            throw new Error('Not enough new IDs passed in');
+        }
+
+        if (newIds.length === 0) {
             logger.debug('No new runs to start', {
                 numberOfRunsRequired: input.numberOfRuns,
-                numberOfPreEvaluatedRuns: input.variant.ids?.length ?? 0,
+                numberOfPreEvaluatedRuns: preEvaluatedIds.length,
                 maxConcurrentRefactors: input.maxConcurrentRefactors,
             });
 
-            const resultFilePaths = (input.variant.ids ?? []).map(
-                (refactorId) =>
-                    join(
-                        repoRoot,
-                        '.refactor-bot',
-                        'refactors',
-                        input.refactorConfig.name,
-                        'state',
-                        refactorId,
-                        'result.yaml'
-                    )
+            const resultFilePaths = preEvaluatedIds.map((refactorId) =>
+                join(
+                    repoRoot,
+                    '.refactor-bot',
+                    'refactors',
+                    input.refactorConfig.name,
+                    'state',
+                    refactorId,
+                    'result.yaml'
+                )
             );
 
             return {
@@ -100,13 +183,16 @@ export const runVariant = makeCachedFunction({
 
         await writeFile(
             goalMd,
-            dedent`
-                \`\`\`yaml
-                ${dump(rest)}
-                \`\`\`
+            await prettierMarkdown({
+                repositoryRoot: cliSandbox.sandboxDirectoryPath,
+                md: dedent`
+                    \`\`\`yaml
+                    ${dump(rest)}
+                    \`\`\`
 
-                ${objective}
-            `
+                    ${objective}
+                `,
+            })
         );
 
         logger.debug('Written refactor config with an objective at', {
@@ -115,71 +201,34 @@ export const runVariant = makeCachedFunction({
 
         logger.debug('Starting refactoring process', {
             numberOfRuns: input.numberOfRuns,
-            numberOfPreEvaluatedRuns: input.variant.ids?.length ?? 0,
+            numberOfPreEvaluatedRuns: preEvaluatedIds.length,
             maxConcurrentRefactors: input.maxConcurrentRefactors,
         });
 
         const results = await lastValueFrom(
-            range(0, newRuns).pipe(
-                mergeMap(async () => {
-                    const refactorId = randomText(8);
-
-                    const result = await spawnResult(
-                        input.variant.command[0],
-                        input.variant.command
-                            .slice(1)
-                            .concat([
-                                '--name',
-                                input.refactorConfig.name,
-                                '--id',
-                                refactorId,
-                            ]),
+            range(0, newIds.length).pipe(
+                mergeMap(async (i) => {
+                    return runRefactor(
                         {
-                            cwd: cliSandbox.sandboxDirectoryPath,
-                            output: [],
-                            exitCodes: 'any',
-                            stdio: 'inherit',
-                            env: {
-                                ...process.env,
-                                LOG_RELATIVE_TO_CWD: process.cwd(),
-                                CACHE_ROOT: repoRoot,
-                            },
-                        }
+                            refactorId: newIds[i] ?? randomText(8),
+                            cacheRoot: repoRoot,
+                            sandboxDirectoryPath:
+                                cliSandbox.sandboxDirectoryPath,
+                            name: input.refactorConfig.name,
+                            command: ensureHasOneElement(
+                                input.variant.command.concat(
+                                    input.variant.args || []
+                                )
+                            ),
+                        },
+                        ctx
                     );
-
-                    logger.debug('Process finished', {
-                        command: input.variant.command.join(' '),
-                        pid: result.pid,
-                        ...(result.error && {
-                            error: result.error,
-                        }),
-                        ...(typeof result.status === 'number' && {
-                            status: result.status,
-                        }),
-                        ...(typeof result.signal === 'string' && {
-                            signal: result.signal,
-                        }),
-                    });
-
-                    assert(!result.signal, 'Failed to run refactor command');
-
-                    return {
-                        resultFilePath: join(
-                            repoRoot,
-                            '.refactor-bot',
-                            'refactors',
-                            input.refactorConfig.name,
-                            'state',
-                            refactorId,
-                            'result.yaml'
-                        ),
-                    };
                 }, input.maxConcurrentRefactors),
                 toArray()
             )
         );
 
-        const resultFilePaths = (input.variant.ids ?? [])
+        const resultFilePaths = preEvaluatedIds
             .map((refactorId) =>
                 join(
                     repoRoot,

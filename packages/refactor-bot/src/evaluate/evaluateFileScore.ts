@@ -3,12 +3,12 @@ import { z } from 'zod';
 import type { CacheStateRef } from '../cache/types';
 import { gitShowFile } from '../git/gitShowFile';
 import { gitShowFileCommitRangeSummary } from '../git/gitShowFileCommitSummary';
+import { avg } from '../math/avg';
 import {
     evaluateFileChanges,
     evaluateFileChangesInput,
 } from './evaluateFileChanges';
 import { evaluateUnchangedFile } from './evaluateUnchangedFile';
-import { avg } from './utils/avg';
 
 export const evaluateFileScoreSchema = evaluateFileChangesInput
     .omit({

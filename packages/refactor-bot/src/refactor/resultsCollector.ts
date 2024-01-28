@@ -24,6 +24,7 @@ import { llmUsageEntrySchema, refactorFilesResultSchema } from './types';
 
 export const collectedRefactorResultSchema = z
     .object({
+        id: z.string(),
         objective: z.string(),
         status: z.enum(['success', 'failure']),
         error: z.record(z.unknown()).optional(),
@@ -35,6 +36,7 @@ export const collectedRefactorResultSchema = z
         usage: z.array(llmUsageEntrySchema),
         performance: z.object({
             totalDurationMs: z.number(),
+            timeToReplayMs: z.number().optional(),
             durationMsByStep: z.record(
                 z.object({
                     durationMs: z.number(),
@@ -226,7 +228,8 @@ export function resultsCollector(deps = { actions }) {
         );
 
         return {
-            totalDurationMs,
+            timeToReplayMs: totalDurationMs,
+            totalDurationMs: durationMsByStep.total.durationMs,
             durationMsByStep,
         };
     };
@@ -237,7 +240,7 @@ export function resultsCollector(deps = { actions }) {
             usage.finishCollecting();
         },
         finalizeResults: (
-            config: RefactorConfig,
+            config: RefactorConfig & { id: string },
             error?: Error
         ): z.output<typeof collectedRefactorResultSchema> => {
             if (error) {
@@ -246,6 +249,7 @@ export function resultsCollector(deps = { actions }) {
                 }
                 return {
                     status: 'failure' as const,
+                    id: config.id,
                     error: extractErrorInfo(error),
                     objective: config.objective,
                     ...ensureHasOneElement(checkoutResults)[0],
@@ -257,6 +261,7 @@ export function resultsCollector(deps = { actions }) {
             } else {
                 return {
                     status: 'success' as const,
+                    id: config.id,
                     objective: config.objective,
                     ...ensureHasOneElement(checkoutResults)[0],
                     ...files,

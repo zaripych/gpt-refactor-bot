@@ -16,6 +16,8 @@ import type {
 } from './internalTypes';
 
 export const modelsSchema = z.enum([
+    'gpt-4-turbo-preview',
+    'gpt-4-0125-preview',
     'gpt-4-1106-preview',
     'gpt-4-1106-vision-preview',
     'gpt-4',
@@ -189,6 +191,14 @@ const messageFromInternal = (message: ResponseMessageShape): ResponseMessage =>
         : message;
 
 const pricing = {
+    'gpt-4-turbo-preview': {
+        perKTokenInput: 0.01,
+        perKTokenOutput: 0.03,
+    },
+    'gpt-4-0125-preview': {
+        perKTokenInput: 0.01,
+        perKTokenOutput: 0.03,
+    },
     'gpt-4-1106-preview': {
         perKTokenInput: 0.01,
         perKTokenOutput: 0.03,

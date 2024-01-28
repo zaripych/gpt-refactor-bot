@@ -2,10 +2,10 @@ import assert from 'assert';
 import { realpath } from 'fs/promises';
 import { basename, isAbsolute, normalize, relative, sep } from 'path';
 
+import { ConfigurationError } from '../errors/configurationError';
 import { logger } from '../logger/logger';
 import { escapeRegExp } from '../utils/escapeRegExp';
 import { ensureHasOneElement } from '../utils/hasOne';
-import { UnreachableError } from '../utils/UnreachableError';
 import { runPackageManagerScript } from './runPackageManagerScript';
 
 type Issue = {
@@ -117,7 +117,7 @@ export async function runCheckCommandWithParser(opts: {
     packageManager: 'npm' | 'yarn' | 'pnpm';
     script: {
         args: [string, ...string[]];
-        parse: 'stdout' | 'stderr';
+        failOnStderr?: boolean;
         supportsFileFiltering: boolean;
     };
     outputParser: (output: string) => Issue[];
@@ -131,17 +131,6 @@ export async function runCheckCommandWithParser(opts: {
         logOnError: undefined,
     });
 
-    const chooseOutput = () => {
-        switch (opts.script.parse) {
-            case 'stderr':
-                return stderr;
-            case 'stdout':
-                return stdout;
-            default:
-                throw new UnreachableError(opts.script.parse);
-        }
-    };
-
     const parentDirectoryRegex = new RegExp(
         `^.*${escapeRegExp(sep + normalize(basename(opts.location) + sep))}`,
         'g'
@@ -151,9 +140,15 @@ export async function runCheckCommandWithParser(opts: {
         () => opts.location
     );
 
+    if (stderr && opts.script.failOnStderr) {
+        logger.error(stderr);
+
+        throw new ConfigurationError(`Failed when running "${args.join(' ')}"`);
+    }
+
     return {
         args,
-        issues: opts.outputParser(chooseOutput()).map((data) => {
+        issues: opts.outputParser(stdout).map((data) => {
             const issue = data.issue.replaceAll(parentDirectoryRegex, '');
             return {
                 ...data,
@@ -178,6 +173,7 @@ export async function runCheckCommand(opts: {
     const script = {
         ...opts.script,
         args: ensureHasOneElement(opts.script.args.concat([])),
+        failOnStderr: true,
     };
 
     let parser: ((output: string) => Issue[]) | undefined = undefined;
@@ -199,6 +195,7 @@ export async function runCheckCommand(opts: {
             if (opts.filePaths) {
                 script.args.push('--findRelatedTests', ...opts.filePaths);
             }
+            script.failOnStderr = false;
             break;
 
         default:
@@ -212,7 +209,6 @@ export async function runCheckCommand(opts: {
         ...opts,
         script: {
             ...script,
-            parse: 'stdout',
             supportsFileFiltering: script.args[0] !== 'tsc',
         },
         outputParser: parser,

@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { spawnResult } from '../child-process/spawnResult';
+import { logger } from '../logger/logger';
 import { determinePackageManager } from '../package-manager/determinePackageManager';
 import { runPackageManagerScript } from '../package-manager/runPackageManagerScript';
 
@@ -114,6 +115,14 @@ export const autoFixIssuesContents = makeCachedFunction({
             }),
             writeToStdin(),
         ]);
+
+        if (result.stderr) {
+            logger.error('Failed to auto-fix issues', result.stderr);
+
+            return {
+                contents: opts.fileContents,
+            };
+        }
 
         const [first] = z
             .array(
