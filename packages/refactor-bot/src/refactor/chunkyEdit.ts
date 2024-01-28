@@ -8,9 +8,11 @@ import { logger } from '../logger/logger';
 import { markdown } from '../markdown/markdown';
 import { prettierTypescript } from '../prettier/prettier';
 import { parseFencedCodeBlocks } from '../response-parsers/parseFencedCodeBlocks';
+import { parseJsonResponse } from '../response-parsers/parseJsonResponse';
 import { format } from '../text/format';
 import { line } from '../text/line';
 import { hasOneElement } from '../utils/hasOne';
+import { applyFindAndReplace } from './applyFindAndReplace';
 import {
     prompt,
     promptParametersFrom,
@@ -46,10 +48,10 @@ export const editResultSchema = z.object({
 export type EditResponse = z.infer<typeof editResultSchema>;
 
 const preface = markdown`
-    Think step by step. Do not make assumptions other than what was given in the
-    instructions. Produce minimal changes in the code to accomplish the task.
-    Attempt to make changes to the code that are backward compatible with the
-    rest of the codebase.
+    Think step by step. Be concise and to the point. Do not make assumptions and
+    follow instructions exactly. Produce minimal changes in the code to
+    accomplish the task. Attempt to make changes to the code that are backward
+    compatible with the rest of the codebase.
 `;
 
 const promptText = (opts: { objective: string; filePath: string }) =>
@@ -57,41 +59,53 @@ const promptText = (opts: { objective: string; filePath: string }) =>
         markdown`
             %objective%
 
-            As a result - produce modified contents of the entire file
-            \`%filePath%\` with the task performed. Modified code must be
-            surrounded with markdown code fences (ie "\`\`\`"). The modified
-            code should represent the entire file contents.
+            As a result - produce changes to \`%filePath%\` with the task
+            performed.
 
-            If no modifications required - respond with "No changes required"
-            without any reasoning.
+            Return list of changes in the following format:
 
-            Do not respond with any other text other than the modified code or
-            "No changes required".
-
-            Do not include any code blocks when responding with "No changes
-            required".
-
-            Do not include unmodified code when responding with "No changes
-            required".
-
-            Do not include "No changes required" when responding with modified
-            code.
-
-            Example response #1:
-
-            ~~~TypeScript
-            /* entire contents of the file omitted in the example */
+            ~~~json
+            [
+                {
+                    "findAll": "find this line in the file",
+                    "replace": "replace all occurrences with this line"
+                },
+                {
+                    "find": "find another line in the file",
+                    "occurrence": 0, // occurrence starts from 0
+                    "replace": "replace only first occurrence with this line"
+                }
+            ]
             ~~~
 
-            Example response #2:
+            Use "find" to replace single occurrence and "findAll" to replace all
+            occurrences.
 
-            No changes required.
+            Ensure that the text being replaced is present in the file.
+
+            Ensure that the text being replaced is an entire line or multiple
+            lines including indentation or whitespace.
+
+            Ensure that the text being replaced is non-ambiguous. If there are
+            multiple entries in the file for the text, include more context to
+            make it unambiguous.
+
+            Ensure that the text being replaced is unique.
+
+            Ensure to include "occurrence" if there are multiple occurrences of
+            the same text in the file and the replacement text is different.
+
+            Do not worry about line breaks or formatting the code, it will be
+            formatted automatically after the modifications using "prettier".
+
+            When replacing multiple consecutive lines, prefer combining them
+            into a single replacement operation.
         `,
         opts
     );
 
-export const edit = makeCachedFunction({
-    name: 'edit',
+export const chunkyEdit = makeCachedFunction({
+    name: 'chunky-edit',
     inputSchema: editInputSchema,
     resultSchema: editResultSchema,
     transform: async (input, ctx): Promise<EditResponse> => {
@@ -118,22 +132,39 @@ export const edit = makeCachedFunction({
             if (!hasOneElement(blocks)) {
                 throw new Error(
                     line`
-                        Expected to find a single code chunk, but found
-                        ${blocks.length}
+                        Expected a single code chunk in response, got
+                        ${blocks.length} chunks
                     `
                 );
             }
 
-            if (!blocks[0].code) {
-                throw new Error(`Expected a non-empty code chunk in response`);
-            }
+            const parsedResponse = parseJsonResponse(
+                message.content,
+                z.array(
+                    z.union([
+                        z.object({
+                            find: z.string(),
+                            occurrence: z.number().optional(),
+                            replace: z.string(),
+                        }),
+                        z.object({
+                            findAll: z.string(),
+                            replace: z.string(),
+                        }),
+                    ])
+                )
+            );
 
-            const codeChunk = blocks[0].code;
+            const codeChunk = applyFindAndReplace({
+                text: input.fileContents,
+                blocks: parsedResponse,
+            });
 
             const formattedCodeChunk = await prettierTypescript({
                 prettierScriptLocation: input.prettierScriptLocation,
                 repositoryRoot: input.sandboxDirectoryPath,
                 ts: codeChunk,
+                throwOnParseError: true,
             });
 
             const eslintFixed = input.eslintAutoFixScriptArgs

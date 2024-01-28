@@ -67,6 +67,16 @@ export const refactorCommand: CommandModule<
                     Whether to print performance metrics, by default it's disabled
                 `,
                 default: false,
+            })
+            .option('experiment-chunky-edit-strategy', {
+                type: 'boolean',
+                describe: line`
+                    Enables chunky edit strategy where we ask the LLM to send
+                    us only the chunks it had modified. This is an experimental
+                    feature and it's disabled by default.
+                `,
+                default: false,
+                hidden: true,
             }),
     handler: async (opts) => {
         const { runRefactor } = await import('./runRefactor');
