@@ -20,8 +20,8 @@ import {
 } from '../chat-gpt/api';
 import { spawnResult } from '../child-process/spawnResult';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
-import { executeFunction } from '../functions/executeFunction';
-import { includeFunctions } from '../functions/includeFunctions';
+import { prepareFunctionsRepository } from '../functions/prepareFunctionsRepository';
+import { functions } from '../functions/registry';
 import { markdown, printMarkdown } from '../markdown/markdown';
 import { format } from '../text/format';
 import { line } from '../text/line';
@@ -203,8 +203,16 @@ export const run = async (opts: {
 }) => {
     const spinner = ora();
 
-    const repoRoot = await findRepositoryRoot();
-    const dir = join(repoRoot, '.refactor-bot', 'prompts');
+    const repositoryRoot = await findRepositoryRoot();
+
+    const functionsRepository = await prepareFunctionsRepository({
+        functions,
+        config: {
+            repositoryRoot,
+        },
+    });
+
+    const dir = join(repositoryRoot, '.refactor-bot', 'prompts');
     const dirContents = orderBy(
         await globby('*.md', {
             cwd: dir,
@@ -246,8 +254,6 @@ export const run = async (opts: {
 
     const convo = conversationState(conversationFile);
     await convo.load();
-
-    const functions = await includeFunctions(opts.functions ?? 'all');
 
     await goToEndOfFile(conversationFile);
 
@@ -305,7 +311,7 @@ export const run = async (opts: {
                 chatCompletions({
                     model: opts.model ?? 'gpt-3.5-turbo',
                     messages: convo.messages,
-                    functions,
+                    functions: functionsRepository.describeFunctions(),
                     temperature: 0,
                 }),
                 {
@@ -387,10 +393,13 @@ export const run = async (opts: {
         if (choice.finishReason === 'function_call') {
             try {
                 const { functionCall } = choice.message;
-                const result = await executeFunction({
-                    name: functionCall.name,
-                    arguments: JSON.parse(functionCall.arguments),
-                })
+                const result = await functionsRepository
+                    .executeFunction({
+                        name: functionCall.name,
+                        arguments: JSON.parse(
+                            functionCall.arguments
+                        ) as unknown,
+                    })
                     .then(
                         (executeResult) =>
                             ({

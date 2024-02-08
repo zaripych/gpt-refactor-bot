@@ -72,7 +72,13 @@ export const extractRequirements = async (
     const validateResponse = (message: RegularAssistantMessage) =>
         parseJsonResponse(message.content, requirementsArraySchema);
 
-    const promptParams = promptParametersFrom(input, ctx);
+    const promptParams = promptParametersFrom(
+        {
+            ...input,
+            allowedFunctions: [],
+        },
+        ctx
+    );
 
     const result = await prompt(
         {
@@ -96,10 +102,6 @@ export const extractRequirements = async (
                 }
             },
             ...promptParams,
-            functionsConfig: {
-                ...promptParams.functionsConfig,
-                allowedFunctions: [],
-            },
         },
         ctx
     );

@@ -1,8 +1,13 @@
 import { z } from 'zod';
 
 import { modelsSchema } from '../chat-gpt/api';
+import type { FunctionsRepositoryFromRegistry } from '../functions/prepareFunctionsRepository';
+import { allowedFunctionsSchema, type functions } from '../functions/registry';
 import { functionsConfigSchema } from '../functions/types';
 import { randomText } from '../utils/randomText';
+import type { CodeCheckingDeps } from './code-checking/prepareCodeCheckingDeps';
+import type { CodeFormattingDeps } from './code-formatting/prepareCodeFormattingDeps';
+import type { LlmDependencies } from './llm/llmDependencies';
 
 export const refactorConfigSchema = z.object({
     /**
@@ -72,7 +77,7 @@ export const refactorConfigSchema = z.object({
     /**
      * List of function names allowed to be called during refactor
      */
-    allowedFunctions: functionsConfigSchema.shape.allowedFunctions,
+    allowedFunctions: allowedFunctionsSchema,
 
     /**
      * A git repository which is the target of the refactor, could be
@@ -106,7 +111,7 @@ export const refactorConfigSchema = z.object({
     /**
      * The default model to use for the refactor
      */
-    model: modelsSchema.optional().default('gpt-3.5-turbo-1106'),
+    model: modelsSchema.optional().default('gpt-4-turbo-preview'),
 
     /**
      * A map of step codes to models to use for that step
@@ -204,6 +209,28 @@ export const refactorConfigSchema = z.object({
 });
 
 export type RefactorConfig = z.input<typeof refactorConfigSchema>;
+
+export type FunctionsRepositoryDeps = FunctionsRepositoryFromRegistry<
+    typeof functions
+> & {
+    _brand?: 'FunctionsRepositoryDeps';
+};
+
+export const functionsRepositorySchema = z
+    .function(z.tuple([]))
+    .returns(z.custom<FunctionsRepositoryDeps>());
+
+export const checkDependenciesSchema = z
+    .function(z.tuple([]))
+    .returns(z.custom<CodeCheckingDeps>());
+
+export const formatDependenciesSchema = z
+    .function(z.tuple([]))
+    .returns(z.custom<CodeFormattingDeps>());
+
+export const llmDependenciesSchema = z
+    .function(z.tuple([]))
+    .returns(z.custom<LlmDependencies>());
 
 export const issueSchema = z.object({
     command: z.string(),

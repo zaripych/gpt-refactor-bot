@@ -3,21 +3,29 @@ import { z } from 'zod';
 import { CycleDetectedError } from '../errors/cycleDetectedError';
 import { logger } from '../logger/logger';
 import { line } from '../text/line';
-import { scriptSchema } from './check';
 import { planFiles, planFilesResultSchema } from './planFiles';
 import { refactorBatch } from './refactorBatch';
 import { resetToLastAcceptedCommit } from './resetToLastAcceptedCommit';
 import type { RefactorFilesResult } from './types';
-import { refactorConfigSchema, refactorFilesResultSchema } from './types';
+import {
+    checkDependenciesSchema,
+    formatDependenciesSchema,
+    functionsRepositorySchema,
+    llmDependenciesSchema,
+    refactorFilesResultSchema,
+} from './types';
 
-export const planAndRefactorInputSchema = refactorConfigSchema.augment({
+export const planAndRefactorInputSchema = z.object({
     objective: z.string(),
     requirements: z.array(z.string()).nonempty(),
     startCommit: z.string(),
     sandboxDirectoryPath: z.string(),
-    scripts: z.array(scriptSchema),
-    prettierScriptLocation: z.string().optional(),
     filesToEdit: z.array(z.string()),
+
+    llmDependencies: llmDependenciesSchema,
+    checkDependencies: checkDependenciesSchema,
+    formatDependencies: formatDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
 });
 
 export const planAndRefactorResultSchema = refactorFilesResultSchema.merge(

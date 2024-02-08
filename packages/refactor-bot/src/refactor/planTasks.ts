@@ -7,7 +7,7 @@ import { gitFilesDiff } from '../git/gitFilesDiff';
 import { markdown } from '../markdown/markdown';
 import { format } from '../text/format';
 import { isTruthy } from '../utils/isTruthy';
-import { determineModelParameters } from './determineModelParameters';
+import { determineModelParameters } from './llm/determineModelParameters';
 import { prompt } from './prompt';
 import { refactorConfigSchema } from './types';
 

@@ -1,12 +1,12 @@
 import assert from 'assert';
 import { z } from 'zod';
 
-import { makeCachedFunction } from '../cache/makeCachedFunction';
-import { diffHash } from '../git/diffHash';
-import { filesDiffHash } from '../git/filesDiffHash';
-import { runCheckCommand } from '../package-manager/runCheckCommand';
-import type { CheckIssuesResult, Issue, RefactorConfig } from './types';
-import { checkIssuesResultSchema } from './types';
+import { makeCachedFunction } from '../../cache/makeCachedFunction';
+import { diffHash } from '../../git/diffHash';
+import { filesDiffHash } from '../../git/filesDiffHash';
+import { runCheckCommand } from '../../package-manager/runCheckCommand';
+import type { CheckIssuesResult, Issue, RefactorConfig } from '../types';
+import { checkIssuesResultSchema } from '../types';
 
 export const scriptSchema = z.object({
     args: z.array(z.string()).nonempty(),

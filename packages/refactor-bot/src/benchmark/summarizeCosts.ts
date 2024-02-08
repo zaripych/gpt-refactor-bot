@@ -1,6 +1,6 @@
 import { outliers } from '../math/outliers';
 import { sum } from '../math/sum';
-import { summarizeLlmUsageTokens } from '../refactor/collectLlmUsage';
+import { summarizeLlmUsageTokens } from '../refactor/llm/collectLlmUsage';
 import type { LoadedRefactorResult } from './loadRefactorResult';
 
 export function summarizeCosts(opts: { results: Array<LoadedRefactorResult> }) {

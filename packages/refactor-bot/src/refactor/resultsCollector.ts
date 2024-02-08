@@ -17,7 +17,7 @@ import { checkoutSandboxCompleted } from './actions/checkoutSandboxCompleted';
 import { discardedEdit } from './actions/discardedEdit';
 import { planFilesCompleted } from './actions/planFilesCompleted';
 import { checkoutSandboxResultSchema } from './checkoutSandbox';
-import { startCollectingLlmUsage } from './collectLlmUsage';
+import { startCollectingLlmUsage } from './llm/collectLlmUsage';
 import { planFilesResultSchema } from './planFiles';
 import type { RefactorConfig, refactorFileResultSchema } from './types';
 import { llmUsageEntrySchema, refactorFilesResultSchema } from './types';

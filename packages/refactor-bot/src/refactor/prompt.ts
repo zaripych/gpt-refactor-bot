@@ -14,54 +14,27 @@ import type { TypeOf } from 'zod';
 import { z } from 'zod';
 
 import { makeCachedFunction } from '../cache/makeCachedFunction';
-import type { CacheStateRef } from '../cache/types';
 import type { Message } from '../chat-gpt/api';
-import {
-    calculatePrice,
-    chatCompletions,
-    functionResultMessageSchema,
-    messageSchema,
-    modelsSchema,
-    regularAssistantMessageSchema,
-    responseSchema,
-    systemMessageSchema,
-} from '../chat-gpt/api';
-import { GptRequestError } from '../errors/gptRequestError';
+import { regularAssistantMessageSchema } from '../chat-gpt/api';
 import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
-import { executeFunction } from '../functions/executeFunction';
-import { includeFunctions } from '../functions/includeFunctions';
-import { sanitizeFunctionResult } from '../functions/sanitizeFunctionResult';
-import { functionsConfigSchema } from '../functions/types';
 import { line } from '../text/line';
 import { ensureHasOneElement } from '../utils/hasOne';
 import { isTruthy } from '../utils/isTruthy';
-import { gptRequestFailed } from './actions/gptRequestFailed';
-import { gptRequestSuccess } from './actions/gptRequestSuccess';
 import {
-    determineModelParameters,
-    refactorConfigModelParamsSchema,
-} from './determineModelParameters';
-import { refactorConfigSchema } from './types';
+    functionsRepositorySchema,
+    llmDependenciesSchema,
+    refactorConfigSchema,
+} from './types';
 
 export const promptInputSchema = z.object({
     preface: z.string().optional(),
     prompt: z.string(),
+
     temperature: z.number(),
-    budgetCents: z.number(),
-    functionsConfig: functionsConfigSchema,
-    shouldStop: z
-        .function()
-        .args(regularAssistantMessageSchema)
-        .returns(
-            z.union([
-                z.promise(z.union([z.literal(true), z.string()])),
-                z.union([z.literal(true), z.string()]),
-            ])
-        )
-        .optional(),
-    model: modelsSchema.optional().default('gpt-3.5-turbo'),
+
     choices: z.number().optional(),
     dedupe: z.boolean().optional(),
+
     seed: z.string().optional(),
 
     /**
@@ -75,6 +48,22 @@ export const promptInputSchema = z.object({
      * before we stop it and fail the whole prompt execution
      */
     maxBounceBacks: z.number().default(3),
+
+    allowedFunctions: refactorConfigSchema.shape.allowedFunctions,
+
+    shouldStop: z
+        .function()
+        .args(regularAssistantMessageSchema)
+        .returns(
+            z.union([
+                z.promise(z.union([z.literal(true), z.string()])),
+                z.union([z.literal(true), z.string()]),
+            ])
+        )
+        .optional(),
+
+    llmDependencies: llmDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
 });
 
 export const promptResultSchema = z.object({
@@ -88,135 +77,11 @@ export const promptResultSchema = z.object({
         .nonempty(),
 });
 
-let totalSpend = 0;
-
-const chat = makeCachedFunction({
-    name: 'chat',
-    inputSchema: promptInputSchema
-        .pick({
-            model: true,
-            temperature: true,
-            budgetCents: true,
-        })
-        .augment({
-            allowedFunctions: z.array(z.string()),
-            messages: z.array(messageSchema),
-            choices: z.number().optional(),
-        }),
-    resultSchema: z.object({
-        response: responseSchema,
-    }),
-    transform: async (state, ctx) => {
-        try {
-            const response = await chatCompletions({
-                ...state,
-                functions: await includeFunctions(state.allowedFunctions),
-            });
-
-            ctx.dispatch(
-                gptRequestSuccess({
-                    model: state.model,
-                    key: ctx.location,
-                    response,
-                })
-            );
-
-            const spent = calculatePrice({
-                ...response,
-                model: state.model,
-            });
-
-            totalSpend += spent.totalPrice;
-
-            if (totalSpend * 100 > state.budgetCents) {
-                throw new GptRequestError('Spent too much');
-            }
-
-            return {
-                response,
-            };
-        } catch (err) {
-            ctx.dispatch(
-                gptRequestFailed({
-                    model: state.model,
-                    key: ctx.location,
-                    error:
-                        err instanceof GptRequestError
-                            ? err
-                            : new GptRequestError('Unhandled internal error', {
-                                  cause: err,
-                              }),
-                })
-            );
-            throw err;
-        }
-    },
-});
-
-const exec = makeCachedFunction({
-    name: 'exec',
-    type: 'deterministic',
-    inputSchema: promptInputSchema
-        .pick({
-            functionsConfig: true,
-        })
-        .extend({
-            functionCall: z.object({
-                name: z.string(),
-                arguments: z.string(),
-            }),
-        }),
-    resultSchema: z.object({
-        message: z.union([systemMessageSchema, functionResultMessageSchema]),
-    }),
-    transform: async ({ functionCall, functionsConfig }) => {
-        let parsedArgs: unknown;
-        try {
-            parsedArgs = JSON.parse(functionCall.arguments);
-        } catch {
-            return {
-                message: {
-                    role: 'system' as const,
-                    content: `Cannot parse function arguments as JSON`,
-                },
-            };
-        }
-
-        try {
-            const result = await executeFunction(
-                {
-                    name: functionCall.name,
-                    arguments: parsedArgs as never,
-                },
-                functionsConfig
-            );
-
-            return {
-                message: {
-                    role: 'function' as const,
-                    name: functionCall.name,
-                    content: JSON.stringify(result),
-                },
-            };
-        } catch (e) {
-            return {
-                message: {
-                    role: 'system' as const,
-                    content: await sanitizeFunctionResult({
-                        result: e instanceof Error ? e.message : String(e),
-                        config: functionsConfig,
-                    }),
-                },
-            };
-        }
-    },
-});
-
 function removeFunctionFromState(
     opts: {
         messages: Array<Message>;
         name: string;
-    } & Pick<TypeOf<typeof promptInputSchema>, 'functionsConfig'>
+    } & Pick<TypeOf<typeof promptInputSchema>, 'functionsRepository'>
 ) {
     // remove bad function name from messages because the ChatGPT
     // API itself chokes on it and stops processing the chain
@@ -236,48 +101,21 @@ function removeFunctionFromState(
         content:
             `Function "${opts.name}" is not a valid ` +
             `function name. Valid function names are: ` +
-            `${opts.functionsConfig.allowedFunctions.join(', ')}`,
+            `${opts.functionsRepository().config.allowedFunctions.join(', ')}`,
     });
 }
-
-export type RefactorConfigPromptOpts = z.input<
-    typeof refactorConfigPromptOptsSchema
->;
-
-export const refactorConfigPromptOptsSchema = refactorConfigSchema
-    .pick({
-        budgetCents: true,
-        scope: true,
-        tsConfigJsonFileName: true,
-        allowedFunctions: true,
-    })
-    .merge(refactorConfigModelParamsSchema)
-    .augment({
-        sandboxDirectoryPath: z.string(),
-    });
-
-export const promptParametersFrom = (
-    inputRaw: RefactorConfigPromptOpts,
-    ctx?: CacheStateRef
-): Omit<z.input<typeof promptInputSchema>, 'temperature' | 'prompt'> => {
-    const input = refactorConfigPromptOptsSchema.parse(inputRaw);
-    return {
-        budgetCents: input.budgetCents,
-        functionsConfig: {
-            repositoryRoot: input.sandboxDirectoryPath,
-            scope: input.scope,
-            tsConfigJsonFileName: input.tsConfigJsonFileName,
-            allowedFunctions: input.allowedFunctions,
-        },
-        ...determineModelParameters(input, ctx),
-    };
-};
 
 export const prompt = makeCachedFunction({
     name: 'prompt',
     inputSchema: promptInputSchema,
     resultSchema: promptResultSchema,
     transform: async (opts, ctx) => {
+        const repository = opts
+            .functionsRepository()
+            .setAllowedFunctions(opts.allowedFunctions);
+
+        const functionsRepository = () => repository;
+
         const initialState = () => {
             const messages: Message[] = [
                 opts.preface && {
@@ -331,15 +169,12 @@ export const prompt = makeCachedFunction({
                     lastMessage.role === 'user'
                 ) {
                     return defer(async () => {
-                        const result = await chat(
+                        const result = await opts.llmDependencies().chat(
                             {
                                 ...state,
-                                budgetCents: opts.budgetCents,
-                                allowedFunctions:
-                                    opts.functionsConfig.allowedFunctions,
-                                model: opts.model,
                                 temperature: opts.temperature,
                                 choices: opts.choices,
+                                functionsRepository,
                             },
                             ctx
                         );
@@ -382,13 +217,13 @@ export const prompt = makeCachedFunction({
                     const functionCall = lastMessage.functionCall;
                     return defer(async () => {
                         if (
-                            !opts.functionsConfig.allowedFunctions.find(
+                            !repository.config.allowedFunctions.find(
                                 (fn) => fn === functionCall.name
                             )
                         ) {
                             removeFunctionFromState({
+                                functionsRepository,
                                 messages: state.messages,
-                                functionsConfig: opts.functionsConfig,
                                 name: functionCall.name,
                             });
 
@@ -398,13 +233,13 @@ export const prompt = makeCachedFunction({
                             };
                         }
 
-                        const result = await exec(
-                            {
-                                functionCall: lastMessage.functionCall,
-                                functionsConfig: opts.functionsConfig,
-                            },
-                            ctx
-                        );
+                        const result =
+                            await functionsRepository().executeGptFunction(
+                                {
+                                    functionCall: lastMessage.functionCall,
+                                },
+                                ctx
+                            );
 
                         return {
                             status: 'function-execution-result' as const,

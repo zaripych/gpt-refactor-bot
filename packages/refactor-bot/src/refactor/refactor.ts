@@ -13,20 +13,22 @@ import { format } from '../text/format';
 import { line } from '../text/line';
 import { randomText } from '../utils/randomText';
 import { checkoutSandbox } from './checkoutSandbox';
+import { prepareDependencies } from './dependencies/prepareDependencies';
 import { enrichObjective } from './enrichObjective';
-import { refactorGoal } from './refactorGoal';
+import { resetAndRefactor } from './resetAndRefactor';
 import {
     collectedRefactorResultSchema,
     resultsCollector,
 } from './resultsCollector';
 import { retrieveParameters } from './retrieveParameters';
-import { type RefactorConfig } from './types';
+import { type RefactorConfig, refactorConfigSchema } from './types';
 
 export async function refactor(opts: {
     config: RefactorConfig;
     saveToCache?: boolean;
     enableCacheFor?: string[];
     disableCacheFor?: string[];
+    cleanCache?: boolean;
 }) {
     if (
         opts.enableCacheFor &&
@@ -35,6 +37,11 @@ export async function refactor(opts: {
         throw new Error('enableCacheFor cannot be empty');
     }
 
+    /**
+     * @note CACHE_ROOT is an environment variable that is used to override the
+     * default cache root. This is used by the benchmarking tool to place cached
+     * data at the root folder of the repository where the benchmark is run
+     */
     const root = process.env['CACHE_ROOT'] ?? (await findRepositoryRoot());
 
     const id = opts.config.id ?? randomText(8);
@@ -50,23 +57,34 @@ export async function refactor(opts: {
         enableCacheFor: opts.enableCacheFor,
         saveToCache: opts.saveToCache ?? true,
         disableCacheFor: opts.disableCacheFor,
-        pipeline: async (input: RefactorConfig) => {
+        cleanCache: opts.cleanCache ?? false,
+        pipeline: async (inputRaw: RefactorConfig) => {
+            const input = refactorConfigSchema.parse(inputRaw);
+
             const checkoutResult = await checkoutSandbox(input);
+
+            const dependencies = await prepareDependencies({
+                ...input,
+                ...checkoutResult,
+            });
 
             const retrieveParametersResult = await retrieveParameters({
                 ...input,
                 ...checkoutResult,
+                ...dependencies,
             });
 
             const enrichObjectiveResult = await enrichObjective({
                 ...input,
                 ...checkoutResult,
+                ...dependencies,
                 ...retrieveParametersResult,
             });
 
-            const refactorResult = await refactorGoal({
+            const refactorResult = await resetAndRefactor({
                 ...input,
                 ...checkoutResult,
+                ...dependencies,
                 ...retrieveParametersResult,
                 ...enrichObjectiveResult,
                 objective: enrichObjectiveResult.enrichedObjective,

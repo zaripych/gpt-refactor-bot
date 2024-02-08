@@ -8,10 +8,14 @@ import { gitRevParse } from '../git/gitRevParse';
 import { logger } from '../logger/logger';
 import { acceptedEdit } from './actions/acceptedEdit';
 import { discardedEdit } from './actions/discardedEdit';
-import { scriptSchema } from './check';
 import { refactorFile } from './refactorFile';
 import type { RefactorFilesResult } from './types';
-import { refactorConfigSchema } from './types';
+import {
+    checkDependenciesSchema,
+    formatDependenciesSchema,
+    functionsRepositorySchema,
+    refactorConfigSchema,
+} from './types';
 
 export const refactorBatchInputSchema = refactorConfigSchema
     .pick({
@@ -31,8 +35,10 @@ export const refactorBatchInputSchema = refactorConfigSchema
         plannedFiles: z.array(z.string()),
         startCommit: z.string(),
         sandboxDirectoryPath: z.string(),
-        scripts: z.array(scriptSchema),
-        prettierScriptLocation: z.string().optional(),
+
+        checkDependencies: checkDependenciesSchema,
+        formatDependencies: formatDependenciesSchema,
+        functionsRepository: functionsRepositorySchema,
     });
 
 export const refactorBatch = async (

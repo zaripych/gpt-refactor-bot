@@ -3,10 +3,8 @@ import { z } from 'zod';
 
 import { makeCachedFunction } from '../cache/makeCachedFunction';
 import type { RegularAssistantMessage } from '../chat-gpt/api';
-import { autoFixIssuesContents } from '../eslint/autoFixIssues';
 import { logger } from '../logger/logger';
 import { markdown } from '../markdown/markdown';
-import { prettierTypescript } from '../prettier/prettier';
 import { parseFencedCodeBlocks } from '../response-parsers/parseFencedCodeBlocks';
 import { format } from '../text/format';
 import { line } from '../text/line';
@@ -16,14 +14,16 @@ import {
     promptParametersFrom,
     refactorConfigPromptOptsSchema,
 } from './prompt';
+import { formatDependenciesSchema, functionsRepositorySchema } from './types';
 
 export const editInputSchema = refactorConfigPromptOptsSchema.augment({
     objective: z.string(),
     filePath: z.string(),
     fileContents: z.string(),
-    eslintAutoFixScriptArgs: z.array(z.string()).nonempty().optional(),
-    prettierScriptLocation: z.string().optional(),
     choices: z.number().optional(),
+
+    formatDependencies: formatDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
 });
 
 const singleChoiceResultSchema = z.discriminatedUnion('status', [
@@ -128,42 +128,11 @@ export const edit = makeCachedFunction({
                 throw new Error(`Expected a non-empty code chunk in response`);
             }
 
-            const codeChunk = blocks[0].code;
-
-            const formattedCodeChunk = await prettierTypescript({
-                prettierScriptLocation: input.prettierScriptLocation,
-                repositoryRoot: input.sandboxDirectoryPath,
-                ts: codeChunk,
+            const eslintFixed = await input.formatDependencies().format({
+                code: blocks[0].code,
+                filePath: input.filePath,
+                throwOnParseError: true,
             });
-
-            const eslintFixed = input.eslintAutoFixScriptArgs
-                ? (
-                      await autoFixIssuesContents(
-                          {
-                              eslintScriptArgs: input.eslintAutoFixScriptArgs,
-                              fileContents: formattedCodeChunk,
-                              filePath: input.filePath,
-                              location: input.sandboxDirectoryPath,
-                          },
-                          ctx
-                      )
-                  ).contents
-                : formattedCodeChunk;
-
-            if (input.eslintAutoFixScriptArgs) {
-                if (
-                    eslintFixed === input.fileContents &&
-                    formattedCodeChunk !== input.fileContents
-                ) {
-                    throw new Error(
-                        line`
-                            eslint reverted the code changes as they do not
-                            pass the eslint formatting rules. Please do not
-                            make similar changes in the future to avoid cycles.
-                        `
-                    );
-                }
-            }
 
             if (eslintFixed === input.fileContents) {
                 return {

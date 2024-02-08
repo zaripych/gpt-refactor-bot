@@ -13,6 +13,7 @@ import {
 export const determineFilesToEditInputSchema =
     refactorConfigPromptOptsSchema.augment({
         objective: z.string(),
+        sandboxDirectoryPath: z.string(),
     });
 
 export const determineFilesToEditResultSchema = z.object({

@@ -4,26 +4,19 @@ import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { diffHash } from '../git/diffHash';
 import { markdown } from '../markdown/markdown';
 import { format } from '../text/format';
-import { determineModelParameters } from './determineModelParameters';
 import { validateAndParseListOfFiles } from './parsers/validateAndParseListOfFiles';
 import { prompt } from './prompt';
-import { refactorConfigSchema } from './types';
+import { functionsRepositorySchema, llmDependenciesSchema } from './types';
 
-export const planFilesInputSchema = refactorConfigSchema
-    .pick({
-        budgetCents: true,
-        model: true,
-        modelByStepCode: true,
-        useMoreExpensiveModelsOnRetry: true,
-        scope: true,
-        tsConfigJsonFileName: true,
-        allowedFunctions: true,
-    })
-    .augment({
+export const planFilesInputSchema = z
+    .object({
         objective: z.string(),
         sandboxDirectoryPath: z.string(),
         startCommit: z.string(),
         filesToEdit: z.array(z.string()),
+
+        llmDependencies: llmDependenciesSchema,
+        functionsRepository: functionsRepositorySchema,
     })
     .transform(async (input) => ({
         ...input,
@@ -102,16 +95,10 @@ export const planFiles = makeCachedFunction({
     transform: async (input, ctx): Promise<PlanFilesResponse> => {
         const plannedFilesResult = await prompt(
             {
+                ...input,
                 preface: systemPrompt,
                 prompt: planFilesPromptText(input.objective),
-                budgetCents: input.budgetCents,
                 temperature: 1,
-                functionsConfig: {
-                    repositoryRoot: input.sandboxDirectoryPath,
-                    scope: input.scope,
-                    tsConfigJsonFileName: input.tsConfigJsonFileName,
-                    allowedFunctions: input.allowedFunctions,
-                },
                 shouldStop: async (message) => {
                     await validateAndParseListOfFiles({
                         sandboxDirectoryPath: input.sandboxDirectoryPath,
@@ -120,7 +107,6 @@ export const planFiles = makeCachedFunction({
                     });
                     return true as const;
                 },
-                ...determineModelParameters(input, ctx),
             },
             ctx
         );

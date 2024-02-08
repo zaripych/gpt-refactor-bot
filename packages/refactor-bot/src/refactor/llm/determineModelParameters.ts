@@ -1,9 +1,9 @@
 import micromatch from 'micromatch';
 import { z } from 'zod';
 
-import { logger } from '../logger/logger';
-import { hasOneElement } from '../utils/hasOne';
-import { refactorConfigSchema } from './types';
+import { logger } from '../../logger/logger';
+import { hasOneElement } from '../../utils/hasOne';
+import { refactorConfigSchema } from '../types';
 
 export const refactorConfigModelParamsSchema = refactorConfigSchema
     .pick({

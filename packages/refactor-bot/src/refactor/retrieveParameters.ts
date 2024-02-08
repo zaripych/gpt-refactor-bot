@@ -12,6 +12,7 @@ export const retrieveParametersInputSchema =
     refactorConfigPromptOptsSchema.augment({
         objective: z.string(),
         filesToEdit: z.array(z.string()).nonempty().optional(),
+        sandboxDirectoryPath: z.string(),
     });
 
 export const retrieveParametersResultSchema =

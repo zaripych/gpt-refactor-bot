@@ -3,9 +3,9 @@ import { globby } from 'globby';
 import { join } from 'path';
 import { z } from 'zod';
 
-import { spawnResult } from '../child-process/spawnResult';
-import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
-import { readPackagesGlobsAt } from '../file-system/readPackagesGlobsAt';
+import { spawnResult } from '../../child-process/spawnResult';
+import { findRepositoryRoot } from '../../file-system/findRepositoryRoot';
+import { readPackagesGlobsAt } from '../../file-system/readPackagesGlobsAt';
 
 export async function discoverDependencies(opts: {
     location: string;

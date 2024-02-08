@@ -37,7 +37,7 @@ type KebabCaseToLowerCamelCase<T extends string> =
 export function makeCachedFunction<
     const Key extends string,
     InputSchema extends SupportedZodSchemas,
-    OutputSchema extends SupportedZodSchemas,
+    OutputSchema extends SupportedZodSchemas | z.ZodType<unknown>,
 >(
     opts: {
         name?: Key;

@@ -163,14 +163,6 @@ export const evaluateFileChanges = makeCachedFunction({
                 })
             );
 
-        const promptParams = promptParametersFrom(
-            {
-                ...input,
-                allowedFunctions: [],
-            },
-            ctx
-        );
-
         const result = await prompt(
             {
                 preface: systemPromptText,
@@ -197,7 +189,7 @@ export const evaluateFileChanges = makeCachedFunction({
                         return String(err);
                     }
                 },
-                ...promptParams,
+                allowedFunctions: [],
                 seed: input.index?.toString(),
             },
             ctx
