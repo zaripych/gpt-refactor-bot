@@ -3,37 +3,34 @@ import { z } from 'zod';
 
 import { evaluateFileScore } from '../evaluate/evaluateFileScore';
 import { dispatch } from '../event-bus';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
 import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { logger } from '../logger/logger';
 import { acceptedEdit } from './actions/acceptedEdit';
 import { discardedEdit } from './actions/discardedEdit';
-import { scriptSchema } from './check';
+import { checkDependenciesSchema } from './code-checking/prepareCodeCheckingDeps';
+import { formatDependenciesSchema } from './code-formatting/prepareCodeFormattingDeps';
 import { refactorFile } from './refactorFile';
 import type { RefactorFilesResult } from './types';
 import { refactorConfigSchema } from './types';
 
-export const refactorBatchInputSchema = refactorConfigSchema
-    .pick({
-        budgetCents: true,
-        lintScripts: true,
-        testScripts: true,
-        model: true,
-        modelByStepCode: true,
-        useMoreExpensiveModelsOnRetry: true,
-        allowedFunctions: true,
-        evaluate: true,
-        evaluateMinScore: true,
-    })
-    .augment({
-        objective: z.string(),
-        requirements: z.array(z.string()).nonempty(),
-        plannedFiles: z.array(z.string()),
-        startCommit: z.string(),
-        sandboxDirectoryPath: z.string(),
-        scripts: z.array(scriptSchema),
-        prettierScriptLocation: z.string().optional(),
-    });
+export const refactorBatchInputSchema = z.object({
+    objective: z.string(),
+    requirements: z.array(z.string()).nonempty(),
+    plannedFiles: z.array(z.string()),
+    startCommit: z.string(),
+    sandboxDirectoryPath: z.string(),
+
+    evaluate: refactorConfigSchema.shape.evaluate,
+    evaluateMinScore: refactorConfigSchema.shape.evaluateMinScore,
+
+    llmDependencies: llmDependenciesSchema,
+    checkDependencies: checkDependenciesSchema,
+    formatDependencies: formatDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
+});
 
 export const refactorBatch = async (
     input: z.input<typeof refactorBatchInputSchema>,

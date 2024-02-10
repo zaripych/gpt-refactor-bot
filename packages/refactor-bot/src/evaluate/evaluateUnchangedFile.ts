@@ -3,31 +3,31 @@ import { z } from 'zod';
 import { makeCachedFunction } from '../cache/makeCachedFunction';
 import type { CacheStateRef } from '../cache/types';
 import type { RegularAssistantMessage } from '../chat-gpt/api';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { markdown } from '../markdown/markdown';
 import { formatBulletList } from '../prompt-formatters/formatBulletList';
 import { formatFileContents } from '../prompt-formatters/formatFileContents';
 import { formatOptional } from '../prompt-formatters/formatOptional';
-import {
-    prompt,
-    promptParametersFrom,
-    refactorConfigPromptOptsSchema,
-} from '../refactor/prompt';
+import { prompt } from '../refactor/prompt';
 import { parseJsonResponse } from '../response-parsers/parseJsonResponse';
 import { format } from '../text/format';
 import { line } from '../text/line';
 import { ensureHasOneElement } from '../utils/hasOne';
 import { evaluateFileResultSchema } from './evaluateFileChanges';
 
-export const evaluateUnchangedFileInput =
-    refactorConfigPromptOptsSchema.augment({
-        requirements: z.array(z.string()).nonempty(),
-        filePath: z.string(),
-        fileContents: z.string(),
-        issues: z.array(z.string()).optional(),
-        index: z.number().optional(),
-        choices: z.number().optional(),
-        temperature: z.number().optional(),
-    });
+export const evaluateUnchangedFileInput = z.object({
+    requirements: z.array(z.string()).nonempty(),
+    filePath: z.string(),
+    fileContents: z.string(),
+    issues: z.array(z.string()).optional(),
+    index: z.number().optional(),
+    choices: z.number().optional(),
+    temperature: z.number().optional(),
+
+    llmDependencies: llmDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
+});
 
 const systemPromptText = markdown`
     Think step by step. Be concise and to the point. Do not make assumptions
@@ -133,16 +133,9 @@ export const evaluateUnchangedFile = makeCachedFunction({
                 })
             );
 
-        const promptParams = promptParametersFrom(
-            {
-                ...input,
-                allowedFunctions: [],
-            },
-            ctx
-        );
-
         const result = await prompt(
             {
+                ...input,
                 preface: systemPromptText,
                 prompt: promptText({
                     filePath,
@@ -163,7 +156,6 @@ export const evaluateUnchangedFile = makeCachedFunction({
                         return String(err);
                     }
                 },
-                ...promptParams,
                 seed: input.index?.toString(),
             },
             ctx

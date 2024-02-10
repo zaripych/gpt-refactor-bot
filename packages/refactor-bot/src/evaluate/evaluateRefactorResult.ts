@@ -17,18 +17,14 @@ import { z } from 'zod';
 import { refactorResultSchema } from '../benchmark/refactorResultSchema';
 import { makeCachedFunction } from '../cache/makeCachedFunction';
 import type { CacheStateRef } from '../cache/types';
-import { modelsSchema } from '../chat-gpt/api';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { avg } from '../math/avg';
 import { summarizeRefactorFilesResult } from '../refactor/types';
 import { evaluateFileScore } from './evaluateFileScore';
 import { extractRequirements } from './extractRequirements';
 
 const evaluateRefactorResultOptsSchema = z.object({
-    /**
-     * Model to use for evaluation
-     */
-    model: modelsSchema.optional(),
-
     /**
      * Temperature to use with the LLM for evaluation
      */
@@ -45,6 +41,9 @@ const evaluateRefactorResultOptsSchema = z.object({
     result: refactorResultSchema,
 
     index: z.number().optional(),
+
+    llmDependencies: llmDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
 });
 
 const evaluateRefactorResultOnceSchema =
@@ -72,7 +71,6 @@ const evaluateRefactorResultOnce = makeCachedFunction({
         const {
             requirements,
             result: { sandboxDirectoryPath, startCommit },
-            model,
         } = opts;
 
         const { accepted, discarded } = summarizeRefactorFilesResult({
@@ -162,6 +160,7 @@ const evaluateRefactorResultOnce = makeCachedFunction({
             return {
                 ...(await evaluateFileScore(
                     {
+                        ...opts,
                         sandboxDirectoryPath,
                         index: opts.index,
                         requirements,
@@ -169,7 +168,6 @@ const evaluateRefactorResultOnce = makeCachedFunction({
                         commitBeforeChanges: step.commitBeforeChanges,
                         commit: step.commit,
                         issues,
-                        model,
                     },
                     ctx
                 )),
@@ -220,12 +218,15 @@ export async function evaluateRefactorResult(
     },
     ctx?: CacheStateRef
 ) {
-    const extractRequirementsResult = await extractRequirements({
-        objective: opts.result.objective,
-        sandboxDirectoryPath: opts.result.sandboxDirectoryPath,
-        choices: 2,
-        temperature: opts.temperature,
-    });
+    const extractRequirementsResult = await extractRequirements(
+        {
+            ...opts,
+            objective: opts.result.objective,
+            choices: 2,
+            temperature: opts.temperature,
+        },
+        ctx
+    );
 
     const requirements = extractRequirementsResult.choices.reduce(
         (acc, choice) =>

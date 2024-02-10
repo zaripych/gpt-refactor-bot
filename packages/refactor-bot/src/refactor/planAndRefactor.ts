@@ -1,23 +1,32 @@
 import { z } from 'zod';
 
 import { CycleDetectedError } from '../errors/cycleDetectedError';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { logger } from '../logger/logger';
 import { line } from '../text/line';
-import { scriptSchema } from './check';
+import { checkDependenciesSchema } from './code-checking/prepareCodeCheckingDeps';
+import { formatDependenciesSchema } from './code-formatting/prepareCodeFormattingDeps';
 import { planFiles, planFilesResultSchema } from './planFiles';
 import { refactorBatch } from './refactorBatch';
 import { resetToLastAcceptedCommit } from './resetToLastAcceptedCommit';
 import type { RefactorFilesResult } from './types';
 import { refactorConfigSchema, refactorFilesResultSchema } from './types';
 
-export const planAndRefactorInputSchema = refactorConfigSchema.augment({
+export const planAndRefactorInputSchema = z.object({
     objective: z.string(),
     requirements: z.array(z.string()).nonempty(),
     startCommit: z.string(),
     sandboxDirectoryPath: z.string(),
-    scripts: z.array(scriptSchema),
-    prettierScriptLocation: z.string().optional(),
     filesToEdit: z.array(z.string()),
+
+    evaluate: refactorConfigSchema.shape.evaluate,
+    evaluateMinScore: refactorConfigSchema.shape.evaluateMinScore,
+
+    llmDependencies: llmDependenciesSchema,
+    checkDependencies: checkDependenciesSchema,
+    formatDependencies: formatDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
 });
 
 export const planAndRefactorResultSchema = refactorFilesResultSchema.merge(

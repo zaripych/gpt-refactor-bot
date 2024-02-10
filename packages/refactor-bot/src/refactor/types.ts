@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { modelsSchema } from '../chat-gpt/api';
+import { allowedFunctionsSchema } from '../functions/registry';
 import { functionsConfigSchema } from '../functions/types';
 import { randomText } from '../utils/randomText';
 
@@ -72,7 +73,7 @@ export const refactorConfigSchema = z.object({
     /**
      * List of function names allowed to be called during refactor
      */
-    allowedFunctions: functionsConfigSchema.shape.allowedFunctions,
+    allowedFunctions: allowedFunctionsSchema,
 
     /**
      * A git repository which is the target of the refactor, could be
@@ -106,7 +107,7 @@ export const refactorConfigSchema = z.object({
     /**
      * The default model to use for the refactor
      */
-    model: modelsSchema.optional().default('gpt-3.5-turbo-1106'),
+    model: modelsSchema.optional().default('gpt-4-turbo-preview'),
 
     /**
      * A map of step codes to models to use for that step

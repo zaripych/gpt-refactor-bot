@@ -62,13 +62,19 @@ export const startNodeProcess = async (opts: {
             child.removeAllListeners();
         });
 
-        child.stdout.addListener('data', (data: Buffer) => {
-            output.push(data);
-        });
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (child.stdout) {
+            child.stdout.addListener('data', (data: Buffer) => {
+                output.push(data);
+            });
+        }
 
-        child.stderr.addListener('data', (data: Buffer) => {
-            output.push(data);
-        });
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (child.stderr) {
+            child.stderr.addListener('data', (data: Buffer) => {
+                output.push(data);
+            });
+        }
 
         res(child);
 
@@ -86,5 +92,6 @@ export const startNodeProcess = async (opts: {
             child.removeAllListeners();
             child.kill();
         },
+        output: () => Buffer.concat(output).toString('utf-8'),
     };
 };

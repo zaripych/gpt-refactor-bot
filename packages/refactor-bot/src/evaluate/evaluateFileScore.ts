@@ -17,6 +17,7 @@ export const evaluateFileScoreSchema = evaluateFileChangesInput
         fileDiff: true,
     })
     .augment({
+        sandboxDirectoryPath: z.string(),
         commit: z.string().optional(),
         commitBeforeChanges: z.string(),
     });

@@ -3,23 +3,21 @@ import { z } from 'zod';
 import { makeCachedFunction } from '../cache/makeCachedFunction';
 import type { CacheStateRef } from '../cache/types';
 import type { RegularAssistantMessage } from '../chat-gpt/api';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { markdown } from '../markdown/markdown';
 import { formatBulletList } from '../prompt-formatters/formatBulletList';
 import { formatFileContents } from '../prompt-formatters/formatFileContents';
 import { formatFileDiff } from '../prompt-formatters/formatFileDiff';
 import { formatOptional } from '../prompt-formatters/formatOptional';
 import { formatZodError } from '../prompt-formatters/formatZodError';
-import {
-    prompt,
-    promptParametersFrom,
-    refactorConfigPromptOptsSchema,
-} from '../refactor/prompt';
+import { prompt } from '../refactor/prompt';
 import { parseJsonResponse } from '../response-parsers/parseJsonResponse';
 import { format } from '../text/format';
 import { line } from '../text/line';
 import { ensureHasOneElement } from '../utils/hasOne';
 
-export const evaluateFileChangesInput = refactorConfigPromptOptsSchema.augment({
+export const evaluateFileChangesInput = z.object({
     requirements: z.array(z.string()).nonempty(),
     filePath: z.string(),
     fileContentsBefore: z.string().optional(),
@@ -29,6 +27,9 @@ export const evaluateFileChangesInput = refactorConfigPromptOptsSchema.augment({
     index: z.number().optional(),
     choices: z.number().optional(),
     temperature: z.number().optional(),
+
+    llmDependencies: llmDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
 });
 
 const promptResponseSchema = z.object({
@@ -163,16 +164,9 @@ export const evaluateFileChanges = makeCachedFunction({
                 })
             );
 
-        const promptParams = promptParametersFrom(
-            {
-                ...input,
-                allowedFunctions: [],
-            },
-            ctx
-        );
-
         const result = await prompt(
             {
+                ...input,
                 preface: systemPromptText,
                 prompt: promptText({
                     filePath,
@@ -197,7 +191,7 @@ export const evaluateFileChanges = makeCachedFunction({
                         return String(err);
                     }
                 },
-                ...promptParams,
+                allowedFunctions: [],
                 seed: input.index?.toString(),
             },
             ctx

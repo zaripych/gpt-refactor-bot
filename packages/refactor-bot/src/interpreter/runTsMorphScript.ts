@@ -34,13 +34,18 @@ export const runTsMorphScriptFunction = makeFunction({
     argsSchema,
     resultSchema: z.unknown(),
     implementation: async (args, config) => {
-        const { runTsMorphScript, teardown } = await startInterpreterRpc();
+        const { runTsMorphScript, teardown, output } =
+            await startInterpreterRpc();
 
         try {
-            return await runTsMorphScript({
+            const result = await runTsMorphScript({
                 args,
                 config,
             });
+            return {
+                result,
+                consoleOutput: output(),
+            };
         } finally {
             teardown();
         }

@@ -1,19 +1,20 @@
 import { z } from 'zod';
 
 import { makeCachedFunction } from '../cache/makeCachedFunction';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { markdown } from '../markdown/markdown';
 import { format } from '../text/format';
 import { validateAndParseListOfFiles } from './parsers/validateAndParseListOfFiles';
-import {
-    prompt,
-    promptParametersFrom,
-    refactorConfigPromptOptsSchema,
-} from './prompt';
+import { prompt } from './prompt';
 
-export const determineFilesToEditInputSchema =
-    refactorConfigPromptOptsSchema.augment({
-        objective: z.string(),
-    });
+export const determineFilesToEditInputSchema = z.object({
+    objective: z.string(),
+    sandboxDirectoryPath: z.string(),
+
+    llmDependencies: llmDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
+});
 
 export const determineFilesToEditResultSchema = z.object({
     /**
@@ -66,25 +67,18 @@ export const determineFilesToEdit = makeCachedFunction({
     inputSchema: determineFilesToEditInputSchema,
     resultSchema: determineFilesToEditResultSchema,
     transform: async (input, ctx) => {
-        const promptParams = promptParametersFrom(
-            {
-                ...input,
-                /**
-                 * @note we do not want to allow any functions for this prompt
-                 */
-                allowedFunctions: [],
-            },
-            ctx
-        );
-
         const allowedFilesResult = await prompt(
             {
+                ...input,
                 preface: systemPrompt,
                 prompt: promptText({
                     objective: input.objective,
                 }),
                 temperature: 0.2,
-                ...promptParams,
+                /**
+                 * @note we do not want to allow any functions for this prompt
+                 */
+                allowedFunctions: [],
                 shouldStop: async (message) => {
                     await validateAndParseListOfFiles({
                         sandboxDirectoryPath: input.sandboxDirectoryPath,

@@ -43,11 +43,13 @@ export const functionsConfigSchema = z.object({
     ignoreFiles: z.array(z.string()).optional().default(['.gitignore']),
 
     /**
-     * List of function names allowed to be called
+     * List of function names allowed to be called, it has defaults but
+     * they are not explicitly listed here due to recursion in the schema
+     * definition.
+     *
+     * @see {@link import('./registry').allowedFunctionsSchema} for the defaults.
      */
-    allowedFunctions: z
-        .array(z.string())
-        .default(['references', 'moduleImports', 'quickInfo', 'declarations']),
+    allowedFunctions: z.array(z.string()).optional().default([]),
 
     /**
      * Whether to use a single ts-morph project for all packages in the monorepo

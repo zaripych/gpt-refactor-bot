@@ -6,8 +6,8 @@ import { explainCacheKey } from '../cache/cache';
 import { calculatePrice } from '../chat-gpt/api';
 import { actions, type AnyAction } from '../event-bus';
 import { ofTypes } from '../event-bus/operators';
+import type { llmUsageEntrySchema } from '../refactor/types';
 import { gptRequestSuccess } from './actions/gptRequestSuccess';
-import type { llmUsageEntrySchema } from './types';
 
 type Usage = z.output<typeof llmUsageEntrySchema>;
 

@@ -3,29 +3,28 @@ import { z } from 'zod';
 
 import { makeCachedFunction } from '../cache/makeCachedFunction';
 import type { RegularAssistantMessage } from '../chat-gpt/api';
-import { autoFixIssuesContents } from '../eslint/autoFixIssues';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { logger } from '../logger/logger';
 import { markdown } from '../markdown/markdown';
-import { prettierTypescript } from '../prettier/prettier';
 import { parseFencedCodeBlocks } from '../response-parsers/parseFencedCodeBlocks';
 import { parseJsonResponse } from '../response-parsers/parseJsonResponse';
 import { format } from '../text/format';
 import { line } from '../text/line';
 import { hasOneElement } from '../utils/hasOne';
 import { applyFindAndReplace } from './applyFindAndReplace';
-import {
-    prompt,
-    promptParametersFrom,
-    refactorConfigPromptOptsSchema,
-} from './prompt';
+import { formatDependenciesSchema } from './code-formatting/prepareCodeFormattingDeps';
+import { prompt } from './prompt';
 
-export const editInputSchema = refactorConfigPromptOptsSchema.augment({
+export const editInputSchema = z.object({
     objective: z.string(),
     filePath: z.string(),
     fileContents: z.string(),
-    eslintAutoFixScriptArgs: z.array(z.string()).nonempty().optional(),
-    prettierScriptLocation: z.string().optional(),
     choices: z.number().optional(),
+
+    llmDependencies: llmDependenciesSchema,
+    formatDependencies: formatDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
 });
 
 const singleChoiceResultSchema = z.discriminatedUnion('status', [
@@ -114,8 +113,6 @@ export const chunkyEdit = makeCachedFunction({
             filePath: input.filePath,
         });
 
-        const promptOpts = promptParametersFrom(input, ctx);
-
         const verifyResponse = async (message: RegularAssistantMessage) => {
             const blocks = parseFencedCodeBlocks(message.content);
             const noChangesRegex = /No changes required/gm;
@@ -160,41 +157,14 @@ export const chunkyEdit = makeCachedFunction({
                 blocks: parsedResponse,
             });
 
-            const formattedCodeChunk = await prettierTypescript({
-                prettierScriptLocation: input.prettierScriptLocation,
-                repositoryRoot: input.sandboxDirectoryPath,
-                ts: codeChunk,
-                throwOnParseError: true,
-            });
-
-            const eslintFixed = input.eslintAutoFixScriptArgs
-                ? (
-                      await autoFixIssuesContents(
-                          {
-                              eslintScriptArgs: input.eslintAutoFixScriptArgs,
-                              fileContents: formattedCodeChunk,
-                              filePath: input.filePath,
-                              location: input.sandboxDirectoryPath,
-                          },
-                          ctx
-                      )
-                  ).contents
-                : formattedCodeChunk;
-
-            if (input.eslintAutoFixScriptArgs) {
-                if (
-                    eslintFixed === input.fileContents &&
-                    formattedCodeChunk !== input.fileContents
-                ) {
-                    throw new Error(
-                        line`
-                            eslint reverted the code changes as they do not
-                            pass the eslint formatting rules. Please do not
-                            make similar changes in the future to avoid cycles.
-                        `
-                    );
-                }
-            }
+            const eslintFixed = await input.formatDependencies().format(
+                {
+                    code: codeChunk,
+                    filePath: input.filePath,
+                    throwOnParseError: true,
+                },
+                ctx
+            );
 
             if (eslintFixed === input.fileContents) {
                 return {
@@ -213,11 +183,12 @@ export const chunkyEdit = makeCachedFunction({
 
         const { choices } = await prompt(
             {
+                ...input,
                 preface,
                 prompt: text,
                 temperature: 1,
                 choices: input.choices,
-                ...promptOpts,
+                allowedFunctions: [],
                 shouldStop: async (message) => {
                     await verifyResponse(message);
                     return true as const;

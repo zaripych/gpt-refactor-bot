@@ -8,50 +8,42 @@ import { makeCachedFunction } from '../cache/makeCachedFunction';
 import { AbortError } from '../errors/abortError';
 import { CycleDetectedError } from '../errors/cycleDetectedError';
 import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
 import { gitDiffRange } from '../git/gitDiffRange';
 import { gitFilesDiff } from '../git/gitFilesDiff';
 import { gitResetHard } from '../git/gitResetHard';
 import { gitRevParse } from '../git/gitRevParse';
+import { startCollectingLlmUsage } from '../llm/collectLlmUsage';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { logger } from '../logger/logger';
-import { determinePackageManager } from '../package-manager/determinePackageManager';
 import type { IdentifierChange } from '../ts-morph/quick-info/changeInfo';
 import { changeInfo } from '../ts-morph/quick-info/changeInfo';
 import { ensureHasOneElement, hasTwoElements } from '../utils/hasOne';
 import { UnreachableError } from '../utils/UnreachableError';
 import { applyChanges } from './applyChanges';
-import { check, checksSummary, scriptSchema } from './check';
 import { chunkyEdit } from './chunkyEdit';
-import { startCollectingLlmUsage } from './collectLlmUsage';
+import { checksSummary } from './code-checking/check';
+import { checkDependenciesSchema } from './code-checking/prepareCodeCheckingDeps';
+import { formatDependenciesSchema } from './code-formatting/prepareCodeFormattingDeps';
 import { edit } from './edit';
 import { formatCommitMessage } from './prompts/formatCommitMessage';
 import { formatFileContents } from './prompts/formatFileContents';
 import { formatFileDiff } from './prompts/formatFileDiff';
 import { formatIssues } from './prompts/formatIssues';
 import type { Issue } from './types';
-import {
-    lastCommit,
-    lastTimestamp,
-    refactorConfigSchema,
-    refactorFileResultSchema,
-} from './types';
+import { lastCommit, lastTimestamp, refactorFileResultSchema } from './types';
 
-export const refactorFileInputSchema = refactorConfigSchema
-    .pick({
-        budgetCents: true,
-        model: true,
-        modelByStepCode: true,
-        useMoreExpensiveModelsOnRetry: true,
-        scope: true,
-        tsConfigJsonFileName: true,
-        allowedFunctions: true,
-    })
-    .augment({
+export const refactorFileInputSchema = z
+    .object({
         objective: z.string(),
         filePath: z.string(),
         startCommit: z.string(),
         sandboxDirectoryPath: z.string(),
-        scripts: z.array(scriptSchema),
-        prettierScriptLocation: z.string().optional(),
+
+        llmDependencies: llmDependenciesSchema,
+        checkDependencies: checkDependenciesSchema,
+        formatDependencies: formatDependenciesSchema,
+        functionsRepository: functionsRepositorySchema,
     })
     .transform(async (input) => ({
         ...input,
@@ -172,10 +164,6 @@ export const refactorFile = makeCachedFunction({
         });
 
         try {
-            const packageManager = await determinePackageManager({
-                directory: input.sandboxDirectoryPath,
-            });
-
             const steps = new Array<{
                 commit?: string;
                 task: 'refactor' | 'fix-issues' | 'fix-export-issues';
@@ -186,16 +174,13 @@ export const refactorFile = makeCachedFunction({
                 timestamp: number;
             }>();
 
-            const initialCheck = await check(
+            const initialCheck = await input.checkDependencies().check(
                 {
-                    packageManager,
-                    location: input.sandboxDirectoryPath,
-                    startCommit: input.startCommit,
                     filePaths: [filePath],
-                    scripts: input.scripts,
                 },
                 ctx
             );
+
             if (initialCheck.issues.length > 0) {
                 throw new AbortError(
                     'We should have no errors initially, this should be guaranteed by the initial pre-check made in refactorGoal function. If we got here there must be a bug in the code.'
@@ -207,11 +192,6 @@ export const refactorFile = makeCachedFunction({
                 ...input,
                 filePath,
                 sandboxDirectoryPath: input.sandboxDirectoryPath,
-                budgetCents: input.budgetCents,
-                eslintAutoFixScriptArgs: input.scripts.find((script) =>
-                    script.args.includes('eslint')
-                )?.args,
-                prettierScriptLocation: input.prettierScriptLocation,
             };
 
             const advice: string[] = [];
@@ -385,15 +365,9 @@ export const refactorFile = makeCachedFunction({
                         fileContentsHash: editResult.fileContentsHash,
                     });
 
-                    const checkResult = await check(
-                        {
-                            packageManager,
-                            location: input.sandboxDirectoryPath,
-                            startCommit: input.startCommit,
-                            scripts: input.scripts,
-                        },
-                        ctx
-                    );
+                    const checkResult = await input
+                        .checkDependencies()
+                        .check({}, ctx);
 
                     const checkSummary = checksSummary({
                         issues,

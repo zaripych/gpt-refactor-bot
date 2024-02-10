@@ -2,17 +2,21 @@ import { z } from 'zod';
 
 import type { CacheStateRef } from '../cache/types';
 import { extractRequirements } from '../evaluate/extractRequirements';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import {
     determineFilesToEdit,
     determineFilesToEditResultSchema,
 } from './filesToEdit';
-import { refactorConfigPromptOptsSchema } from './prompt';
 
-export const retrieveParametersInputSchema =
-    refactorConfigPromptOptsSchema.augment({
-        objective: z.string(),
-        filesToEdit: z.array(z.string()).nonempty().optional(),
-    });
+export const retrieveParametersInputSchema = z.object({
+    objective: z.string(),
+    filesToEdit: z.array(z.string()).nonempty().optional(),
+    sandboxDirectoryPath: z.string(),
+
+    llmDependencies: llmDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
+});
 
 export const retrieveParametersResultSchema =
     determineFilesToEditResultSchema.augment({

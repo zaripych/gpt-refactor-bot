@@ -3,31 +3,25 @@ import { join } from 'path';
 import { z } from 'zod';
 
 import { makeCachedFunction } from '../cache/makeCachedFunction';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
 import { gitFilesDiff } from '../git/gitFilesDiff';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { markdown } from '../markdown/markdown';
 import { format } from '../text/format';
 import { isTruthy } from '../utils/isTruthy';
-import { determineModelParameters } from './determineModelParameters';
 import { prompt } from './prompt';
-import { refactorConfigSchema } from './types';
 
-export const planTasksInputSchema = refactorConfigSchema
-    .pick({
-        budgetCents: true,
-        model: true,
-        modelByStepCode: true,
-        useMoreExpensiveModelsOnRetry: true,
-        tsConfigJsonFileName: true,
-        scope: true,
-        allowedFunctions: true,
-    })
-    .augment({
+export const planTasksInputSchema = z
+    .object({
         objective: z.string(),
         filePath: z.string(),
         sandboxDirectoryPath: z.string(),
         startCommit: z.string(),
         completedTasks: z.array(z.string()),
         issues: z.array(z.string()),
+
+        llmDependencies: llmDependenciesSchema,
+        functionsRepository: functionsRepositorySchema,
     })
     .transform(async (input) => ({
         ...input,
@@ -168,17 +162,10 @@ export const planTasks = makeCachedFunction({
 
         const { choices } = await prompt(
             {
+                ...input,
                 preface: systemPrompt,
                 prompt: userPrompt,
                 temperature: 1,
-                budgetCents: input.budgetCents,
-                functionsConfig: {
-                    repositoryRoot: input.sandboxDirectoryPath,
-                    scope: input.scope,
-                    tsConfigJsonFileName: input.tsConfigJsonFileName,
-                    allowedFunctions: input.allowedFunctions,
-                },
-                ...determineModelParameters(input, ctx),
             },
             ctx
         );

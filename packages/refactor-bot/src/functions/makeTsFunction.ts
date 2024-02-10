@@ -7,7 +7,7 @@ import { createCombinedProject } from '../ts-morph/project/createCombinedProject
 import { createProject } from '../ts-morph/project/createProject';
 import { listProjects } from '../ts-morph/project/listProjects';
 import { makeFunction } from './makeFunction';
-import type { FunctionsConfig } from './types';
+import { functionsConfigSchema } from './types';
 
 const successResultSchema = (functionResultSchema: ZodSchema) =>
     z.object({
@@ -41,23 +41,29 @@ export const makeTsFunction = <
     ArgSchema extends AnyZodObject,
     ResultSchema extends ZodSchema,
     Name extends string,
+    ConfigSchema extends z.ZodObject<
+        typeof functionsConfigSchema.shape
+    > = typeof functionsConfigSchema,
 >(opts: {
     argsSchema: ArgSchema;
     resultSchema: ResultSchema;
+    functionsConfigSchema?: ConfigSchema;
     name: Name;
     description: string;
     implementation: (
         project: Project,
-        config: FunctionsConfig,
-        args: z.infer<ArgSchema>
+        config: z.output<ConfigSchema>,
+        args: z.output<ArgSchema>
     ) => Promise<z.infer<ResultSchema>>;
 }) =>
     makeFunction({
         argsSchema: opts.argsSchema as unknown as ZodObject<ArgSchema['shape']>,
         resultSchema: z.array(unionResultSchema(opts.resultSchema)),
+        functionsConfigSchema:
+            opts.functionsConfigSchema ?? functionsConfigSchema,
         name: opts.name,
         description: opts.description,
-        implementation: async (args, config: FunctionsConfig) => {
+        implementation: async (args, config) => {
             const { useCombinedTsMorphProject = true } = config;
 
             if (useCombinedTsMorphProject) {

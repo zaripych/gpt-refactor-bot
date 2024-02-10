@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, readFile, writeFile } from 'fs/promises';
 import { globby } from 'globby';
 import orderBy from 'lodash-es/orderBy';
 import { basename, dirname } from 'path';
@@ -7,19 +7,24 @@ import { z } from 'zod';
 
 import { ConfigurationError } from '../errors/configurationError';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
+import { summarizeLlmUsagePrice } from '../llm/collectLlmUsage';
 import { extractErrorInfo } from '../logger/extractErrorInfo';
 import { formatObject } from '../logger/formatObject';
 import { glowFormat } from '../markdown/glowFormat';
 import { markdown } from '../markdown/markdown';
+import { prettierMarkdown } from '../prettier/prettier';
 import { goToEndOfFile } from '../prompt/editor';
 import { formatFencedCodeBlock } from '../prompt-formatters/formatFencedCodeBlock';
 import { formatOptional } from '../prompt-formatters/formatOptional';
 import { format } from '../text/format';
 import { hasOneElement } from '../utils/hasOne';
-import { summarizeLlmUsagePrice } from './collectLlmUsage';
 import { loadRefactorConfigs } from './loadRefactors';
 import { refactor } from './refactor';
-import { type RefactorConfig, summarizeRefactorFilesResult } from './types';
+import {
+    type RefactorConfig,
+    refactorConfigSchema,
+    summarizeRefactorFilesResult,
+} from './types';
 
 const validateUsingSchema =
     <T extends z.ZodType>(schema: T) =>
@@ -78,18 +83,33 @@ async function promptForConfig(refactors: RefactorConfig[]) {
 
         await writeFile(
             goalMdFilePath,
-            `
-\`\`\`yaml
-# For information about possible options have a look at the code:
-# https://github.com/zaripych/refactor-bot/blob/main/src/refactor/types.ts#L5
-budgetCents: 100
-model: gpt-4
-\`\`\`
+            await prettierMarkdown({
+                repositoryRoot: process.cwd(),
+                md: markdown`
+                    \`\`\`yaml
+                    # For information about possible options have a look at the code:
+                    # https://github.com/zaripych/refactor-bot/blob/main/src/refactor/types.ts#L5
+                    budgetCents: 100
+                    model: ${refactorConfigSchema.shape.model._def.defaultValue()}
+                    \`\`\`
 
-> Please describe the refactoring in here, save the file and restart the command to continue...
-`,
+                    > Please describe the refactoring in here, save the file and restart the command to continue...
+                `,
+            }),
             'utf-8'
         );
+
+        const text = await readFile('.gitignore', 'utf-8').catch(() => null);
+        if (
+            text !== null &&
+            !text.includes('.refactor-bot/refactors/*/state')
+        ) {
+            await writeFile(
+                '.gitignore',
+                [text, '.refactor-bot/refactors/*/state'].join('\n') + '\n',
+                'utf-8'
+            );
+        }
 
         if (!(await goToEndOfFile(goalMdFilePath))) {
             console.log(

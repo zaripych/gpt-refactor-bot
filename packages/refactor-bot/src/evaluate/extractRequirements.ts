@@ -2,21 +2,22 @@ import { z } from 'zod';
 
 import type { CacheStateRef } from '../cache/types';
 import type { RegularAssistantMessage } from '../chat-gpt/api';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { markdown } from '../markdown/markdown';
 import { formatZodError } from '../prompt-formatters/formatZodError';
-import {
-    prompt,
-    promptParametersFrom,
-    refactorConfigPromptOptsSchema,
-} from '../refactor/prompt';
+import { prompt } from '../refactor/prompt';
 import { parseJsonResponse } from '../response-parsers/parseJsonResponse';
 import { format } from '../text/format';
 import { ensureHasOneElement } from '../utils/hasOne';
 
-export const extractRequirementsInput = refactorConfigPromptOptsSchema.augment({
+export const extractRequirementsInput = z.object({
     objective: z.string(),
     choices: z.number().optional(),
     temperature: z.number().optional(),
+
+    llmDependencies: llmDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
 });
 
 const requirementsArraySchema = z.array(z.string()).nonempty();
@@ -72,16 +73,16 @@ export const extractRequirements = async (
     const validateResponse = (message: RegularAssistantMessage) =>
         parseJsonResponse(message.content, requirementsArraySchema);
 
-    const promptParams = promptParametersFrom(input, ctx);
-
     const result = await prompt(
         {
+            ...input,
             preface: systemPromptText,
             prompt: promptText({
                 objective,
             }),
             temperature: input.temperature ?? 0.2,
             choices: input.choices,
+            allowedFunctions: [],
             shouldStop: (message) => {
                 try {
                     validateResponse(message);
@@ -94,11 +95,6 @@ export const extractRequirements = async (
                     }
                     return String(err);
                 }
-            },
-            ...promptParams,
-            functionsConfig: {
-                ...promptParams.functionsConfig,
-                allowedFunctions: [],
             },
         },
         ctx

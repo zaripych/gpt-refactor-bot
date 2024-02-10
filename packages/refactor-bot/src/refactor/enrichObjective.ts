@@ -1,26 +1,18 @@
 import { z } from 'zod';
 
 import { makeCachedFunction } from '../cache/makeCachedFunction';
+import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
+import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { markdown } from '../markdown/markdown';
 import { format } from '../text/format';
-import { determineModelParameters } from './determineModelParameters';
 import { prompt } from './prompt';
-import { refactorConfigSchema } from './types';
 
-export const enrichObjectiveInputSchema = refactorConfigSchema
-    .pick({
-        objective: true,
-        budgetCents: true,
-        model: true,
-        modelByStepCode: true,
-        useMoreExpensiveModelsOnRetry: true,
-        scope: true,
-        tsConfigJsonFileName: true,
-        allowedFunctions: true,
-    })
-    .augment({
-        sandboxDirectoryPath: z.string(),
-    });
+export const enrichObjectiveInputSchema = z.object({
+    objective: z.string(),
+
+    llmDependencies: llmDependenciesSchema,
+    functionsRepository: functionsRepositorySchema,
+});
 
 export const enrichObjectiveResultSchema = z.object({
     /**
@@ -71,17 +63,10 @@ export const enrichObjective = makeCachedFunction({
 
         const { choices } = await prompt(
             {
+                ...input,
                 preface: systemPrompt,
                 prompt: userPrompt,
                 temperature: 1,
-                budgetCents: input.budgetCents,
-                functionsConfig: {
-                    repositoryRoot: input.sandboxDirectoryPath,
-                    scope: input.scope,
-                    tsConfigJsonFileName: input.tsConfigJsonFileName,
-                    allowedFunctions: input.allowedFunctions,
-                },
-                ...determineModelParameters(input, ctx),
             },
             ctx
         );

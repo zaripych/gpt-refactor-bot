@@ -19,10 +19,31 @@ export async function languageServiceReferences(
             ? syntaxKindByIdentifierContext[args.identifierContext]
             : undefined;
 
-    const findIdentifier = (node: Node<ts.Node>) =>
-        node.getKind() === SyntaxKind.Identifier &&
-        node.getText() === args.identifier &&
-        (!context || context.includes(node.getParentOrThrow().getKind()));
+    if (args.identifier === '@ts-ignore') {
+        throw new Error(
+            `This function does not support "@ts-ignore". Use regular search instead.`
+        );
+    }
+
+    if (args.identifier === '@ts-expect-error') {
+        throw new Error(
+            `This function does not support "@ts-expect-error". Use regular search instead.`
+        );
+    }
+
+    const findIdentifier = (node: Node<ts.Node>) => {
+        if (args.identifier === 'any') {
+            return node.getKind() === SyntaxKind.AnyKeyword;
+        }
+        if (args.identifier === 'unknown') {
+            return node.getKind() === SyntaxKind.UnknownKeyword;
+        }
+        return (
+            node.getKind() === SyntaxKind.Identifier &&
+            node.getText() === args.identifier &&
+            (!context || context.includes(node.getParentOrThrow().getKind()))
+        );
+    };
 
     const fullInitialFilePath = args.initialFilePath
         ? join(config.repositoryRoot, args.initialFilePath)
@@ -105,17 +126,25 @@ export async function languageServiceReferences(
                     .getFirstAncestorByKind(SyntaxKind.ModuleDeclaration)
                     ?.getNameNode().compilerNode.text;
 
-            references.push({
-                ancestorKind: refNode.getParentOrThrow().getKindName(),
-                pos: refNode.getPos(),
-                ...lineAndCol,
-                excerpt: firstLineOf(
+            let excerpt;
+            try {
+                excerpt = firstLineOf(
                     refNode
                         .getFirstAncestor((ancestor) =>
                             ancestor.isFirstNodeOnLine()
                         )
                         ?.getText() || refNode.getText()
-                ),
+                );
+            } catch (err) {
+                // ignore
+                excerpt = '// error getting excerpt';
+            }
+
+            references.push({
+                ancestorKind: refNode.getParentOrThrow().getKindName(),
+                pos: refNode.getPos(),
+                ...lineAndCol,
+                excerpt,
                 ...(module && {
                     module,
                 }),

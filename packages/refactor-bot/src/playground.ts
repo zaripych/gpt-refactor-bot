@@ -6,6 +6,7 @@ import { evaluateFileChanges } from './evaluate/evaluateFileChanges';
 import { runEpic } from './event-bus';
 import { gitShowFileCommitSummary } from './git/gitShowFileCommitSummary';
 import { logger } from './logger/logger';
+import { prepareMinimalDeps } from './refactor/dependencies/prepareMinimalDeps';
 
 /**
  * @note this is a playground file, it is not used in production, I basically
@@ -19,8 +20,7 @@ import { logger } from './logger/logger';
  * pnpm tsx --watch ./src/playground.ts
  */
 
-const location =
-    '/var/folders/kk/cj4kd1wx1rg16xq_jhdw75kc0000gn/T/.refactor-bot/sandboxes/test-likely-failure-oTH22sfc';
+const location = '.';
 
 runEpic((stream) =>
     stream.pipe(
@@ -35,7 +35,6 @@ logger.info(
     await bootstrap(async () => {
         return await evaluateFileChanges(
             {
-                sandboxDirectoryPath: location,
                 requirements: [
                     'Replace all usages of `readFile` from `fs/promises` module with `readFileSync` from `fs` module in packages/refactor-bot/src/cache/dependencies.ts`.',
                 ],
@@ -43,6 +42,9 @@ logger.info(
                     location,
                     filePath: 'packages/refactor-bot/src/cache/dependencies.ts',
                     ref: '28d5f0d1f7985bd16e4d3cc4f26ffd53c1a6f94b',
+                })),
+                ...(await prepareMinimalDeps({
+                    sandboxDirectoryPath: '.',
                 })),
             },
             {

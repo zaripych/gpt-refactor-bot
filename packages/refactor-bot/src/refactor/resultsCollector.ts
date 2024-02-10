@@ -7,6 +7,7 @@ import {
 import { explainCacheKey } from '../cache/cache';
 import { actions } from '../event-bus';
 import { ofTypes } from '../event-bus/operators';
+import { startCollectingLlmUsage } from '../llm/collectLlmUsage';
 import { extractErrorInfo } from '../logger/extractErrorInfo';
 import { logger } from '../logger/logger';
 import { line } from '../text/line';
@@ -17,7 +18,6 @@ import { checkoutSandboxCompleted } from './actions/checkoutSandboxCompleted';
 import { discardedEdit } from './actions/discardedEdit';
 import { planFilesCompleted } from './actions/planFilesCompleted';
 import { checkoutSandboxResultSchema } from './checkoutSandbox';
-import { startCollectingLlmUsage } from './collectLlmUsage';
 import { planFilesResultSchema } from './planFiles';
 import type { RefactorConfig, refactorFileResultSchema } from './types';
 import { llmUsageEntrySchema, refactorFilesResultSchema } from './types';

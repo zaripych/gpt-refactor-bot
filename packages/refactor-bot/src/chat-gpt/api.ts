@@ -91,7 +91,7 @@ export type Message = z.infer<typeof messageSchema>;
 
 export type MessageRole = z.infer<typeof messageRoleSchema>;
 
-export const functionDefinitionSchema = z.object({
+export const functionDescriptionSchema = z.object({
     name: z.string(),
     description: z.string().optional(),
     parameters: z
@@ -101,12 +101,12 @@ export const functionDefinitionSchema = z.object({
         .refine((value) => value as ReturnType<typeof zodToJsonSchema>),
 });
 
-export type FunctionDefinition = z.infer<typeof functionDefinitionSchema>;
+export type FunctionDescription = z.infer<typeof functionDescriptionSchema>;
 
 export type Opts = {
     model?: Models;
     messages: Array<Message>;
-    functions?: Array<FunctionDefinition>;
+    functions?: Array<FunctionDescription>;
     functionCall?: 'none' | 'auto' | { name: string };
     maxTokens?: number;
     // between zero to two, defaults to one

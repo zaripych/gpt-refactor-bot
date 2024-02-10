@@ -25,6 +25,7 @@ export async function startRpc(opts: {
     }) => Promise<{
         teardown: () => void;
         checkStatus?: () => void;
+        output?: () => string;
     }>;
 }) {
     const {
@@ -43,7 +44,7 @@ export async function startRpc(opts: {
 
     const startProcess = opts.startServerProcess ?? defaultStart;
 
-    const { teardown, checkStatus } = await startProcess({
+    const { teardown, checkStatus, output } = await startProcess({
         unixSocketPath,
         apiModulePath,
         apiExportName,
@@ -120,6 +121,11 @@ export async function startRpc(opts: {
                 teardown,
             };
         },
+        output:
+            output ??
+            (() => {
+                throw new Error('No output available for in-process servers');
+            }),
         makeRequest: makeRequestWithRetries,
         teardown: () => {
             teardown();
