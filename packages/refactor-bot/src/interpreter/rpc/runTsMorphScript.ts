@@ -57,7 +57,7 @@ async function importTsMorphScript(opts: {
 
     return module.namespace as {
         mapProject: (
-            project: ReturnType<typeof createProject>['project']
+            project: ReturnType<typeof createProject>
         ) => Promise<unknown>;
         reduce?: (results: unknown[]) => Promise<unknown>;
     };
@@ -97,7 +97,7 @@ export async function runTsMorphScript(opts: {
     const results: unknown[] = [];
 
     for (const info of projectInfos) {
-        const { project } = createProject(info);
+        const project = createProject(info);
 
         const result = await mapProject(project);
 

@@ -221,14 +221,20 @@ export interface FunctionsRepository<
 > {
     config: Config;
 
-    executeFunction<Name extends Allowed>(opts: {
-        name: Name;
-        arguments: Name extends keyof Args ? Args[Name] : unknown;
-    }): Promise<Name extends keyof Results ? Results[Name] : unknown>;
-    executeFunction(opts: {
-        name: string;
-        arguments: unknown;
-    }): Promise<unknown>;
+    executeFunction<Name extends Allowed>(
+        opts: {
+            name: Name;
+            arguments: Name extends keyof Args ? Args[Name] : unknown;
+        },
+        ctx?: CacheStateRef
+    ): Promise<Name extends keyof Results ? Results[Name] : unknown>;
+    executeFunction(
+        opts: {
+            name: string;
+            arguments: unknown;
+        },
+        ctx?: CacheStateRef
+    ): Promise<unknown>;
 
     executeGptFunction(
         opts: {
@@ -369,7 +375,7 @@ export async function prepareFunctionsRepository<
 export type FunctionsRepositoryDeps = FunctionsRepositoryFromRegistry<
     typeof functions
 > & {
-    _brand?: 'FunctionsRepositoryDeps';
+    readonly _brand?: 'FunctionsRepositoryDeps';
 };
 
 export const functionsRepositorySchema = z

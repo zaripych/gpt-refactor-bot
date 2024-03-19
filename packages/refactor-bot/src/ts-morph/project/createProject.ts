@@ -5,7 +5,5 @@ export function createProject(config: { tsConfigFilePath: string }) {
         tsConfigFilePath: config.tsConfigFilePath,
     });
 
-    return {
-        project,
-    };
+    return project;
 }

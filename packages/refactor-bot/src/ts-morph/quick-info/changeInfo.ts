@@ -284,9 +284,9 @@ function extractIdentifiersFromPatch(params: {
                                 )
                         ),
                     ],
-                    quickInfo: quickInfoForNode(project, {
+                    quickInfo: quickInfoForNode({
+                        project,
                         node: id,
-                        repositoryRoot: params.location,
                     }),
                     line: id.getStartLineNumber(),
                 });

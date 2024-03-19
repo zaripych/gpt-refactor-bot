@@ -4,7 +4,7 @@ import type { CallExpression, Project, ts } from 'ts-morph';
 import { Node, SyntaxKind } from 'ts-morph';
 import { z } from 'zod';
 
-import { findPackageName } from '../file-system/findPackageName';
+import { findPackage } from '../file-system/findPackage';
 import { makeTsFunction } from '../functions/makeTsFunction';
 import type { FunctionsConfig } from '../functions/types';
 import { markdown } from '../markdown/markdown';
@@ -104,8 +104,11 @@ export async function moduleImports(
     // does the module path we are searching for include the file name?
     const hasSubModulePath = args.module.includes('/');
 
+    const moduleSpecifierIsSourceFile = project.getSourceFile(args.module);
+
     const moduleSpecifierIsPackagePath = projects.find(
-        (project) => project.packageName === args.module.trim()
+        (project) =>
+            project.packageInfo?.packageJson.name === args.module.trim()
     )?.directoryPath;
 
     const findImport = (node: Node<ts.Node>) => {
@@ -146,7 +149,7 @@ export async function moduleImports(
               return !!descendant;
           });
 
-    if (!initialSourceFile) {
+    if (!initialSourceFile && !moduleSpecifierIsSourceFile) {
         if (args.initialFilePath) {
             throw new Error(
                 `No source files found at "${args.initialFilePath}"`
@@ -159,15 +162,24 @@ export async function moduleImports(
     }
 
     const firstImport = initialSourceFile
-        .getFirstDescendantOrThrow(findImport, () =>
-            args.initialFilePath
-                ? `Cannot find import declaration importing module "${args.module}" in file "${args.initialFilePath}"`
-                : `Cannot find import declaration importing module "${args.module}"`
-        )
-        .asKindOrThrow(SyntaxKind.ImportDeclaration);
+        ? initialSourceFile
+              .getFirstDescendantOrThrow(findImport, () =>
+                  args.initialFilePath
+                      ? `Cannot find import declaration importing module "${args.module}" in file "${args.initialFilePath}"`
+                      : `Cannot find import declaration importing module "${args.module}"`
+              )
+              .asKindOrThrow(SyntaxKind.ImportDeclaration)
+        : undefined;
 
-    const firstImportModuleSourceFile =
-        firstImport.getModuleSpecifierSourceFile();
+    const lookupSourceFile = firstImport
+        ? firstImport.getModuleSpecifierSourceFile()
+        : moduleSpecifierIsSourceFile;
+
+    if (!lookupSourceFile) {
+        throw new Error(
+            `Cannot find source file for module "${args.module}" in the repository`
+        );
+    }
 
     const results: Map<
         string,
@@ -227,7 +239,7 @@ export async function moduleImports(
                 continue;
             }
 
-            if (moduleSourceFile !== firstImportModuleSourceFile) {
+            if (moduleSourceFile !== lookupSourceFile) {
                 continue;
             }
 
@@ -254,7 +266,8 @@ export async function moduleImports(
 
             const fileInfo = results.get(filePath) || {
                 filePath,
-                package: await findPackageName(sourceFile.getFilePath()),
+                package: (await findPackage(sourceFile.getFilePath()))
+                    ?.packageJson.name,
                 isInNodeModules: sourceFile.isInNodeModules(),
                 imports: [],
             };

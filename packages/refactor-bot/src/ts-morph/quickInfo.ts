@@ -36,17 +36,21 @@ export async function quickInfo(
     config: FunctionsConfig,
     args: Args
 ): Promise<Result> {
-    const node = findIdentifier(project, config, {
-        ...args,
-        ...(args.initialFilePath && {
-            includeFilePaths: [args.initialFilePath],
-        }),
+    const node = findIdentifier({
+        project,
+        repositoryRoot: config.repositoryRoot,
+        args: {
+            ...args,
+            ...(args.initialFilePath && {
+                includeFilePaths: [args.initialFilePath],
+            }),
+        },
     });
 
     return {
-        info: quickInfoForNode(project, {
+        info: quickInfoForNode({
+            project,
             node,
-            repositoryRoot: config.repositoryRoot,
         }),
     };
 }

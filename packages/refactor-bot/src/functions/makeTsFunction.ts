@@ -87,7 +87,7 @@ export const makeTsFunction = <
                 const projects = await listProjects(config);
 
                 for (const info of projects) {
-                    const { project } = createProject({
+                    const project = createProject({
                         tsConfigFilePath: info.tsConfigFilePath,
                     });
                     try {
@@ -98,14 +98,14 @@ export const makeTsFunction = <
                         );
                         results.push({
                             tsConfigFilePath: info.tsConfigFilePath,
-                            packageName: info.packageName,
+                            packageName: info.packageInfo?.packageJson.name,
                             status: 'success' as const,
                             result,
                         });
                     } catch (err) {
                         results.push({
                             tsConfigFilePath: info.tsConfigFilePath,
-                            packageName: info.packageName,
+                            packageName: info.packageInfo?.packageJson.name,
                             status: 'error',
                             error: {
                                 message:

@@ -2,16 +2,17 @@ import { join } from 'path';
 import type { ts } from 'ts-morph';
 import { type Node, type Project, SyntaxKind } from 'ts-morph';
 
-import type { FunctionsConfig } from '../../functions/types';
 import { handleExceptions } from '../../utils/handleExceptions';
 import { syntaxKindByIdentifierContext } from './identifierContext';
 import type { Args } from './types';
 
-export function findIdentifier(
-    project: Project,
-    config: FunctionsConfig,
-    args: Args
-) {
+export function findIdentifier(opts: {
+    project: Project;
+    repositoryRoot: string;
+    args: Args;
+}) {
+    const { project, repositoryRoot, args } = opts;
+
     const context: ReadonlyArray<SyntaxKind> | undefined =
         args.identifierContext
             ? syntaxKindByIdentifierContext[args.identifierContext]
@@ -26,7 +27,7 @@ export function findIdentifier(
                 args.line);
 
     const fullInitialFilePath = args.initialFilePath
-        ? join(config.repositoryRoot, args.initialFilePath)
+        ? join(repositoryRoot, args.initialFilePath)
         : undefined;
 
     const sourceFile = fullInitialFilePath

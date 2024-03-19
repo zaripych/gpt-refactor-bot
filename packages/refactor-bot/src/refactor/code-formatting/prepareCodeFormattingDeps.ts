@@ -12,7 +12,9 @@ import { line } from '../../text/line';
 
 export type CodeFormattingDeps = Awaited<
     ReturnType<typeof prepareCodeFormattingDeps>
->;
+> & {
+    readonly _brand?: 'CodeFormattingDeps';
+};
 
 export const formatDependenciesSchema = z
     .function(z.tuple([]))

@@ -1,13 +1,10 @@
 import type { Node, Project, SymbolDisplayPart, ts } from 'ts-morph';
 
-export function quickInfoForNode(
-    project: Project,
-    args: {
-        node: Node<ts.Node>;
-        repositoryRoot: string;
-    }
-) {
-    const { node } = args;
+export function quickInfoForNode(opts: {
+    project: Project;
+    node: Node<ts.Node>;
+}) {
+    const { node, project } = opts;
 
     const joinParts = (parts?: SymbolDisplayPart[]) =>
         parts?.map((part) => part.getText()).join('');

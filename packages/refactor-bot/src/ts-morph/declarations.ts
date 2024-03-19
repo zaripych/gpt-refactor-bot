@@ -29,7 +29,11 @@ export async function declarations(
     config: FunctionsConfig,
     args: Args
 ): Promise<Array<z.infer<typeof resultSchema>>> {
-    const node = findIdentifier(project, config, args);
+    const node = findIdentifier({
+        project,
+        repositoryRoot: config.repositoryRoot,
+        args,
+    });
 
     const definitions = project.getLanguageService().getDefinitions(node);
 
@@ -43,9 +47,9 @@ export async function declarations(
 
             const declaration = decl.getFullText().trim();
 
-            const info = quickInfoForNode(project, {
+            const info = quickInfoForNode({
+                project,
                 node: decl,
-                repositoryRoot: config.repositoryRoot,
             });
 
             return {

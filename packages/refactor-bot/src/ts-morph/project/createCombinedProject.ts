@@ -1,6 +1,8 @@
+import type { z } from 'zod';
+
 import { ConfigurationError } from '../../errors/configurationError';
-import { type FunctionsConfig } from '../../functions/types';
 import { logger } from '../../logger/logger';
+import { typeScriptProjectsLookupConfigSchema } from '../types';
 import { createProject } from './createProject';
 import { listProjects } from './listProjects';
 
@@ -22,7 +24,14 @@ import { listProjects } from './listProjects';
  * iterating over all the projects and executing the function in each project
  * separately.
  */
-export async function createCombinedProject(config: FunctionsConfig) {
+export async function createCombinedProject(
+    configRaw: z.input<typeof typeScriptProjectsLookupConfigSchema>,
+    deps = {
+        createProject,
+        listProjects,
+    }
+) {
+    const config = typeScriptProjectsLookupConfigSchema.parse(configRaw);
     const { scope } = config;
     const projects = await listProjects(config);
 
@@ -36,18 +45,19 @@ export async function createCombinedProject(config: FunctionsConfig) {
         firstTsConfigJson: projects[0].tsConfigFilePath,
     });
 
-    const { project } = createProject({
+    const project = deps.createProject({
         tsConfigFilePath: projects[0].tsConfigFilePath,
     });
 
     for (const {
         tsConfigFilePath,
         directoryName,
-        packageName,
+        packageInfo,
     } of projects.slice(1)) {
         if (
             !scope ||
-            (packageName && scope.some((s) => packageName.includes(s))) ||
+            (packageInfo &&
+                scope.some((s) => packageInfo.packageJson.name.includes(s))) ||
             scope.some((s) => directoryName.includes(s))
         ) {
             logger.debug(`Adding tsconfig.json at`, {
@@ -68,7 +78,7 @@ export async function createCombinedProject(config: FunctionsConfig) {
     return {
         project,
         tsConfigFilePath: projects[0].tsConfigFilePath,
-        packageName: projects[0].packageName,
+        packageInfo: projects[0].packageInfo,
         otherProjects: projects.slice(1),
     };
 }

@@ -9,7 +9,9 @@ import { discoverCheckDependencies } from './discoverDependencies';
 
 export type CodeCheckingDeps = Awaited<
     ReturnType<typeof prepareCodeCheckingDeps>
->;
+> & {
+    readonly _brand?: 'CodeCheckingDeps';
+};
 
 export const checkDependenciesSchema = z
     .function(z.tuple([]))

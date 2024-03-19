@@ -16,7 +16,9 @@ import { determineModelParameters } from './determineModelParameters';
 
 export type LlmDependencies = Awaited<
     ReturnType<typeof prepareLlmDependencies>
->;
+> & {
+    readonly _brand?: 'LlmDependencies';
+};
 
 const llmDependenciesConfigSchema = refactorConfigSchema.pick({
     model: true,
