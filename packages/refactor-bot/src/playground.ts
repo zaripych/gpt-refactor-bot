@@ -1,10 +1,7 @@
-import { join } from 'path';
 import { ignoreElements, tap } from 'rxjs';
 
 import { bootstrap } from './bootstrap';
-import { evaluateFileChanges } from './evaluate/evaluateFileChanges';
 import { runEpic } from './event-bus';
-import { gitShowFileCommitSummary } from './git/gitShowFileCommitSummary';
 import { logger } from './logger/logger';
 import { prepareMinimalDeps } from './refactor/dependencies/prepareMinimalDeps';
 
@@ -20,8 +17,6 @@ import { prepareMinimalDeps } from './refactor/dependencies/prepareMinimalDeps';
  * pnpm tsx --watch ./src/playground.ts
  */
 
-const location = '.';
-
 runEpic((stream) =>
     stream.pipe(
         tap((event) => {
@@ -33,26 +28,16 @@ runEpic((stream) =>
 
 logger.info(
     await bootstrap(async () => {
-        return await evaluateFileChanges(
-            {
-                requirements: [
-                    'Replace all usages of `readFile` from `fs/promises` module with `readFileSync` from `fs` module in packages/refactor-bot/src/cache/dependencies.ts`.',
-                ],
-                ...(await gitShowFileCommitSummary({
-                    location,
-                    filePath: 'packages/refactor-bot/src/cache/dependencies.ts',
-                    ref: '28d5f0d1f7985bd16e4d3cc4f26ffd53c1a6f94b',
-                })),
-                ...(await prepareMinimalDeps({
-                    sandboxDirectoryPath: '.',
-                })),
+        const { functionsRepository } = await prepareMinimalDeps({
+            sandboxDirectoryPath: '.',
+        });
+        return await functionsRepository().executeFunction({
+            name: 'moduleImports',
+            arguments: {
+                module: 'fs/promises',
+                // initialFilePath:
+                //     'packages/refactor-bot/src/refactor/planTasks.ts',
             },
-            {
-                location: join(
-                    '.refactor-bot/playground-cache',
-                    'evaluateFileChanges'
-                ),
-            }
-        );
+        });
     })
 );

@@ -230,6 +230,7 @@ export function createCachedPipeline<Input, Output>(opts: {
     return {
         execute,
         abort,
+        ctx,
     };
 }
 

@@ -1,3 +1,5 @@
+import { once } from 'node:events';
+
 import { watch } from 'chokidar';
 
 export const createWatcher = () => {
@@ -7,25 +9,33 @@ export const createWatcher = () => {
         ignoreInitial: true,
     });
 
-    const watchForChangesOnce = async (file: string) => {
-        watcher.add(file);
-        await new Promise<void>((res, rej) => {
-            const change = () => {
-                cleanup();
-                res();
-            };
-            const error = (err: unknown) => {
-                cleanup();
-                rej(err);
-            };
-            const cleanup = () => {
-                watcher.removeListener('change', change);
-                watcher.removeListener('error', error);
-            };
-            watcher.addListener('change', change);
-            watcher.addListener('error', error);
-        });
-        watcher.unwatch(file);
+    const activeWatchers = new Set<string>();
+
+    const watchForChangesOnce = async (
+        file: string,
+        opts?: { signal?: AbortSignal }
+    ) => {
+        if (!activeWatchers.has(file)) {
+            activeWatchers.add(file);
+            watcher.add(file);
+        }
+
+        try {
+            await Promise.race([
+                once(watcher, 'change', opts),
+                once(watcher, 'error', opts),
+            ]);
+        } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+                return;
+            }
+            throw err;
+        } finally {
+            activeWatchers.delete(file);
+            if (!activeWatchers.has(file)) {
+                watcher.unwatch(file);
+            }
+        }
     };
 
     return {

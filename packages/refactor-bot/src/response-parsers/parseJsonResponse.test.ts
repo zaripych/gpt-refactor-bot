@@ -6,8 +6,8 @@ import { parseJsonResponse } from './parseJsonResponse';
 
 it('should return parsed response', () => {
     expect(
-        parseJsonResponse(
-            dedent`
+        parseJsonResponse({
+            response: dedent`
                 \`\`\`json
                 {
                     "summary": "The objective was not achieved. The algorithm did not replace 'readFile' from 'fs/promises' with 'readFileSync' from 'fs'. Instead, it redefined 'readFile' within the 'defaultDeps' object to call itself recursively without any changes, which will lead to a stack overflow if executed.",
@@ -26,7 +26,7 @@ it('should return parsed response', () => {
                 }
                 \`\`\`
             `,
-            z.object({
+            schema: z.object({
                 summary: z.string(),
                 requirements: z.array(
                     z.object({
@@ -35,8 +35,8 @@ it('should return parsed response', () => {
                         satisfied: z.boolean(),
                     })
                 ),
-            })
-        )
+            }),
+        })
     ).toEqual({
         summary:
             "The objective was not achieved. The algorithm did not replace 'readFile' from 'fs/promises' with 'readFileSync' from 'fs'. Instead, it redefined 'readFile' within the 'defaultDeps' object to call itself recursively without any changes, which will lead to a stack overflow if executed.",

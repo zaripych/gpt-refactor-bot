@@ -100,7 +100,7 @@ export const planFiles = makeCachedFunction({
                 preface: systemPrompt,
                 prompt: planFilesPromptText(input.objective),
                 temperature: 1,
-                shouldStop: async (message) => {
+                shouldStop: async ({ message }) => {
                     await validateAndParseListOfFiles({
                         sandboxDirectoryPath: input.sandboxDirectoryPath,
                         text: message.content,

@@ -8,3 +8,6 @@ dist
 .refactor-bot/refactors/*/state
 .refactor-bot/prompts/playground.md
 .refactor-bot/playground-cache
+.refactor-bot/reviews/*/state
+.direnv
+.pr-train.yml

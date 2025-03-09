@@ -135,9 +135,9 @@ export const chunkyEdit = makeCachedFunction({
                 );
             }
 
-            const parsedResponse = parseJsonResponse(
-                message.content,
-                z.array(
+            const parsedResponse = parseJsonResponse({
+                response: message.content,
+                schema: z.array(
                     z.union([
                         z.object({
                             find: z.string(),
@@ -149,8 +149,8 @@ export const chunkyEdit = makeCachedFunction({
                             replace: z.string(),
                         }),
                     ])
-                )
-            );
+                ),
+            });
 
             const codeChunk = applyFindAndReplace({
                 text: input.fileContents,
@@ -189,7 +189,7 @@ export const chunkyEdit = makeCachedFunction({
                 temperature: 1,
                 choices: input.choices,
                 allowedFunctions: [],
-                shouldStop: async (message) => {
+                shouldStop: async ({ message }) => {
                     await verifyResponse(message);
                     return true as const;
                 },

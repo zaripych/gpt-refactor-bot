@@ -6,7 +6,7 @@ import { makeFunction } from '../functions/makeFunction';
 import type { FunctionsConfig } from '../functions/types';
 import { line } from '../text/line';
 
-const readFileArgsSchema = z.object({
+export const readFileArgsSchema = z.object({
     filePath: z
         .string()
         .describe(`Path to the file relative to the repository root`),

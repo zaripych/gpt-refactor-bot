@@ -10,11 +10,19 @@
 > @role system
 
 You think step by step. You are experienced developer that has access to a code
-repository. You use the OpenAI functions calling to discover extra information
-about the repository, provide analytics and help the user with their questions.
-For example, you can list directory contents and read files to give the user
-more details. The user is a developer who wants to learn more about the codebase
-you have access to.
+repository. You use the tool calls to discover extra information about the
+repository, provide analytics and help the user with their questions. For
+example, you can list directory contents and read files to give the user more
+details. The user is a developer who wants to learn more about the codebase you
+have access to.
+
+You attempt to provide information grounded in the results of the function calls
+and their results cuz you are very bad at reasoning.
+
+You try to use factually based language and do not make far-fetching
+assumptions.
+
+You try not to be ambiguous and provide clear and concise answers.
 
 ---
 
@@ -24,126 +32,298 @@ Describe to me step by step how the `refactorBatch` function works.
 
 ---
 
-> @role assistant @function quickInfo
+> @role assistant
 
-```json
-{
-    "identifier": "refactorBatch"
-}
+> @id call_KLGzPuatLstJc0dgKj2N82CE @name declarations
+
+```yaml
+identifier: refactorBatch
+identifierContext: function
 ```
 
 ---
 
-> @role function @function quickInfo
+> @role tool @id call_KLGzPuatLstJc0dgKj2N82CE @name declarations
 
-```json
-{
-    "info": "const refactorBatch: {\n    (input: {\n        objective: string;\n        plannedFiles: string[];\n        startCommit: string;\n        sandboxDirectoryPath: string;\n        scripts: {\n            args: [string, ...string[]];\n        }[];\n        allowedFunctions?: string[] | undefined;\n        budgetCents?: number | undefined;\n        model?: \"gpt-4\" | ... 7 more ... | undefined;\n        modelByStepCode?: Record<...> | undefined;\n        useMoreExpensiveModelsOnRetry?: Partial<...> | undefined;\n        shouldAcceptResult?: ((args_0: {\n            ...;\n        } | {\n            ...;\n        }) => boolean | Promise<...>) | undefined;\n    } & {\n        ...;\n    }, ctx?: PipelineStateRef | undefined): Promise<...>;\n    name: string;\n    inputSchema: z.ZodObject<...>;\n    resultSchema: z.ZodObject<...>;\n}"
-}
-```
+```yaml
+- status: success
+  result:
+      - filePath: packages/refactor-bot/src/refactor/refactorBatch.ts
+        declaration: |-
+            refactorBatch = async (
+                input: z.input<typeof refactorBatchInputSchema>,
+                deps = { dispatch }
+            ) => {
+                const { plannedFiles } = await refactorBatchInputSchema.parseAsync(input);
 
----
+                const accepted: RefactorFilesResult['accepted'] = [];
+                const discarded: RefactorFilesResult['discarded'] = [];
 
-> @role assistant @function declarations
+                for (const filePath of plannedFiles) {
+                    const beforeRefactorCommit = await gitRevParse({
+                        location: input.sandboxDirectoryPath,
+                        ref: 'HEAD',
+                    });
 
-```json
-{
-    "identifier": "refactorBatch"
-}
-```
+                    const refactorFileResult = await refactorFile({
+                        filePath,
+                        ...input,
+                    });
 
----
+                    const { file } = refactorFileResult;
 
-> @role function @function declarations
+                    let shouldAccept =
+                        file.status === 'success' && Boolean(file.lastCommit);
 
-```json
-[
-    {
-        "filePath": "packages/refactor-bot/src/refactor/refactorBatch.ts",
-        "declaration": "refactorBatch = makePipelineFunction({\n    name: 'batch',\n    inputSchema: refactorBatchInputSchema,\n    resultSchema: refactorFilesResultSchema,\n    transform: async (input, persistence) => {\n        const { plannedFiles } = input;\n\n        const shouldAcceptResult =\n            input.shouldAcceptResult ??\n            ((result) =>\n                result.status === 'success' && Boolean(result.lastCommit));\n\n        const accepted: RefactorFilesResult['accepted'] = {};\n        const discarded: RefactorFilesResult['discarded'] = {};\n\n        for (const filePath of plannedFiles) {\n            const beforeRefactorCommit = await gitRevParse({\n                location: input.sandboxDirectoryPath,\n                ref: 'HEAD',\n            });\n\n            const { file } = await refactorFile(\n                {\n                    filePath,\n                    ...input,\n                },\n                persistence\n            ).catch((err) => {\n                if (\n                    err instanceof AbortError &&\n                    !(err instanceof CycleDetectedError) &&\n                    !(err instanceof OutOfContextBoundsError)\n                ) {\n                    return Promise.reject(err);\n                }\n\n                /**\n                 * @note this is temporary, ideally the refactorFile\n                 * function should not throw and return a failure result\n                 */\n                return {\n                    file: {\n                        status: 'failure',\n                        failureDescription:\n                            err instanceof Error ? err.message : String(err),\n                        filePath,\n                        issues: [],\n                        steps: [],\n                        timestamp: performance.now(),\n                    },\n                } as RefactorFileResult;\n            });\n\n            const shouldAccept = await Promise.resolve(\n                shouldAcceptResult(file)\n            );\n\n            if (shouldAccept) {\n                if (file.lastCommit) {\n                    const currentCommit = await gitRevParse({\n                        location: input.sandboxDirectoryPath,\n                        ref: 'HEAD',\n                    });\n\n                    if (currentCommit !== file.lastCommit) {\n                        logger.info('Resetting to', file.lastCommit);\n\n                        await gitResetHard({\n                            location: input.sandboxDirectoryPath,\n                            ref: file.lastCommit,\n                        });\n                    }\n                }\n                pushRefactorFileResults({\n                    into: accepted,\n                    result: file,\n                });\n            } else {\n                const currentCommit = await gitRevParse({\n                    location: input.sandboxDirectoryPath,\n                    ref: 'HEAD',\n                });\n\n                if (currentCommit !== beforeRefactorCommit) {\n                    logger.warn(\n                        'Resetting to previous commit',\n                        beforeRefactorCommit\n                    );\n\n                    await gitResetHard({\n                        location: input.sandboxDirectoryPath,\n                        ref: beforeRefactorCommit,\n                    });\n                }\n\n                if (file.status === 'failure') {\n                    pushRefactorFileResults({\n                        into: discarded,\n                        result: file,\n                    });\n                }\n            }\n        }\n\n        return {\n            accepted,\n            discarded,\n        };\n    },\n})",
-        "info": "const refactorBatch: {\n    (input: {\n        objective: string;\n        plannedFiles: string[];\n        startCommit: string;\n        sandboxDirectoryPath: string;\n        scripts: {\n            args: [string, ...string[]];\n        }[];\n        allowedFunctions?: string[] | undefined;\n        budgetCents?: number | undefined;\n        model?: \"gpt-4\" | ... 7 more ... | undefined;\n        modelByStepCode?: Record<...> | undefined;\n        useMoreExpensiveModelsOnRetry?: Partial<...> | undefined;\n        shouldAcceptResult?: ((args_0: {\n            ...;\n        } | {\n            ...;\n        }) => boolean | Promise<...>) | undefined;\n    } & {\n        ...;\n    }, ctx?: PipelineStateRef | undefined): Promise<...>;\n    name: string;\n    inputSchema: z.ZodObject<...>;\n    resultSchema: z.ZodObject<...>;\n}"
-    }
-]
+                    if (shouldAccept && input.evaluate) {
+                        const lastCommit = file.lastCommit;
+                        assert(lastCommit);
+
+                        refactorFileResult.evaluation = await evaluateFileScore({
+                            ...input,
+                            filePath: file.filePath,
+                            commitBeforeChanges: beforeRefactorCommit,
+                            commit: lastCommit,
+                            choices: 3,
+                        });
+
+                        shouldAccept =
+                            refactorFileResult.evaluation.score >=
+                            (input.evaluateMinScore ?? 0.5);
+                    }
+
+                    if (shouldAccept) {
+                        if (file.lastCommit) {
+                            const currentCommit = await gitRevParse({
+                                location: input.sandboxDirectoryPath,
+                                ref: 'HEAD',
+                            });
+
+                            if (currentCommit !== file.lastCommit) {
+                                logger.info('Resetting to', file.lastCommit);
+
+                                await gitResetHard({
+                                    location: input.sandboxDirectoryPath,
+                                    ref: file.lastCommit,
+                                });
+                            }
+                        }
+
+                        accepted.push(refactorFileResult);
+
+                        deps.dispatch(acceptedEdit(refactorFileResult));
+                    } else {
+                        const currentCommit = await gitRevParse({
+                            location: input.sandboxDirectoryPath,
+                            ref: 'HEAD',
+                        });
+
+                        if (currentCommit !== beforeRefactorCommit) {
+                            logger.warn(
+                                'Resetting to previous commit',
+                                beforeRefactorCommit
+                            );
+
+                            await gitResetHard({
+                                location: input.sandboxDirectoryPath,
+                                ref: beforeRefactorCommit,
+                            });
+                        }
+
+                        discarded.push(refactorFileResult);
+
+                        deps.dispatch(discardedEdit(refactorFileResult));
+                    }
+                }
+
+                return {
+                    accepted,
+                    discarded,
+                };
+            }
+        info: |-
+            const refactorBatch: (input: {
+                objective: string;
+                requirements: [string, ...string[]];
+                plannedFiles: string[];
+                startCommit: string;
+                sandboxDirectoryPath: string;
+                functionsRepository: () => FunctionsRepositoryDeps;
+                ... 4 more ...;
+                evaluateMinScore?: number | undefined;
+            }, deps?: {
+                ...;
+            }) => Promise<...>
 ```
 
 ---
 
 > @role assistant
 
-The `refactorBatch` function is a pipeline function, which seems to be part of a
-system designed to automate code refactoring tasks. It accepts an input object
-with a variety of properties and returns a promise.
+The `refactorBatch` function is an asynchronous function that processes a batch
+of files for refactoring. Here's a step-by-step explanation of how it works:
 
-Here's how it works:
+1. **Input Parsing**: The function begins by parsing the input using
+   `refactorBatchInputSchema.parseAsync(input)`. This input includes details
+   such as the list of files to be refactored (`plannedFiles`).
 
-1. It starts by defining an `inputSchema` and a `resultSchema`, which seem to
-   dictate the expected structure of the input given to the function and the
-   result it will return.
+2. **Initialize Results**: Two arrays, `accepted` and `discarded`, are
+   initialized to store the results of the refactoring process for each file.
 
-2. The `transform` method of the function contains the core logic. It takes as
-   input an `input` object and a `persistence` object.
+3. **Iterate Over Files**: The function iterates over each file path in the
+   `plannedFiles` array.
 
-3. It first extracts the list of files planned for refactoring (`plannedFiles`)
-   from the `input` object.
+4. **Get Current Commit**: For each file, it retrieves the current commit hash
+   using `gitRevParse` with the reference `HEAD` in the specified sandbox
+   directory.
 
-4. It also checks if a `shouldAcceptResult` function is provided in the `input`
-   object. If not, it defaults to a function that checks if the result status is
-   'success' and if a `lastCommit` value exists.
+5. **Refactor File**: It calls `refactorFile` for each file, passing the file
+   path and other input parameters. This function attempts to refactor the file
+   and returns a result.
 
-5. The function then loops over each `filePath` in `plannedFiles`:
+6. **Determine Acceptance**: The function checks if the refactoring was
+   successful and if the file has a `lastCommit`. If the `evaluate` option is
+   enabled, it further evaluates the file's score using `evaluateFileScore`.
 
-    - It attempts to refactor the file at `filePath` using the `refactorFile`
-      function.
-    - If the file is refactored successfully and satisfies the
-      `shouldAcceptResult` condition, its result is added to an `accepted`
-      object. If it comes with a `lastCommit`, the repository is reset to that
-      commit.
-    - If the file fails the `shouldAcceptResult` condition, it is added to a
-      `discarded` object. If the state of the repository has changed, it resets
-      the repository to its previous commit.
+7. **Evaluate Score**: If evaluation is required, it checks if the evaluation
+   score meets or exceeds a minimum score (`evaluateMinScore`). If so, the
+   refactoring is considered acceptable.
 
-6. After refactoring all planned files, the function returns an object with the
-   `accepted` and `discarded` results.
+8. **Handle Accepted Files**:
 
-The actual refactoring seems to be handled by another function (`refactorFile`).
-The main job of `refactorBatch` appears to be orchestrating the process,
-handling errors, and dealing with git operations.
+    - If the refactoring is accepted, it checks if the current commit matches
+      the file's `lastCommit`. If not, it resets the repository to the
+      `lastCommit` using `gitResetHard`.
+    - The refactored file result is added to the `accepted` array, and an
+      `acceptedEdit` action is dispatched.
+
+9. **Handle Discarded Files**:
+
+    - If the refactoring is not accepted, it checks if the current commit
+      matches the commit before refactoring. If not, it resets the repository to
+      the previous commit.
+    - The refactored file result is added to the `discarded` array, and a
+      `discardedEdit` action is dispatched.
+
+10. **Return Results**: Finally, the function returns an object containing the
+    `accepted` and `discarded` arrays, representing the results of the
+    refactoring process.
+
+This function is designed to automate the process of refactoring multiple files,
+evaluating the changes, and managing the commit history to ensure consistency.
 
 ---
 
 > @role user
 
-Can you please create a mermaid diagram for that?
+Provide a flow diagram (using mermaid) explaining the `refactorBatch` function.
 
 ---
 
 > @role assistant
 
-Sure, here is a sequence diagram for the `refactorBatch` function.
+Here is a flow diagram using Mermaid syntax to explain the `refactorBatch`
+function:
+
+```mermaid
+flowchart TD
+    A[Start] --> B[Parse Input]
+    B --> C[Initialize accepted and discarded arrays]
+    C --> D[Iterate Over plannedFiles]
+    D --> E[Get Current Commit]
+    E --> F[Refactor File]
+    F --> G{Refactor Successful?}
+    G -->|Yes| H[Evaluate File Score]
+    G -->|No| I[Add to discarded]
+    H --> J{Score >= Min Score?}
+    J -->|Yes| K[Check Current vs Last Commit]
+    J -->|No| I
+    K --> L{Commits Match?}
+    L -->|Yes| M[Add to accepted]
+    L -->|No| N[Reset to Last Commit]
+    N --> M
+    I --> O[Dispatch discardedEdit]
+    M --> P[Dispatch acceptedEdit]
+    O --> Q[Continue Iteration]
+    P --> Q
+    Q --> R{More Files?}
+    R -->|Yes| D
+    R -->|No| S[Return accepted and discarded]
+    S --> T[End]
+```
+
+This diagram provides a visual representation of the flow of the `refactorBatch`
+function, showing the decision points and actions taken for each file in the
+batch.
+
+---
+
+> @role user
+
+Produce a sequence diagram for the `refactorBatch` function.
+
+---
+
+> @role assistant
+
+Here is a sequence diagram using Mermaid syntax to illustrate the
+`refactorBatch` function:
 
 ```mermaid
 sequenceDiagram
-  participant B as Function Caller
-  participant R as refactorBatch
-  participant F as refactorFile
-  participant G as Git Operations
-  B->>R: Call refactorBatch with input and persistence
-  R->>R: Extract plannedFiles and shouldAcceptResult from input
-  loop over each filePath in plannedFiles
-    R->>F: Call refactorFile with filePath and persistence
-    F-->>R: Return RefactorFileResult
-    R->>R: Evaluate shouldAcceptResult with file result
-    alt if shouldAccept is true
-      R->>G: If lastCommit exists, hard reset to lastCommit
-      R->>R: Add file result to accepted
-    else shouldAccept is false
-      R->>G: If currentCommit != beforeRefactorCommit, hard reset to beforeRefactorCommit
-      R->>R: If file status is failure, add file to discarded
+    participant User
+    participant refactorBatch
+    participant gitRevParse
+    participant refactorFile
+    participant evaluateFileScore
+    participant gitResetHard
+    participant dispatch
+
+    User ->> refactorBatch: Call refactorBatch(input)
+    refactorBatch ->> refactorBatch: Parse input
+    refactorBatch ->> refactorBatch: Initialize accepted and discarded arrays
+    loop for each file in plannedFiles
+        refactorBatch ->> gitRevParse: Get current commit (HEAD)
+        gitRevParse -->> refactorBatch: Return current commit
+        refactorBatch ->> refactorFile: Refactor file
+        refactorFile -->> refactorBatch: Return refactor result
+        alt Refactor Successful
+            refactorBatch ->> refactorBatch: Check if evaluation is needed
+            alt Evaluation Needed
+                refactorBatch ->> evaluateFileScore: Evaluate file score
+                evaluateFileScore -->> refactorBatch: Return score
+                refactorBatch ->> refactorBatch: Check if score >= Min Score
+            end
+            alt Accept Refactor
+                refactorBatch ->> gitRevParse: Get current commit (HEAD)
+                gitRevParse -->> refactorBatch: Return current commit
+                alt Commits Don't Match
+                    refactorBatch ->> gitResetHard: Reset to last commit
+                    gitResetHard -->> refactorBatch: Reset complete
+                end
+                refactorBatch ->> refactorBatch: Add to accepted
+                refactorBatch ->> dispatch: Dispatch acceptedEdit
+            else
+                refactorBatch ->> gitRevParse: Get current commit (HEAD)
+                gitRevParse -->> refactorBatch: Return current commit
+                alt Commits Don't Match
+                    refactorBatch ->> gitResetHard: Reset to previous commit
+                    gitResetHard -->> refactorBatch: Reset complete
+                end
+                refactorBatch ->> refactorBatch: Add to discarded
+                refactorBatch ->> dispatch: Dispatch discardedEdit
+            end
+        else
+            refactorBatch ->> refactorBatch: Add to discarded
+            refactorBatch ->> dispatch: Dispatch discardedEdit
+        end
     end
-  end
-  R-->>B: Return { accepted, discarded }
+    refactorBatch ->> User: Return accepted and discarded
 ```
 
-Please paste this into a Mermaid Live Editor to view the sequence diagram. You
-can use this editor:
-[Mermaid Live Editor](https://mermaid-js.github.io/mermaid-live-editor/).
+This sequence diagram provides a detailed view of the interactions between the
+`refactorBatch` function and other components or functions it interacts with
+during its execution.
+
+> @hint Last message is not a user prompt, please add another message and finish
+> with `"---"` to confirm ... [+ ~USD 0.0275]

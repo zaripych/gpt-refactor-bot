@@ -79,7 +79,7 @@ export const determineFilesToEdit = makeCachedFunction({
                  * @note we do not want to allow any functions for this prompt
                  */
                 allowedFunctions: [],
-                shouldStop: async (message) => {
+                shouldStop: async ({ message }) => {
                     await validateAndParseListOfFiles({
                         sandboxDirectoryPath: input.sandboxDirectoryPath,
                         text: message.content,

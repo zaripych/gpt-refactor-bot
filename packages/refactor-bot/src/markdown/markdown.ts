@@ -1,7 +1,7 @@
 import dedent from 'dedent';
 import { format as formatText } from 'util';
 
-import { glowFormat } from './glowFormat';
+import { prettierMarkdown } from '../prettier/prettier';
 import { glowPrint } from './glowPrint';
 
 export function markdown(template: string, ...values: unknown[]): string;
@@ -32,22 +32,24 @@ export function markdown(
     );
 }
 
-export async function formatMarkdown(input: string, deps = { glowFormat }) {
-    return deps.glowFormat({
-        input: input
-            .replace(/^\s*/g, '')
-            .replace(/^\n/g, '')
-            .replace(/\n$/g, '')
-            .trim(),
+export async function prettifyMarkdownForConsoleOutput(input: string) {
+    return await prettierMarkdown({
+        md: input,
+        repositoryRoot: process.cwd(),
+        // we unwrap the markdown so we can adapt to the console width
+        proseWrap: 'never',
+        throwOnParseError: false,
     });
 }
 
 export async function printMarkdown(input: string, deps = { glowPrint }) {
     await deps.glowPrint({
-        input: input
-            .replace(/^\s*/g, '')
-            .replace(/^\n/g, '')
-            .replace(/\n$/g, '')
-            .trim(),
+        input: await prettifyMarkdownForConsoleOutput(
+            input
+                .replace(/^\s*/g, '')
+                .replace(/^\n/g, '')
+                .replace(/\n$/g, '')
+                .trim()
+        ),
     });
 }

@@ -157,7 +157,7 @@ export const edit = makeCachedFunction({
                 temperature: 1,
                 choices: input.choices,
                 allowedFunctions: [],
-                shouldStop: async (message) => {
+                shouldStop: async ({ message }) => {
                     await verifyResponse(message);
                     return true as const;
                 },

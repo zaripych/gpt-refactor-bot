@@ -1,3 +1,5 @@
+import { formatWithOptions } from 'node:util';
+
 import yargs from 'yargs';
 
 import { flush } from './logger/logger';
@@ -27,8 +29,18 @@ function run() {
             });
         })
         .catch((err) => {
-            console.error(err);
-            process.exitCode = 1;
+            console.error(
+                formatWithOptions(
+                    { depth: Number.MAX_SAFE_INTEGER, colors: true },
+                    err
+                )
+            );
+            if (
+                typeof process.exitCode !== 'number' ||
+                process.exitCode === 0
+            ) {
+                process.exitCode = 1;
+            }
         });
 }
 

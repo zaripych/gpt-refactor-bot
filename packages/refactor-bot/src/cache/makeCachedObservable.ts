@@ -237,7 +237,7 @@ export function makeCachedObservable<
                     `,
                     {
                         ...(location && {
-                            location,
+                            location: `${key}.yaml`,
                         }),
                     }
                 );

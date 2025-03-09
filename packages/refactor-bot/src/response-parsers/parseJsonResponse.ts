@@ -3,10 +3,21 @@ import { z, ZodError } from 'zod';
 import { parseJsonSchema } from '../utils/parseJsonSchema';
 import { parseFencedCodeBlocks } from './parseFencedCodeBlocks';
 
-export function parseJsonResponse<Schema extends z.ZodType<unknown>>(
-    content: string,
-    schema: Schema
-) {
+export function parseJsonResponse<Schema extends z.ZodType<unknown>>(opts: {
+    response: string;
+    schema: Schema;
+    allowMultiple: true;
+}): Array<z.infer<Schema>>;
+export function parseJsonResponse<Schema extends z.ZodType<unknown>>(opts: {
+    response: string;
+    schema: Schema;
+}): z.infer<Schema>;
+export function parseJsonResponse<Schema extends z.ZodType<unknown>>(opts: {
+    response: string;
+    schema: Schema;
+    allowMultiple?: boolean;
+}) {
+    const { response, schema, allowMultiple = false } = opts;
     const json = parseJsonSchema(schema);
 
     const fencedJson = z
@@ -38,12 +49,12 @@ export function parseJsonResponse<Schema extends z.ZodType<unknown>>(
     const nonFencedJson = json.transform((response) => [response] as const);
 
     const schemas = [nonFencedJson, fencedJson];
-    const results = schemas.map((schema) => schema.safeParse(content));
+    const results = schemas.map((schema) => schema.safeParse(response));
 
     const successResult = results.find((r) => r.success);
 
     if (successResult && successResult.success) {
-        return successResult.data[0];
+        return !allowMultiple ? successResult.data[0] : successResult.data;
     } else {
         throw new ZodError([
             ...results.flatMap((r) => (r.success ? [] : r.error.issues)),

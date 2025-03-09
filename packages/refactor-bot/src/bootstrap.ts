@@ -7,6 +7,9 @@ export async function bootstrap(load: () => Promise<unknown>) {
             debugger;
         });
     }
+    if (process.env['DEBUG']) {
+        await import('wtfnode').then(({ init }) => init());
+    }
     await import('dotenv').then((dotenv) =>
         dotenv.config({
             override: true,

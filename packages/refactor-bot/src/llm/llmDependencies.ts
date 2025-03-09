@@ -2,15 +2,16 @@ import { z } from 'zod';
 
 import { makeCachedFunction } from '../cache/makeCachedFunction';
 import {
-    calculatePrice,
     chatCompletions,
     messageSchema,
     responseSchema,
 } from '../chat-gpt/api';
+import { calculatePrice } from '../chat-gpt/pricing';
 import { GptRequestError } from '../errors/gptRequestError';
 import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
 import { refactorConfigSchema } from '../refactor/types';
 import { gptRequestFailed } from './actions/gptRequestFailed';
+import { gptRequestStarted } from './actions/gptRequestStarted';
 import { gptRequestSuccess } from './actions/gptRequestSuccess';
 import { determineModelParameters } from './determineModelParameters';
 
@@ -42,6 +43,7 @@ export async function prepareLlmDependencies(
             choices: z.number().optional(),
 
             functionsRepository: functionsRepositorySchema,
+            abortSignal: z.custom<() => AbortSignal>().optional(),
         }),
         resultSchema: z.object({
             response: responseSchema,
@@ -57,10 +59,20 @@ export async function prepareLlmDependencies(
                 ctx
             );
             try {
+                ctx.dispatch(
+                    gptRequestStarted({
+                        ...modelParameters,
+                        ...params,
+                        tools: params.functionsRepository().describeFunctions(),
+                        key: ctx.location,
+                    })
+                );
+
                 const response = await chatCompletions({
                     ...modelParameters,
                     ...params,
-                    functions: params.functionsRepository().describeFunctions(),
+                    tools: params.functionsRepository().describeFunctions(),
+                    abortSignal: params.abortSignal?.(),
                 });
 
                 const spent = calculatePrice({

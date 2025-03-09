@@ -18,11 +18,13 @@ export async function glowPrint(
         style = 'auto',
         command = 'glow',
         args,
+        disableWordWrap = false,
     }: {
         input: string;
         style?: 'auto' | 'dark' | 'light' | 'drakula' | 'notty';
         command?: string;
         args?: string[];
+        disableWordWrap?: boolean;
     },
     depsRaw?: Partial<typeof glowPrintDefaultDeps>
 ) {
@@ -38,11 +40,13 @@ export async function glowPrint(
         return;
     }
 
-    const width = Math.max(40, Math.min(process.stdout.columns, 120));
+    const width = disableWordWrap
+        ? 0
+        : Math.max(40, Math.min(process.stdout.columns - 5, 120));
 
     const child = spawn(
         command,
-        args ?? ['-', '-s', style, '--width', String(width), '-l'],
+        args ?? ['-s', style, '--width', String(width), '-l'],
         {
             stdio: ['pipe', 'inherit', 'inherit'],
         }

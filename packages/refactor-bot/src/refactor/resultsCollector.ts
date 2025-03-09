@@ -43,6 +43,7 @@ export const collectedRefactorResultSchema = z
                 })
             ),
         }),
+        executionLog: z.array(z.string()).optional(),
     });
 
 const commitHashRegex = /^[a-f0-9]{40}$/;

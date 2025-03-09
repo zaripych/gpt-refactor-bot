@@ -31,7 +31,27 @@ export async function languageServiceReferences(
         );
     }
 
-    const findIdentifier = (node: Node<ts.Node>) => {
+    const findIdentifierWithContext = (node: Node<ts.Node>) => {
+        if (args.identifier === 'any') {
+            return node.getKind() === SyntaxKind.AnyKeyword;
+        }
+        if (args.identifier === 'unknown') {
+            return node.getKind() === SyntaxKind.UnknownKeyword;
+        }
+        const parentKind = node.getParent()?.getKind();
+        const superParentKind = node.getParent()?.getParent()?.getKind();
+        const contextMatches =
+            !context ||
+            (parentKind && context.includes(parentKind)) ||
+            (superParentKind && context.includes(superParentKind));
+        return (
+            node.getKind() === SyntaxKind.Identifier &&
+            node.getText() === args.identifier &&
+            Boolean(contextMatches)
+        );
+    };
+
+    const findIdentifierNoContext = (node: Node<ts.Node>) => {
         if (args.identifier === 'any') {
             return node.getKind() === SyntaxKind.AnyKeyword;
         }
@@ -40,8 +60,7 @@ export async function languageServiceReferences(
         }
         return (
             node.getKind() === SyntaxKind.Identifier &&
-            node.getText() === args.identifier &&
-            (!context || context.includes(node.getParentOrThrow().getKind()))
+            node.getText() === args.identifier
         );
     };
 
@@ -52,7 +71,9 @@ export async function languageServiceReferences(
     const sourceFile = fullInitialFilePath
         ? project.getSourceFileOrThrow(fullInitialFilePath)
         : project.getSourceFiles().find((file) => {
-              const descendant = file.getFirstDescendant(findIdentifier);
+              const descendant = file.getFirstDescendant(
+                  findIdentifierWithContext
+              );
               return !!descendant;
           });
 
@@ -62,10 +83,25 @@ export async function languageServiceReferences(
         );
     }
 
-    const node = sourceFile.getFirstDescendantOrThrow(findIdentifier, () =>
-        args.initialFilePath
-            ? `Cannot find identifier "${args.identifier}" in file "${args.initialFilePath}"`
-            : `Cannot find identifier "${args.identifier}"`
+    const node = sourceFile.getFirstDescendantOrThrow(
+        findIdentifierWithContext,
+        () => {
+            const identifiers = sourceFile.getDescendants().flatMap((node) => {
+                return findIdentifierNoContext(node) ? [node] : [];
+            });
+            const parts = [
+                `Cannot find identifier "${args.identifier}"`,
+                args.initialFilePath && `in file "${args.initialFilePath}"`,
+                args.identifierContext && `of type "${args.identifierContext}"`,
+                identifiers.length > 0 &&
+                    args.identifierContext &&
+                    `Ignoring "identifierContext", found  ${identifiers.length} identifiers ` +
+                        `in the file - reduce the specificity of your search by not passing "identifierContext" to get more information about them.`,
+            ]
+                .filter(Boolean)
+                .join(' ');
+            return parts;
+        }
     );
 
     const referencedSymbols = project.getLanguageService().findReferences(node);

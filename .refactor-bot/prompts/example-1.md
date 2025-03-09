@@ -13,215 +13,151 @@ Can you list all sub-classes of the `AbortError` class?
 
 ---
 
-> @role assistant @function declarations
+> @role assistant @name declarations
 
-```json
-{
-    "identifier": "AbortError",
-    "identifierContext": "class"
-}
+```yaml
+identifier: AbortError
+identifierContext: class
 ```
 
 ---
 
-> @role function @function declarations
+> @role function @name declarations
 
-```json
-[
-    {
-        "filePath": "src/errors/abortError.ts",
-        "declaration": "export class AbortError extends Error {\n    override name = 'AbortError';\n\n    constructor(\n        message: string,\n        options?: ErrorOptions & Record<string, unknown>\n    ) {\n        super(message, options);\n        Object.assign(this, options);\n    }\n}",
-        "info": "class AbortError"
-    }
-]
+```yaml
+- filePath: src/errors/abortError.ts
+  declaration: |-
+      export class AbortError extends Error {
+          override name = 'AbortError';
+
+          constructor(
+              message: string,
+              options?: ErrorOptions & Record<string, unknown>
+          ) {
+              super(message, options);
+              Object.assign(this, options);
+          }
+      }
+  info: class AbortError
 ```
 
 ---
 
-> @role assistant @function references
+> @role assistant @name references
 
-```json
-{
-    "identifier": "AbortError",
-    "identifierContext": "class"
-}
+```yaml
+identifier: AbortError
+identifierContext: class
 ```
 
 ---
 
-> @role function @function references
+> @role function @name references
 
-```json
-[
-    {
-        "filePath": "src/errors/abortError.ts",
-        "package": "refactor-bot",
-        "references": [
-            {
-                "pos": 12,
-                "line": 1,
-                "column": 13,
-                "excerpt": "export class AbortError extends Error {"
-            }
-        ]
-    },
-    {
-        "filePath": "src/errors/configurationError.ts",
-        "package": "refactor-bot",
-        "references": [
-            {
-                "pos": 8,
-                "line": 1,
-                "column": 9,
-                "excerpt": "import { AbortError } from './abortError';"
-            },
-            {
-                "pos": 83,
-                "line": 3,
-                "column": 40,
-                "excerpt": "export class ConfigurationError extends AbortError {"
-            }
-        ]
-    },
-    {
-        "filePath": "src/errors/outOfContextBoundsError.ts",
-        "package": "refactor-bot",
-        "references": [
-            {
-                "pos": 8,
-                "line": 1,
-                "column": 9,
-                "excerpt": "import { AbortError } from './abortError';"
-            },
-            {
-                "pos": 88,
-                "line": 3,
-                "column": 45,
-                "excerpt": "export class OutOfContextBoundsError extends AbortError {"
-            }
-        ]
-    },
-    {
-        "filePath": "src/errors/rateLimitExceeded.ts",
-        "package": "refactor-bot",
-        "references": [
-            {
-                "pos": 8,
-                "line": 1,
-                "column": 9,
-                "excerpt": "import { AbortError } from './abortError';"
-            },
-            {
-                "pos": 87,
-                "line": 3,
-                "column": 44,
-                "excerpt": "export class RateLimitExceededError extends AbortError {"
-            }
-        ]
-    },
-    {
-        "filePath": "src/errors/cycleDetectedError.ts",
-        "package": "refactor-bot",
-        "references": [
-            {
-                "pos": 8,
-                "line": 1,
-                "column": 9,
-                "excerpt": "import { AbortError } from './abortError';"
-            },
-            {
-                "pos": 83,
-                "line": 3,
-                "column": 40,
-                "excerpt": "export class CycleDetectedError extends AbortError {"
-            }
-        ]
-    },
-    {
-        "filePath": "src/utils/retry.ts",
-        "package": "refactor-bot",
-        "references": [
-            {
-                "pos": 8,
-                "line": 1,
-                "column": 9,
-                "excerpt": "import { AbortError } from '../errors/abortError';"
-            },
-            {
-                "pos": 605,
-                "line": 21,
-                "column": 31,
-                "excerpt": "if (err instanceof AbortError) {"
-            }
-        ]
-    },
-    {
-        "filePath": "src/pipeline/pipeline.ts",
-        "package": "refactor-bot",
-        "references": [
-            {
-                "pos": 231,
-                "line": 7,
-                "column": 9,
-                "excerpt": "import { AbortError } from '../errors/abortError';"
-            },
-            {
-                "pos": 13255,
-                "line": 428,
-                "column": 26,
-                "excerpt": "throw new AbortError("
-            },
-            {
-                "pos": 18890,
-                "line": 613,
-                "column": 26,
-                "excerpt": "throw new AbortError(`Pipeline has been aborted`);"
-            }
-        ]
-    },
-    {
-        "filePath": "src/refactor/refactorFile.ts",
-        "package": "refactor-bot",
-        "references": [
-            {
-                "pos": 183,
-                "line": 7,
-                "column": 9,
-                "excerpt": "import { AbortError } from '../errors/abortError';"
-            },
-            {
-                "pos": 6205,
-                "line": 194,
-                "column": 22,
-                "excerpt": "throw new AbortError("
-            },
-            {
-                "pos": 19978,
-                "line": 504,
-                "column": 38,
-                "excerpt": "throw new AbortError("
-            }
-        ]
-    },
-    {
-        "filePath": "src/refactor/refactorBatch.ts",
-        "package": "refactor-bot",
-        "references": [
-            {
-                "pos": 34,
-                "line": 3,
-                "column": 9,
-                "excerpt": "import { AbortError } from '../errors/abortError';"
-            },
-            {
-                "pos": 2703,
-                "line": 81,
-                "column": 39,
-                "excerpt": "err instanceof AbortError"
-            }
-        ]
-    }
-]
+```yaml
+- filePath: src/errors/abortError.ts
+  package: refactor-bot
+  references:
+      - pos: 12
+        line: 1
+        column: 13
+        excerpt: export class AbortError extends Error {
+- filePath: src/errors/configurationError.ts
+  package: refactor-bot
+  references:
+      - pos: 8
+        line: 1
+        column: 9
+        excerpt: import { AbortError } from './abortError';
+      - pos: 83
+        line: 3
+        column: 40
+        excerpt: export class ConfigurationError extends AbortError {
+- filePath: src/errors/outOfContextBoundsError.ts
+  package: refactor-bot
+  references:
+      - pos: 8
+        line: 1
+        column: 9
+        excerpt: import { AbortError } from './abortError';
+      - pos: 88
+        line: 3
+        column: 45
+        excerpt: export class OutOfContextBoundsError extends AbortError {
+- filePath: src/errors/rateLimitExceeded.ts
+  package: refactor-bot
+  references:
+      - pos: 8
+        line: 1
+        column: 9
+        excerpt: import { AbortError } from './abortError';
+      - pos: 87
+        line: 3
+        column: 44
+        excerpt: export class RateLimitExceededError extends AbortError {
+- filePath: src/errors/cycleDetectedError.ts
+  package: refactor-bot
+  references:
+      - pos: 8
+        line: 1
+        column: 9
+        excerpt: import { AbortError } from './abortError';
+      - pos: 83
+        line: 3
+        column: 40
+        excerpt: export class CycleDetectedError extends AbortError {
+- filePath: src/utils/retry.ts
+  package: refactor-bot
+  references:
+      - pos: 8
+        line: 1
+        column: 9
+        excerpt: import { AbortError } from '../errors/abortError';
+      - pos: 605
+        line: 21
+        column: 31
+        excerpt: if (err instanceof AbortError) {
+- filePath: src/pipeline/pipeline.ts
+  package: refactor-bot
+  references:
+      - pos: 231
+        line: 7
+        column: 9
+        excerpt: import { AbortError } from '../errors/abortError';
+      - pos: 13255
+        line: 428
+        column: 26
+        excerpt: throw new AbortError(
+      - pos: 18890
+        line: 613
+        column: 26
+        excerpt: throw new AbortError(`Pipeline has been aborted`);
+- filePath: src/refactor/refactorFile.ts
+  package: refactor-bot
+  references:
+      - pos: 183
+        line: 7
+        column: 9
+        excerpt: import { AbortError } from '../errors/abortError';
+      - pos: 6205
+        line: 194
+        column: 22
+        excerpt: throw new AbortError(
+      - pos: 19978
+        line: 504
+        column: 38
+        excerpt: throw new AbortError(
+- filePath: src/refactor/refactorBatch.ts
+  package: refactor-bot
+  references:
+      - pos: 34
+        line: 3
+        column: 9
+        excerpt: import { AbortError } from '../errors/abortError';
+      - pos: 2703
+        line: 81
+        column: 39
+        excerpt: err instanceof AbortError
 ```
 
 ---

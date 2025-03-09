@@ -19,7 +19,10 @@ const search = async (opts: { repositoryRoot: string; patterns: string[] }) => {
     });
 };
 
-it('should work for the repository root', async () => {
+/**
+ * This test needs to be isolated from the rest of the source code
+ */
+it.skip('should work for the repository root', async () => {
     const repositoryRoot = join(findRefactorBotPackageRoot(), '../../');
 
     const gitLsResult = await listFiles(

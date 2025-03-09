@@ -2,7 +2,7 @@ import assert from 'assert';
 import dedent from 'dedent';
 import { mkdir, writeFile } from 'fs/promises';
 import { dump } from 'js-yaml';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { lastValueFrom, mergeMap, range, toArray } from 'rxjs';
 import { z } from 'zod';
 
@@ -195,8 +195,33 @@ export const runVariant = makeCachedFunction({
             })
         );
 
+        const localGoalMd = join(
+            repoRoot,
+            '.refactor-bot',
+            'refactors',
+            input.refactorConfig.name,
+            `goal.md`
+        );
+
+        await mkdir(dirname(localGoalMd), { recursive: true });
+
+        await writeFile(
+            localGoalMd,
+            await prettierMarkdown({
+                repositoryRoot: cliSandbox.sandboxDirectoryPath,
+                md: dedent`
+                    \`\`\`yaml
+                    ${dump(rest)}
+                    \`\`\`
+
+                    ${objective}
+                `,
+            })
+        );
+
         logger.debug('Written refactor config with an objective at', {
             location: goalMd,
+            andLocallyAt: localGoalMd,
         });
 
         logger.debug('Starting refactoring process', {

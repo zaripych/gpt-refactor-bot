@@ -1,4 +1,4 @@
-import type { AnyZodObject, ZodEffects } from 'zod';
+import { type AnyZodObject, type ZodEffects } from 'zod';
 
 export type SupportedZodSchemas = AnyZodObject | ZodEffects<AnyZodObject>;
 

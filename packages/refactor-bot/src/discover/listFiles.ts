@@ -49,7 +49,7 @@ export const listFiles = async (
         }
     );
 
-    const files = result.stdout.trim().split('\n');
+    const files = result.stdout.trim().split('\n').filter(Boolean);
 
     return {
         filePaths: files.slice(0, max),

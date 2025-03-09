@@ -17,8 +17,43 @@ it('should parse single block', () => {
         `)
     ).toEqual([
         {
-            code: `  // some code\n`,
+            block: markdown`
+                ~~~TypeScript
+                  // some code
+                ~~~
+            `,
+            code: `  // some code`,
             language: 'TypeScript',
+            marker: '~~~',
+            start: 0,
+        },
+    ]);
+});
+
+it('should parse single block surrounded by md', () => {
+    expect(
+        parseFencedCodeBlocks(markdown`
+            # Title
+
+            Preceding text
+
+            ~~~TypeScript
+              // some code
+            ~~~
+
+            Some text after
+        `)
+    ).toEqual([
+        {
+            block: markdown`
+                ~~~TypeScript
+                  // some code
+                ~~~
+            `,
+            code: `  // some code`,
+            language: 'TypeScript',
+            marker: '~~~',
+            start: 25,
         },
     ]);
 });
@@ -32,7 +67,14 @@ it('should be allowed without language tag', () => {
         `)
     ).toEqual([
         {
-            code: 'unknown language\n',
+            block: markdown`
+                ~~~
+                unknown language
+                ~~~
+            `,
+            code: 'unknown language',
+            marker: '~~~',
+            start: 0,
         },
     ]);
 });
@@ -45,8 +87,14 @@ it('should allow empty code block', () => {
         `)
     ).toEqual([
         {
+            block: dedent`
+                ~~~txt
+                ~~~
+            `,
             code: '',
             language: 'txt',
+            marker: '~~~',
+            start: 0,
         },
     ]);
 });
@@ -60,8 +108,15 @@ it('should parse backtick block', () => {
         `)
     ).toEqual([
         {
-            code: `Hello!\n`,
+            block: dedent`
+                \`\`\`md
+                Hello!
+                \`\`\`
+            `,
+            code: `Hello!`,
             language: 'md',
+            marker: '```',
+            start: 0,
         },
     ]);
 });
@@ -81,12 +136,65 @@ it('should parse multiple blocks', () => {
         `)
     ).toEqual([
         {
-            code: `ls .\n`,
+            block: dedent`
+                \`\`\`sh
+                ls .
+                \`\`\`
+            `,
+            code: `ls .`,
             language: 'sh',
+            marker: '```',
+            start: 27,
         },
         {
-            code: `cat file.txt\n`,
+            block: dedent`
+                \`\`\`sh
+                cat file.txt
+                \`\`\`
+            `,
+            code: `cat file.txt`,
             language: 'sh',
+            marker: '```',
+            start: 57,
+        },
+    ]);
+});
+
+it('should parse multiple blocks with different markers', () => {
+    expect(
+        parseFencedCodeBlocks(dedent`
+            Confirm the file is there:
+            \`\`\`sh
+            ls .
+            \`\`\`
+
+            Then execute:
+            ~~~sh
+            cat file.txt
+            ~~~
+        `)
+    ).toEqual([
+        {
+            block: dedent`
+                \`\`\`sh
+                ls .
+                \`\`\`
+            `,
+            code: `ls .`,
+            language: 'sh',
+            marker: '```',
+            start: 27,
+        },
+        {
+            block: dedent`
+                ~~~sh
+                cat file.txt
+                ~~~
+            `,
+            code: `cat file.txt`,
+            language: 'sh',
+            marker: '~~~',
+            start: 57,
         },
     ]);
 });
@@ -100,10 +208,21 @@ it('should not trigger internal code blocks', () => {
                   // some code
                 \`\`\`
             \`
+
             ~~~
         `)
     ).toEqual([
         {
+            block: markdown`
+                ~~~TypeScript
+                const value = /* yaml */\`
+                    \`\`\`TypeScript
+                      // some code
+                    \`\`\`
+                \`
+
+                ~~~
+            `,
             code: dedent/* ts */ `
                 const value = /* yaml */\`
                     \`\`\`TypeScript
@@ -112,6 +231,8 @@ it('should not trigger internal code blocks', () => {
                 \`\n
             `,
             language: 'TypeScript',
+            marker: '~~~',
+            start: 0,
         },
     ]);
 });
@@ -129,14 +250,25 @@ it('should not trigger other internal code blocks on the same level', () => {
         `)
     ).toEqual([
         {
+            block: dedent`
+                ~~~~TypeScript
+                const value = /* ts */\`
+                ~~~TypeScript
+                // some code
+                ~~~
+                \`
+                ~~~~
+            `,
             code: dedent`
                 const value = /* ts */\`
                 ~~~TypeScript
                 // some code
                 ~~~
-                \`\n
+                \`
             `,
             language: 'TypeScript',
+            marker: '~~~~',
+            start: 0,
         },
     ]);
 });

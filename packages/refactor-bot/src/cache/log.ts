@@ -41,3 +41,7 @@ export function logExecutionLog(ctx: CacheStateRef) {
         });
     }
 }
+
+export function getExecutionLog(ctx: CacheStateRef) {
+    return getPipelineState(ctx)?.log;
+}

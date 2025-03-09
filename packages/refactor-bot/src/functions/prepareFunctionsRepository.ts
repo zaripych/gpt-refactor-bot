@@ -7,12 +7,16 @@ import { makeCachedFunction } from '../cache/makeCachedFunction';
 import type { CacheStateRef } from '../cache/types';
 import type {
     FunctionCallMessage,
-    functionResultMessageSchema,
+    functionCallResultMessageSchema,
+    regularMessageSchema,
     systemMessageSchema,
+    toolCallResultMessageSchema,
+    ToolCallsMessage,
 } from '../chat-gpt/api';
 import { type FunctionDescription } from '../chat-gpt/api';
 import { ConfigurationError } from '../errors/configurationError';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
+import { logger } from '../logger/logger';
 import type { FunctionDefinition } from './makeFunction';
 import type { functions } from './registry';
 import { sanitizeFunctionResult } from './sanitizeFunctionResult';
@@ -131,7 +135,7 @@ const createExecuteFunctions = (opts: {
     ): Promise<{
         message:
             | z.output<typeof systemMessageSchema>
-            | z.output<typeof functionResultMessageSchema>;
+            | z.output<typeof functionCallResultMessageSchema>;
     }> => {
         let parsedArgs: unknown;
         try {
@@ -162,6 +166,9 @@ const createExecuteFunctions = (opts: {
                 },
             };
         } catch (e) {
+            logger.trace('Failed to execute function call', {
+                error: e,
+            });
             return {
                 message: {
                     role: 'system' as const,
@@ -174,9 +181,80 @@ const createExecuteFunctions = (opts: {
         }
     };
 
+    const executeGptToolCall = async (
+        args: {
+            toolCall: ToolCallsMessage['toolCalls'][0];
+        },
+        ctx?: CacheStateRef
+    ): Promise<{
+        message: z.output<typeof toolCallResultMessageSchema>;
+        suggestionMessage?: z.output<typeof regularMessageSchema>;
+    }> => {
+        let parsedArgs: unknown;
+        try {
+            parsedArgs = JSON.parse(args.toolCall.function.arguments);
+        } catch {
+            // unlike function calls, we need to return a tool call message
+            // it's mandatory, otherwise we get HTTP 400 from the API itself
+            return {
+                message: {
+                    role: 'tool' as const,
+                    toolCallId: args.toolCall.id,
+                    content: `Cannot parse function arguments as JSON`,
+                },
+                suggestionMessage: {
+                    role: 'user' as const,
+                    content: `Cannot parse function arguments as JSON`,
+                },
+            };
+        }
+
+        try {
+            const result = await executeFunction(
+                {
+                    name: args.toolCall.function.name,
+                    arguments: parsedArgs,
+                },
+                ctx
+            );
+
+            return {
+                message: {
+                    role: 'tool' as const,
+                    toolCallId: args.toolCall.id,
+                    content: JSON.stringify(result),
+                },
+            };
+        } catch (e) {
+            logger.trace('Failed to execute tool call', {
+                error: e,
+            });
+            return {
+                // unlike function calls, we need to return a tool call message
+                // it's mandatory, otherwise we get HTTP 400 from the API itself
+                message: {
+                    role: 'tool' as const,
+                    toolCallId: args.toolCall.id,
+                    content: await sanitizeFunctionResult({
+                        result: e instanceof Error ? e.message : String(e),
+                        config,
+                    }),
+                },
+                suggestionMessage: {
+                    role: 'user' as const,
+                    content: await sanitizeFunctionResult({
+                        result: e instanceof Error ? e.message : String(e),
+                        config,
+                    }),
+                },
+            };
+        }
+    };
+
     return {
         executeFunction,
         executeGptFunction,
+        executeGptToolCall,
     };
 };
 
@@ -247,7 +325,17 @@ export interface FunctionsRepository<
     ): Promise<{
         message:
             | z.output<typeof systemMessageSchema>
-            | z.output<typeof functionResultMessageSchema>;
+            | z.output<typeof functionCallResultMessageSchema>;
+    }>;
+
+    executeGptToolCall(
+        opts: {
+            toolCall: ToolCallsMessage['toolCalls'][0];
+        },
+        ctx?: CacheStateRef
+    ): Promise<{
+        message: z.output<typeof toolCallResultMessageSchema>;
+        suggestionMessage?: z.output<typeof systemMessageSchema>;
     }>;
 
     describeFunctions(): FunctionDescription[];

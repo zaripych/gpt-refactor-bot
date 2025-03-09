@@ -16,7 +16,7 @@ export const runTsMorphScriptFunction = makeFunction({
         "mapProject" which receives a single argument that represents an
         initialized "Project" from "ts-morph" library.
 
-        The function must return a value.
+        The function must return a JSON serializable value.
 
         The function is then executed for every TypeScript project in the
         repository and results are flat mapped into an array.
@@ -30,6 +30,9 @@ export const runTsMorphScriptFunction = makeFunction({
 
         This allows to perform analysis that spans the entire repository and
         aggregate over the data.
+
+        console.log can be used to print diagnostic. The output could be quite
+        large, so use it sparingly and remove log entries when not needed.
     `,
     argsSchema,
     resultSchema: z.unknown(),

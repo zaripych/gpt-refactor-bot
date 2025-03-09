@@ -1,9 +1,9 @@
 import type { ObservedValueOf } from 'rxjs';
-import { filter, type Observable, scan, startWith } from 'rxjs';
+import { filter, type Observable, scan, startWith, takeUntil } from 'rxjs';
 import type { z } from 'zod';
 
 import { explainCacheKey } from '../cache/cache';
-import { calculatePrice } from '../chat-gpt/api';
+import { calculatePrice } from '../chat-gpt/pricing';
 import { actions, type AnyAction } from '../event-bus';
 import { ofTypes } from '../event-bus/operators';
 import type { llmUsageEntrySchema } from '../refactor/types';
@@ -44,13 +44,19 @@ export const collectLlmUsage =
         );
 
 export function startCollectingLlmUsage(
-    opts?: { key?: string },
+    opts?: {
+        key?: string;
+        until?: Observable<unknown>;
+    },
     deps = { actions }
 ) {
     let result: ObservedValueOf<ReturnType<ReturnType<typeof collectLlmUsage>>>;
     const subscription = deps
         .actions()
-        .pipe(collectLlmUsage(opts))
+        .pipe(
+            opts?.until ? takeUntil(opts.until) : (stream) => stream,
+            collectLlmUsage(opts)
+        )
         .subscribe({
             next: (usage) => {
                 result = usage;

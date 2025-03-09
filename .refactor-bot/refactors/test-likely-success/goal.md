@@ -2,7 +2,7 @@
 # This is to test a likely failure during refactor
 ref: 8f1a3da55caeee3df75853042e57978c45513f18
 budgetCents: 100
-model: gpt-4-1106-preview
+model: gpt-4o
 ```
 
 Replace all usages of `readFile` from `fs/promises` module with `readFileSync`

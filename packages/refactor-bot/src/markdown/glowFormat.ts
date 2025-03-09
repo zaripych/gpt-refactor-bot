@@ -16,12 +16,14 @@ export const glowFormatDefaultDeps = {
 export async function glowFormat(
     {
         input,
-        style = 'auto',
+        style: selectedStyle = 'auto',
         command = 'glow',
+        disableWordWrap = false,
         args,
     }: {
         input: string;
         style?: 'auto' | 'dark' | 'light' | 'drakula' | 'notty';
+        disableWordWrap?: boolean;
         command?: string;
         args?: string[];
     },
@@ -36,12 +38,19 @@ export async function glowFormat(
     const cols = Number.isFinite(process.stdout.columns)
         ? process.stdout.columns
         : 80;
-    const width = Math.max(40, Math.min(cols, 120));
+    const width = disableWordWrap ? 0 : Math.max(40, Math.min(cols, 120));
+
+    const style = selectedStyle === 'auto' ? 'dark' : selectedStyle;
 
     const child = spawn(
         command,
-        args ?? ['-', '-s', style, '--width', String(width), '-l'],
+        args ?? ['-s', style, '--width', String(width), '-l'],
         {
+            env: {
+                ...process.env,
+                CLICOLOR_FORCE: '1',
+                COLORTERM: 'truecolor',
+            },
             stdio: 'pipe',
         }
     );

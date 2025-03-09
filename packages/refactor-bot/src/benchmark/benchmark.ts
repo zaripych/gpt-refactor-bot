@@ -36,6 +36,7 @@ export async function benchmark(opts: {
     saveToCache?: boolean;
     enableCacheFor?: string[];
     disableCacheFor?: string[];
+    cleanCache?: boolean;
 }) {
     const config = await loadBenchmarkConfig(opts.config);
 
@@ -95,6 +96,8 @@ export async function benchmark(opts: {
                             !(variant.excludeIds?.includes(refactorId) ?? false)
                         ) {
                             newIds.push(refactorId);
+                        } else {
+                            logger.debug('Excluded ID', refactorId);
                         }
 
                         i += 1;
@@ -160,6 +163,7 @@ export async function benchmark(opts: {
         saveToCache: opts.saveToCache ?? true,
         enableCacheFor: opts.enableCacheFor,
         disableCacheFor: opts.disableCacheFor,
+        cleanCache: opts.cleanCache ?? false,
         pipeline: runVariantsAndCompare,
     });
 

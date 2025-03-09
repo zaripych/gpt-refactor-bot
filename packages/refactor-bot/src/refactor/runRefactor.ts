@@ -13,7 +13,6 @@ import { formatObject } from '../logger/formatObject';
 import { glowFormat } from '../markdown/glowFormat';
 import { markdown } from '../markdown/markdown';
 import { prettierMarkdown } from '../prettier/prettier';
-import { goToEndOfFile } from '../prompt/editor';
 import { formatFencedCodeBlock } from '../prompt-formatters/formatFencedCodeBlock';
 import { formatOptional } from '../prompt-formatters/formatOptional';
 import { format } from '../text/format';
@@ -111,18 +110,16 @@ async function promptForConfig(refactors: RefactorConfig[]) {
             );
         }
 
-        if (!(await goToEndOfFile(goalMdFilePath))) {
-            console.log(
-                await glowFormat({
-                    input: `# Created a file
+        console.log(
+            await glowFormat({
+                input: `# Created a file
 
 at \`${goalMdFilePath}\`
 
 Please describe the refactoring in the file, save the file and restart the command to continue.
 `,
-                })
-            );
-        }
+            })
+        );
 
         process.exit(0);
     }

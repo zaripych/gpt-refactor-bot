@@ -7,7 +7,9 @@ import {
 } from '../errors/gptRequestError';
 import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
 import { RateLimitExceededError } from '../errors/rateLimitExceeded';
+import { logger } from '../logger/logger';
 import { ensureHasOneElement } from '../utils/hasOne';
+import { adaptO1RequestBody, adaptO1Response } from './adapters/o1';
 import type {
     BodyShape,
     MessageShape,
@@ -16,6 +18,13 @@ import type {
 } from './internalTypes';
 
 export const modelsSchema = z.enum([
+    'o1',
+    'o1-mini',
+    'o1-preview',
+    'gpt-4o-realtime-preview',
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4-turbo',
     'gpt-4-turbo-preview',
     'gpt-4-0125-preview',
     'gpt-4-1106-preview',
@@ -66,25 +75,54 @@ export const functionCallMessageSchema = z.object({
 
 export type FunctionCallMessage = z.infer<typeof functionCallMessageSchema>;
 
+export const toolCallsMessageSchema = z.object({
+    role: z.literal('assistant'),
+    toolCalls: z.array(
+        z.object({
+            id: z.string(),
+            type: z.literal('function'),
+            function: z.object({
+                name: z.string(),
+                arguments: z.string(),
+            }),
+        })
+    ),
+});
+
+export type ToolCallsMessage = z.infer<typeof toolCallsMessageSchema>;
+
 export const responseMessageSchema = z.union([
     functionCallMessageSchema,
+    toolCallsMessageSchema,
     regularAssistantMessageSchema,
 ]);
 
 export type ResponseMessage = z.infer<typeof responseMessageSchema>;
 
-export const functionResultMessageSchema = z.object({
+export const functionCallResultMessageSchema = z.object({
     role: z.literal('function'),
     name: z.string(),
     content: z.string(),
 });
 
-export type FunctionResultMessage = z.infer<typeof functionResultMessageSchema>;
+export type FunctionCallResultMessage = z.infer<
+    typeof functionCallResultMessageSchema
+>;
+
+export const toolCallResultMessageSchema = z.object({
+    role: z.literal('tool'),
+    toolCallId: z.string(),
+    content: z.string(),
+});
+
+export type ToolCallResultMessage = z.infer<typeof toolCallResultMessageSchema>;
 
 export const messageSchema = z.union([
     regularMessageSchema,
     functionCallMessageSchema,
-    functionResultMessageSchema,
+    functionCallResultMessageSchema,
+    toolCallsMessageSchema,
+    toolCallResultMessageSchema,
 ]);
 
 export type Message = z.infer<typeof messageSchema>;
@@ -107,6 +145,7 @@ export type Opts = {
     model?: Models;
     messages: Array<Message>;
     functions?: Array<FunctionDescription>;
+    tools?: Array<FunctionDescription>;
     functionCall?: 'none' | 'auto' | { name: string };
     maxTokens?: number;
     // between zero to two, defaults to one
@@ -122,6 +161,11 @@ export const responseSchema = z.object({
     choices: z
         .array(
             z.union([
+                z.object({
+                    index: z.number(),
+                    message: toolCallsMessageSchema,
+                    finishReason: z.literal('tool_calls'),
+                }),
                 z.object({
                     index: z.number(),
                     message: functionCallMessageSchema,
@@ -149,17 +193,21 @@ const errorResponseShape = z
         error: z
             .object({
                 message: z.string().optional(),
-                type: z.string().optional(),
-                param: z.string().optional(),
-                code: z.string().transform(
-                    (code) =>
-                        code as
-                            | 'context_length_exceeded'
-                            | 'rate_limit_exceeded'
-                            | (string & {
-                                  _brand?: 'unknown';
-                              })
-                ),
+                type: z.string().nullable().optional(),
+                param: z.string().nullable().optional(),
+                code: z
+                    .string()
+                    .nullable()
+                    .optional()
+                    .transform(
+                        (code) =>
+                            code as
+                                | 'context_length_exceeded'
+                                | 'rate_limit_exceeded'
+                                | (string & {
+                                      _brand?: 'unknown';
+                                  })
+                    ),
             })
             .passthrough(),
     })
@@ -167,143 +215,117 @@ const errorResponseShape = z
 
 export type ErrorResponse = z.infer<typeof errorResponseShape>;
 
-const messageToInternal = (message: Message): MessageShape =>
-    'functionCall' in message
-        ? ({
-              role: 'assistant',
-              content: null,
-              function_call: {
-                  name: message.functionCall.name,
-                  arguments: message.functionCall.arguments,
-              },
-          } as unknown as MessageShape)
-        : message;
-
-const messageFromInternal = (message: ResponseMessageShape): ResponseMessage =>
-    'function_call' in message
-        ? {
-              role: 'assistant',
-              functionCall: {
-                  name: message.function_call.name,
-                  arguments: message.function_call.arguments,
-              },
-          }
-        : message;
-
-const pricing = {
-    'gpt-4-turbo-preview': {
-        perKTokenInput: 0.01,
-        perKTokenOutput: 0.03,
-    },
-    'gpt-4-0125-preview': {
-        perKTokenInput: 0.01,
-        perKTokenOutput: 0.03,
-    },
-    'gpt-4-1106-preview': {
-        perKTokenInput: 0.01,
-        perKTokenOutput: 0.03,
-    },
-    'gpt-4-1106-vision-preview': {
-        perKTokenInput: 0.01,
-        perKTokenOutput: 0.03,
-    },
-    'gpt-4': {
-        perKTokenInput: 0.03,
-        perKTokenOutput: 0.06,
-    },
-    'gpt-4-32k': {
-        perKTokenInput: 0.06,
-        perKTokenOutput: 0.12,
-    },
-    'gpt-3.5-turbo': {
-        perKTokenInput: 0.001,
-        perKTokenOutput: 0.002,
-    },
-    'gpt-3.5-turbo-16k': {
-        perKTokenInput: 0.003,
-        perKTokenOutput: 0.004,
-    },
-} satisfies Partial<
-    Record<Models, { perKTokenInput: number; perKTokenOutput: number }>
->;
-
-export function estimatePrice(
-    opts: Pick<Opts, 'functions' | 'messages' | 'model'>
-): number {
-    const inputTokens = opts.messages.reduce(
-        (acc, message) => acc + JSON.stringify(message).length,
-        0
-    );
-
-    const model = opts.model || 'gpt-3.5-turbo-0613';
-
-    const pricingModels = Object.keys(pricing);
-    const matchingPricingModel = pricingModels.find((pricingModel) =>
-        model.startsWith(pricingModel)
-    );
-
-    if (!matchingPricingModel) {
-        throw new Error(`Unknown model ${model}`);
+const messageToInternal = (message: Message): MessageShape => {
+    if ('functionCall' in message) {
+        return {
+            role: 'assistant' as const,
+            content: null,
+            function_call: {
+                name: message.functionCall.name,
+                arguments: message.functionCall.arguments,
+            },
+        };
     }
 
-    const price = pricing[matchingPricingModel as keyof typeof pricing] as
-        | {
-              perKTokenInput: number;
-              perKTokenOutput: number;
-          }
-        | undefined;
-
-    if (!price) {
-        throw new Error(`Unknown model ${model}`);
+    if ('toolCalls' in message) {
+        return {
+            role: 'assistant' as const,
+            content: null,
+            function_call: null,
+            tool_calls: message.toolCalls.map((toolCall) => ({
+                id: toolCall.id,
+                type: 'function' as const,
+                function: {
+                    name: toolCall.function.name,
+                    arguments: toolCall.function.arguments,
+                },
+            })),
+        };
     }
 
-    return (inputTokens / 1000) * price.perKTokenInput;
-}
-
-export function calculatePrice(
-    opts: Pick<Response, 'usage'> & {
-        model: string;
-    }
-) {
-    const model = opts.model;
-
-    const pricingModels = Object.keys(pricing);
-
-    const matchingPricingModel = pricingModels.find((pricingModel) =>
-        model.startsWith(pricingModel)
-    );
-
-    if (!matchingPricingModel) {
-        throw new Error(`Unknown model ${model}`);
+    if ('toolCallId' in message) {
+        return {
+            role: 'tool' as const,
+            tool_call_id: message.toolCallId,
+            content: message.content,
+        };
     }
 
-    const price = pricing[matchingPricingModel as keyof typeof pricing] as
-        | {
-              perKTokenInput: number;
-              perKTokenOutput: number;
-          }
-        | undefined;
+    return message;
+};
 
-    if (!price) {
-        throw new Error(`Unknown model ${model}`);
+const messageFromInternal = (
+    message: ResponseMessageShape
+): ResponseMessage => {
+    if ('function_call' in message && message.function_call) {
+        return {
+            role: 'assistant' as const,
+            functionCall: {
+                name: message.function_call.name,
+                arguments: message.function_call.arguments,
+            },
+        };
     }
 
-    const promptPrice = (opts.usage.promptTokens / 1000) * price.perKTokenInput;
-    const completionPrice =
-        (opts.usage.completionTokens / 1000) * price.perKTokenInput;
+    if ('tool_calls' in message) {
+        return {
+            role: 'assistant' as const,
+            toolCalls: message.tool_calls.map((toolCall) => ({
+                id: toolCall.id,
+                type: 'function' as const,
+                function: {
+                    name: toolCall.function.name,
+                    arguments: toolCall.function.arguments,
+                },
+            })),
+        };
+    }
 
-    return {
-        totalPrice: promptPrice + completionPrice,
-        promptPrice,
-        completionPrice,
-    };
-}
+    return message;
+};
 
 export async function chatCompletions(opts: Opts): Promise<Response> {
-    const model = opts.model || 'gpt-3.5-turbo-0613';
+    const model = opts.model || 'gpt-4o';
     const apiToken = process.env['OPENAI_API_KEY'];
     if (!apiToken) {
         throw new Error(`OPENAI_API_KEY environment variable is not set`);
+    }
+
+    const applyO1Workarounds = model.startsWith('o1-');
+
+    let body: BodyShape = {
+        model,
+        messages: opts.messages.map(messageToInternal),
+        ...(opts.functions &&
+            opts.functions.length > 0 && {
+                functions: opts.functions,
+            }),
+        ...(opts.tools &&
+            opts.tools.length > 0 && {
+                tools: opts.tools.map((tool) => ({
+                    type: 'function',
+                    function: tool,
+                })),
+            }),
+        ...(opts.functionCall && {
+            function_call: opts.functionCall,
+        }),
+        ...(typeof opts.maxTokens === 'number' && {
+            max_tokens: opts.maxTokens,
+        }),
+        ...(typeof opts.temperature === 'number' && {
+            temperature: opts.temperature,
+        }),
+        ...(typeof opts.choices === 'number' && {
+            n: opts.choices,
+        }),
+    };
+
+    if (applyO1Workarounds) {
+        body = {
+            ...body,
+            ...adaptO1RequestBody(opts),
+        };
     }
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -312,26 +334,7 @@ export async function chatCompletions(opts: Opts): Promise<Response> {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${apiToken}`,
         },
-        body: JSON.stringify({
-            model,
-            messages: opts.messages.map(messageToInternal),
-            ...(opts.functions &&
-                opts.functions.length > 0 && {
-                    functions: opts.functions,
-                }),
-            ...(opts.functionCall && {
-                function_call: opts.functionCall,
-            }),
-            ...(typeof opts.maxTokens === 'number' && {
-                max_tokens: opts.maxTokens,
-            }),
-            ...(typeof opts.temperature === 'number' && {
-                temperature: opts.temperature,
-            }),
-            ...(typeof opts.choices === 'number' && {
-                n: opts.choices,
-            }),
-        } satisfies BodyShape),
+        body: JSON.stringify(body),
         signal: opts.abortSignal,
     }).catch((err) => {
         throw new GptRequestError(
@@ -349,10 +352,14 @@ export async function chatCompletions(opts: Opts): Promise<Response> {
             statusText: response.statusText,
             headers: Object.fromEntries(response.headers.entries()),
         };
+
+        const contentType = response.headers.get('content-type');
         if (
-            response.headers.get('content-type')?.startsWith('application/json')
+            contentType === 'application/json' ||
+            contentType?.includes('application/json')
         ) {
-            const result = errorResponseShape.safeParse(await response.json());
+            const raw = await response.json();
+            const result = errorResponseShape.safeParse(raw);
             if (result.success) {
                 const jsonInfo = {
                     ...info,
@@ -385,8 +392,14 @@ export async function chatCompletions(opts: Opts): Promise<Response> {
                             }
                         );
                 }
+            } else {
+                logger.error('Failed to parse GPT error response', {
+                    error: result.error,
+                    response: raw,
+                });
             }
         }
+
         const text = await response.text().catch(() => '');
         throw new GptRequestError(
             `Failed to fetch chat completions: ${response.statusText}`,
@@ -410,33 +423,57 @@ export async function chatCompletions(opts: Opts): Promise<Response> {
         );
     })) as ResponseShape;
 
-    return {
+    let finalResponse: Response = {
         id: data.id,
         object: data.object,
         created: data.created,
-        choices: ensureHasOneElement(
-            data.choices.map((choice) =>
-                choice.finish_reason === 'function_call'
-                    ? {
-                          finishReason: choice.finish_reason,
-                          index: choice.index,
-                          message: messageFromInternal(
-                              choice.message
-                          ) as FunctionCallMessage,
-                      }
-                    : {
-                          finishReason: choice.finish_reason,
-                          index: choice.index,
-                          message: messageFromInternal(
-                              choice.message
-                          ) as RegularAssistantMessage,
-                      }
-            )
-        ),
         usage: {
             completionTokens: data.usage.completion_tokens,
             promptTokens: data.usage.prompt_tokens,
             totalTokens: data.usage.total_tokens,
         },
+        choices: ensureHasOneElement(
+            data.choices.map((choice) => {
+                switch (choice.finish_reason) {
+                    case 'function_call':
+                        return {
+                            finishReason: choice.finish_reason,
+                            index: choice.index,
+                            message: messageFromInternal(
+                                choice.message
+                            ) as FunctionCallMessage,
+                        };
+                    case 'tool_calls':
+                        return {
+                            finishReason: choice.finish_reason,
+                            index: choice.index,
+                            message: messageFromInternal(
+                                choice.message
+                            ) as ToolCallsMessage,
+                        };
+                    default: {
+                        return {
+                            finishReason: choice.finish_reason,
+                            index: choice.index,
+                            message: messageFromInternal(
+                                choice.message
+                            ) as RegularAssistantMessage,
+                        };
+                    }
+                }
+            })
+        ),
+    };
+
+    if (applyO1Workarounds) {
+        finalResponse = {
+            ...finalResponse,
+            ...adaptO1Response(finalResponse),
+        };
+    }
+
+    return {
+        ...finalResponse,
+        choices: finalResponse.choices,
     };
 }

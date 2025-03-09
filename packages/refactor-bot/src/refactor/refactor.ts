@@ -2,6 +2,7 @@ import { writeFile } from 'fs/promises';
 import { dump } from 'js-yaml';
 import { join } from 'path';
 
+import { getExecutionLog } from '../cache/log';
 import { createCachedPipeline } from '../cache/state';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { gitCheckoutNewBranch } from '../git/gitCheckoutNewBranch';
@@ -52,7 +53,7 @@ export async function refactor(opts: {
         id
     );
 
-    const { execute, abort } = createCachedPipeline({
+    const { execute, abort, ctx } = createCachedPipeline({
         location,
         enableCacheFor: opts.enableCacheFor,
         saveToCache: opts.saveToCache ?? true,
@@ -164,7 +165,12 @@ export async function refactor(opts: {
 
     await writeFile(
         join(location, 'result.yaml'),
-        dump(collectedRefactorResultSchema.parse(result)),
+        dump(
+            collectedRefactorResultSchema.parse({
+                ...result,
+                executionLog: getExecutionLog(ctx),
+            })
+        ),
         'utf-8'
     );
 

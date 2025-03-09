@@ -71,7 +71,10 @@ export const extractRequirements = async (
     const { objective } = input;
 
     const validateResponse = (message: RegularAssistantMessage) =>
-        parseJsonResponse(message.content, requirementsArraySchema);
+        parseJsonResponse({
+            response: message.content,
+            schema: requirementsArraySchema,
+        });
 
     const result = await prompt(
         {
@@ -83,7 +86,7 @@ export const extractRequirements = async (
             temperature: input.temperature ?? 0.2,
             choices: input.choices,
             allowedFunctions: [],
-            shouldStop: (message) => {
+            shouldStop: ({ message }) => {
                 try {
                     validateResponse(message);
                     return true;

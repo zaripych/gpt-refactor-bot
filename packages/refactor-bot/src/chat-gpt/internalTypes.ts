@@ -1,6 +1,13 @@
 import type { zodToJsonSchema } from 'zod-to-json-schema';
 
 export type Models =
+    | 'o1'
+    | 'o1-mini'
+    | 'o1-preview'
+    | 'gpt-4o-realtime-preview'
+    | 'gpt-4o'
+    | 'gpt-4o-mini'
+    | 'gpt-4-turbo'
     | 'gpt-4-turbo-preview'
     | 'gpt-4-0125-preview'
     | 'gpt-4-1106-preview'
@@ -34,20 +41,43 @@ export type FunctionCallMessageShape = {
     };
 };
 
-export type FunctionResponseMessageShape = {
+export type ToolCallsMessageShape = {
+    role: 'assistant';
+    content: null;
+    function_call: null;
+    tool_calls: Array<{
+        id: string;
+        type: 'function';
+        function: {
+            name: string;
+            arguments: string;
+        };
+    }>;
+};
+
+export type FunctionCallResultMessageShape = {
     role: 'function';
     name: string;
+    content: string;
+};
+
+export type ToolCallResultMessageShape = {
+    role: 'tool';
+    tool_call_id: string;
     content: string;
 };
 
 export type MessageShape =
     | RegularMessageShape
     | FunctionCallMessageShape
-    | FunctionResponseMessageShape;
+    | FunctionCallResultMessageShape
+    | ToolCallsMessageShape
+    | ToolCallResultMessageShape;
 
 export type ResponseMessageShape =
     | RegularAssistantMessageShape
-    | FunctionCallMessageShape;
+    | FunctionCallMessageShape
+    | ToolCallsMessageShape;
 
 export type FunctionDefinitionShape = {
     name: string;
@@ -59,7 +89,16 @@ export type BodyShape = {
     model?: Models;
     messages: Array<MessageShape>;
     functions?: Array<FunctionDefinitionShape>;
+    tools?: Array<{
+        type: 'function';
+        function: FunctionDefinitionShape;
+    }>;
     function_call?: 'none' | 'auto' | { name: string };
+    tool_choice?:
+        | 'none'
+        | 'required'
+        | 'auto'
+        | { type: 'function'; function: { name: string } };
     max_tokens?: number;
     // between zero to two, defaults to one
     temperature?: number;
@@ -75,12 +114,12 @@ export type ResponseShape = {
         {
             index: number;
             message: ResponseMessageShape;
-            finish_reason: 'stop' | 'function_call' | 'length';
+            finish_reason: 'stop' | 'function_call' | 'length' | 'tool_calls';
         },
         ...{
             index: number;
             message: ResponseMessageShape;
-            finish_reason: 'stop' | 'function_call' | 'length';
+            finish_reason: 'stop' | 'function_call' | 'length' | 'tool_calls';
         }[],
     ];
     usage: {

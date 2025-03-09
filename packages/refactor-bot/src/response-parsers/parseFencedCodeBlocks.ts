@@ -2,10 +2,13 @@ import { line } from '../text/line';
 import { escapeRegExp } from '../utils/escapeRegExp';
 import { firstLineOf } from '../utils/firstLineOf';
 
-export function parseFencedCodeBlocks(text: string) {
+export function* iterateFencedCodeBlocks(text: string) {
     const results: Array<{
+        block: string;
         code: string;
         language?: string;
+        marker: string;
+        start: number;
     }> = [];
 
     const openingMarkerRegex =
@@ -42,19 +45,26 @@ export function parseFencedCodeBlocks(text: string) {
 
         const code = text.slice(
             openingMarkerRegex.lastIndex,
-            closingMarkerRegex.lastIndex - closingRes[0].length
+            closingMarkerRegex.lastIndex - closingRes[0].length - 1
         );
 
-        results.push({
+        yield {
             code,
+            block: text.slice(openingRes.index, closingMarkerRegex.lastIndex),
             ...(language && {
                 language,
             }),
-        });
+            marker: openingMarker,
+            start: openingMarkerRegex.lastIndex - openingRes[0].length,
+        };
 
         openingMarkerRegex.lastIndex = closingMarkerRegex.lastIndex;
         openingRes = openingMarkerRegex.exec(text);
     }
 
     return results;
+}
+
+export function parseFencedCodeBlocks(text: string) {
+    return [...iterateFencedCodeBlocks(text)];
 }

@@ -38,11 +38,11 @@
         "@types/yargs": "17.0.24",
         "globby": "14.0.0",
         "refactor-bot": "workspace:*",
-        "tsx": "4.7.0",
+        "tsx": "4.19.2",
         "utility-types": "3.10.0"
     },
     "packageManager": "pnpm@8.9.0",
     "engines": {
-        "node": "18"
+        "node": "20"
     }
 }

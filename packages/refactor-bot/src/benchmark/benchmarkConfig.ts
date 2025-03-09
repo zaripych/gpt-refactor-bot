@@ -44,7 +44,7 @@ export const benchConfigSchema = z
             .transform((variants) => ensureHasTwoElements(variants)),
         refactorConfig: passthroughRefactorConfigSchema,
         evaluationConfig: evaluationConfigSchema.default({
-            model: 'gpt-4-turbo-preview',
+            model: 'gpt-4o',
             choices: 3,
         }),
         numberOfRuns: z.number().default(1),

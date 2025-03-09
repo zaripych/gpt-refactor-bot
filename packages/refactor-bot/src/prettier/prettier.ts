@@ -60,6 +60,7 @@ const prettierFormat = async (
         input: string;
         filePath: string;
         throwOnParseError: boolean;
+        extraArgs?: string[];
     },
     deps = defaultDeps
 ) => {
@@ -84,7 +85,12 @@ const prettierFormat = async (
 
     const child = spawn(
         process.execPath,
-        [scriptLocation, '--stdin-filepath', opts.filePath],
+        [
+            scriptLocation,
+            '--stdin-filepath',
+            opts.filePath,
+            ...(opts.extraArgs ?? []),
+        ],
         {
             stdio: 'pipe',
             cwd: opts.repositoryRoot,
@@ -134,6 +140,7 @@ export async function prettierMarkdown(
         filePath?: string;
         md: string;
         throwOnParseError?: boolean;
+        proseWrap?: 'always' | 'never' | 'preserve';
     },
     deps = defaultDeps
 ) {
@@ -144,6 +151,9 @@ export async function prettierMarkdown(
             repositoryRoot: opts.repositoryRoot,
             input: opts.md,
             throwOnParseError: opts.throwOnParseError ?? false,
+            ...(opts.proseWrap && {
+                extraArgs: ['--prose-wrap', opts.proseWrap],
+            }),
         },
         deps
     );

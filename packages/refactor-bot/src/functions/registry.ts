@@ -4,6 +4,7 @@ import { listFilesFunction } from '../discover/listFiles';
 import { readFileFunction } from '../discover/readFile';
 import { searchFunction } from '../discover/search';
 import { runTsMorphScriptFunction } from '../interpreter/runTsMorphScript';
+import { diffFunction } from '../review/diff';
 import { declarationsFunction } from '../ts-morph/declarations';
 import { moduleImportsFunction } from '../ts-morph/moduleImports';
 import { quickInfoFunction } from '../ts-morph/quickInfo';
@@ -19,6 +20,7 @@ export const functions = [
     searchFunction,
     readFileFunction,
     runTsMorphScriptFunction,
+    diffFunction,
 ];
 
 export const functionNames = ensureHasOneElement(functions.map((f) => f.name));

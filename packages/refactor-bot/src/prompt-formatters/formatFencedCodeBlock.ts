@@ -1,25 +1,42 @@
 import { markdown } from '../markdown/markdown';
-import { escapeRegExp } from '../utils/escapeRegExp';
 
 export function formatFencedCodeBlock(opts: {
     code: string;
     language?: string;
     marker?: '```' | '~~~';
+    prettierIgnore?: boolean;
+}): string;
+export function formatFencedCodeBlock(opts: {
+    code: string | undefined;
+    language?: string;
+    marker?: '```' | '~~~';
+    prettierIgnore?: boolean;
+}): string | undefined;
+export function formatFencedCodeBlock(opts: {
+    code: string | undefined;
+    language?: string;
+    marker?: '```' | '~~~';
+    /**
+     * We want to disable prettier for some code blocks to not
+     * disturb the actual content (ie result of a function call)
+     */
+    prettierIgnore?: boolean;
 }) {
     if (!opts.code) {
-        return '';
+        return undefined;
     }
 
-    const marker =
-        opts.marker ?? opts.code.search(/^```/g) >= 0 ? '~~~' : '```';
-    const candidateMarker = new RegExp(`^${escapeRegExp(marker)}`, 'g');
-
-    if (opts.code.search(candidateMarker) >= 0) {
-        throw new Error(`The code block contains the marker "${marker}"`);
+    let marker = opts.marker ?? '```';
+    while (opts.code.search(marker) >= 0) {
+        marker += marker[0];
     }
+
+    const prettierIgnore = opts.prettierIgnore
+        ? `<!-- prettier-ignore -->\n`
+        : '';
 
     return markdown`
-        ${marker}${opts.language ?? ''}
+        ${prettierIgnore}${marker}${opts.language ?? ''}
         ${opts.code}
         ${marker}
     `;

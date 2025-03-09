@@ -12,7 +12,7 @@ const max = 1_000;
 const command = [`git`, `grep`, `-n`] as const;
 
 const searchArgsSchema = z.object({
-    text: z.string().describe(`Text to search for in files`),
+    text: z.string().nonempty().describe(`Text to search for in files`),
     patterns: z.array(z.string()).optional().describe(line`
         Glob patterns for directories and files to look at. When not
         specified - will lookup for all files and directories at the root of
@@ -124,5 +124,9 @@ export const searchFunction = makeFunction({
         results returned is limited by a parameter. Contents of the .git/
         directory along with other files matching .gitignore-listed patterns are
         not included.
+
+        Search results can include any files in the repository and best used for
+        text which is not a TypeScript language element or identifier that could
+        be found using other TypeScript aware tools.
     `,
 });

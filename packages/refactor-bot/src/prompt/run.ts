@@ -1,139 +1,54 @@
-import chalk from 'chalk';
-import { mkdir, writeFile } from 'fs/promises';
-import { globby } from 'globby';
-import orderBy from 'lodash-es/orderBy';
+/* eslint-disable @typescript-eslint/no-unnecessary-condition */
+import { setInterval } from 'node:timers';
+
+import { mkdir, readFile, stat } from 'fs/promises';
 import ora, { oraPromise } from 'ora';
-import { join } from 'path';
-import prompts from 'prompts';
+import { dirname, join } from 'path';
+import {
+    concatMap,
+    defer,
+    finalize,
+    fromEvent,
+    ignoreElements,
+    of,
+    takeUntil,
+} from 'rxjs';
 import stripAnsi from 'strip-ansi';
 
-import type {
-    FunctionResultMessage,
-    Message,
-    Models,
-    Response,
-} from '../chat-gpt/api';
-import {
-    calculatePrice,
-    chatCompletions,
-    estimatePrice,
-} from '../chat-gpt/api';
-import { spawnResult } from '../child-process/spawnResult';
+import type { Message, Models } from '../chat-gpt/api';
+import { estimatePrice } from '../chat-gpt/pricing';
+import { actions, declareAction, dispatch } from '../event-bus';
+import { ofTypes } from '../event-bus/operators';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
 import { prepareFunctionsRepository } from '../functions/prepareFunctionsRepository';
-import { functions } from '../functions/registry';
-import { markdown, printMarkdown } from '../markdown/markdown';
+import { allowedFunctionsSchema, functions } from '../functions/registry';
+import { gptRequestFailed } from '../llm/actions/gptRequestFailed';
+import { gptRequestStarted } from '../llm/actions/gptRequestStarted';
+import { gptRequestSuccess } from '../llm/actions/gptRequestSuccess';
+import { prepareLlmDependencies } from '../llm/llmDependencies';
+import {
+    markdown,
+    prettifyMarkdownForConsoleOutput,
+    printMarkdown,
+} from '../markdown/markdown';
+import type { PromptChainMiddleware } from '../refactor/prompt';
+import { prompt } from '../refactor/prompt';
 import { format } from '../text/format';
-import { line } from '../text/line';
 import {
     clearScreenFromCursorTillTheEnd,
     restoreCursorPosition,
     saveCursorPosition,
 } from '../utils/ansi';
-import { isTruthy } from '../utils/isTruthy';
+import { UnreachableError } from '../utils/UnreachableError';
 import { conversationState } from './conversation';
-import { goToEndOfFile } from './editor';
-import { formatMessage, printMessage } from './print';
-import { header } from './serialize';
+import { formatMessage, printMessage } from './formatMessage';
+import { promptForConversationFile } from './input-prompts/promptForConversationFile';
+import { promptForNewFileName } from './input-prompts/promptForNewFileName';
 import { createWatcher } from './watcher';
 
-async function promptForFile(dirContents: string[]) {
-    const answers = (await prompts({
-        name: 'file',
-        message: 'Select a file where the conversation is going to be stored',
-        type: 'select',
-        choices: [
-            ...dirContents.map((file) => ({
-                title: file.replace('.md', ''),
-                value: file,
-            })),
-            {
-                title: 'New conversation...',
-                value: 'new',
-            },
-        ],
-    })) as {
-        file: string;
-    };
-    if (!answers.file) {
-        process.exit(0);
-    }
-    return answers;
-}
+const note = '**NOTE**';
 
-async function promptForNewFileName() {
-    const result = (await prompts({
-        name: 'name',
-        message: 'Please specify the name of the file',
-        type: 'text',
-        hint: markdown`
-            The file will be stored in the ./prompts directory and will have .md
-            extension
-        `,
-        format: (value: string) => `${value}.md`,
-    })) as {
-        name: string;
-    };
-    if (!result.name) {
-        process.exit(0);
-    }
-    return result;
-}
-
-async function promptForNextAction(
-    options: Array<'discard' | 'save' | 'execute' | 'auto'>,
-    choice?: Response['choices'][0]
-) {
-    const questionText =
-        choice?.finishReason === 'function_call'
-            ? format(
-                  markdown`
-                      The OpenAI model wants you to execute function %name%.
-                      Please choose one of the options below:
-                  `,
-                  {
-                      name: chalk.bgYellowBright(
-                          choice.message.functionCall.name
-                      ),
-                  }
-              )
-            : `Please choose one of the options below:`;
-
-    const result = (await prompts({
-        name: 'nextAction',
-        message: questionText,
-        type: 'select',
-        choices: [
-            options.includes('discard') && {
-                title: 'Discard',
-                value: 'discard' as const,
-            },
-            options.includes('save') && {
-                title: 'Save',
-                value: 'save' as const,
-            },
-            options.includes('execute') && {
-                title: 'Execute the function',
-                value: 'execute' as const,
-            },
-            options.includes('auto') && {
-                title: 'Continue until the OpenAI model decides to finish',
-                value: 'auto' as const,
-            },
-        ].filter(isTruthy),
-    })) as {
-        nextAction: 'discard' | 'save' | 'execute' | 'auto' | undefined;
-    };
-    if (!result.nextAction) {
-        process.exit(0);
-    }
-
-    return result;
-}
-
-const note = chalk.green.bold('NOTE');
-
-const hr = chalk.green('"') + chalk.greenBright('---') + chalk.green('"');
+const hr = '`"---"`';
 
 const text = {
     watchingSpinnerText: (price: string) =>
@@ -193,15 +108,107 @@ const text = {
 
         You have spent **USD ${total}** so far.
     `,
+
+    usingFrontmatterModel: (model: Models) =>
+        format(
+            markdown`
+                Using model **\`%model%\`** specified in the frontmatter.
+            `,
+            { model }
+        ),
+
+    usingCliFlagModel: (model: Models) =>
+        format(`Using model **\`%model%\`** specified via cli flag.`, {
+            model,
+        }),
+
+    usingDefaultModel: (model: Models) =>
+        format(
+            markdown`
+                Using model **\`%model%\`**, you can specify a different model
+                by specifying it using \`--model\` flag of the cli or using the
+                frontmatter in the conversation .md file.
+            `,
+            { model }
+        ),
+
+    startOfConversationText: (opts: { messages: Message[] }) =>
+        format(
+            markdown`
+                # Started with
+
+                %messages%
+            `,
+            {
+                messages: opts.messages
+                    .map((message) => formatMessage(message))
+                    .join('\n\n---\n\n'),
+            }
+        ),
+
+    lastMessageText: (opts: { message: Message }) =>
+        format(
+            markdown`
+                # %header%
+
+                %message%
+            `,
+            {
+                header:
+                    opts.message.role === 'assistant'
+                        ? 'Response'
+                        : 'Last message',
+                message: formatMessage(opts.message),
+            }
+        ),
 };
 
-export const run = async (opts: {
+const suggestEditingFile = async (file: string) => {
+    const contents = await readFile(file, 'utf-8');
+
+    await printMarkdown(
+        format(
+            markdown`
+                ---
+
+                Edit the file in your editor to retry/continue:
+
+                [%path%]()
+            `,
+            {
+                path: `${file}:${contents.split('\n').length}:1`,
+            }
+        )
+    );
+};
+
+const createFileWithDefaultContents = async (conversationFile: string) => {
+    await mkdir(dirname(conversationFile), { recursive: true });
+
+    await conversationState({
+        conversationFile,
+    }).save();
+};
+
+const initialize = async (opts: {
     model?: Models;
     watch?: boolean;
     manual?: boolean;
     functions?: string[];
 }) => {
-    const spinner = ora();
+    const stopController = new AbortController();
+
+    process.on('SIGINT', () => {
+        spinner.stop();
+        stopController.abort();
+        setInterval(() => {
+            void import('wtfnode').then(({ dump }) => {
+                dump();
+                console.error('Have to forcefully exit for some reason');
+                process.exit(1);
+            });
+        }, 5_000).unref();
+    });
 
     const repositoryRoot = await findRepositoryRoot();
 
@@ -211,240 +218,330 @@ export const run = async (opts: {
             repositoryRoot,
         },
     });
-
-    const dir = join(repositoryRoot, '.refactor-bot', 'prompts');
-    const dirContents = orderBy(
-        await globby('*.md', {
-            cwd: dir,
-            ignore: ['_*.md'],
-            onlyFiles: true,
-            stats: true,
-            objectMode: true,
-        }),
-        (file) => file.stats?.ctimeMs,
-        'desc'
+    const conversationsDirectory = join(
+        repositoryRoot,
+        '.refactor-bot',
+        'prompts'
     );
-
-    const answers = await promptForFile(dirContents.map((file) => file.name));
-
+    const answers = await promptForConversationFile(conversationsDirectory);
+    if (!answers) {
+        return;
+    }
     if (answers.file === 'new') {
         const result = await promptForNewFileName();
-        await mkdir(dir, { recursive: true });
-        await writeFile(join(dir, result.name), header, 'utf-8');
-
-        await spawnResult(
-            'code',
-            ['-g', `${join(dir, result.name)}:${header.split('\n').length}:1`],
-            {
-                exitCodes: 'any',
-            }
-        );
-        answers.file = result.name;
-
-        if (!opts.watch) {
+        if (!result) {
             return;
         }
+        answers.file = result.name;
     }
 
     if (!answers.file) {
         return;
     }
 
-    const conversationFile = join(dir, answers.file);
+    const conversationFile = join(conversationsDirectory, answers.file);
+    const fileExists = await stat(conversationFile)
+        .then((f) => f.isFile())
+        .catch(() => false);
 
-    const convo = conversationState(conversationFile);
-    await convo.load();
+    if (!fileExists) {
+        await createFileWithDefaultContents(conversationFile);
+        await suggestEditingFile(conversationFile);
 
-    await goToEndOfFile(conversationFile);
+        if (!opts.watch) {
+            return;
+        }
+    }
 
-    let isManual = opts.manual;
+    const conversation = conversationState({
+        conversationFile,
+    });
+    await conversation.load();
+
+    const defaultModel = 'gpt-4o';
+
+    let model = conversation.opts.model ?? opts.model ?? defaultModel;
+
+    const llmDependencies = await prepareLlmDependencies({
+        model,
+        budgetCents: 100,
+        modelByStepCode: {},
+        useMoreExpensiveModelsOnRetry: {},
+    });
+
+    const scheduleConsoleOutputAction = declareAction(
+        'scheduleConsoleOutput',
+        (action: () => Promise<void>) => ({
+            action,
+        })
+    );
+
+    const printAboutModel = async () => {
+        if (conversation.opts.model) {
+            await printMarkdown(
+                text.usingFrontmatterModel(conversation.opts.model)
+            );
+        } else if (opts.model) {
+            await printMarkdown(text.usingCliFlagModel(opts.model));
+        } else {
+            await printMarkdown(text.usingDefaultModel(model));
+        }
+    };
+
+    await printAboutModel();
 
     const watcher = createWatcher();
 
-    let totalPrice = 0;
+    const refreshModel = async () => {
+        const nextModel = conversation.opts.model ?? opts.model ?? defaultModel;
+        if (model !== nextModel) {
+            await printAboutModel();
+        }
+        model = nextModel;
+    };
 
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    const spinner = ora();
+
+    const displaySpinnerText = async (
+        text: string,
+        opts?: {
+            hint?: boolean;
+        }
+    ) => {
+        spinner.text = await prettifyMarkdownForConsoleOutput(text);
+        if (opts?.hint) {
+            await conversation.hint(stripAnsi(spinner.text));
+        }
+    };
+
+    const displayProgressText = async <T>(
+        promise: Promise<T>,
+        fn: string | ((s: typeof spinner) => string)
+    ) => {
+        return oraPromise(promise, {
+            text:
+                typeof fn === 'string'
+                    ? fn
+                    : await prettifyMarkdownForConsoleOutput(fn(spinner)),
+        });
+    };
+
+    const stop = stopController.signal.aborted
+        ? of(true)
+        : fromEvent(stopController.signal, 'abort');
+
+    actions()
+        .pipe(
+            ofTypes(
+                gptRequestStarted,
+                gptRequestSuccess,
+                gptRequestFailed,
+                scheduleConsoleOutputAction
+            ),
+            takeUntil(stop),
+            concatMap(async (action) => {
+                switch (action.type) {
+                    case gptRequestStarted.type:
+                        await printMarkdown(text.requesting);
+                        spinner.start(text.requestingSpinnerText);
+                        if (opts.watch) {
+                            await conversation.hint(
+                                stripAnsi(text.requestingSpinnerText)
+                            );
+                        }
+                        return;
+                    case gptRequestSuccess.type:
+                        spinner.succeed();
+                        spinner.text = '';
+                        return;
+                    case gptRequestFailed.type:
+                        spinner.fail();
+                        spinner.text = '';
+                        return;
+                    case scheduleConsoleOutputAction.type:
+                        {
+                            let spinnerText;
+                            if (spinner.isSpinning) {
+                                spinnerText = spinner.text;
+                                spinner.stop();
+                            }
+                            await action.data.action();
+                            if (spinnerText) {
+                                spinner.start(spinnerText);
+                            }
+                        }
+                        return;
+                    default:
+                        throw new UnreachableError(action);
+                }
+            }),
+            ignoreElements(),
+            finalize(() => {
+                spinner.stop();
+            })
+        )
+        .subscribe({
+            error: (error) => {
+                console.error(error);
+            },
+        });
+
+    const printAndSaveNewConversationMessages = (): PromptChainMiddleware => {
+        return ({ state }) => {
+            return defer(async () => {
+                if (state.messages.length <= conversation.messages.length) {
+                    return;
+                }
+
+                for (const message of state.messages.slice(
+                    conversation.messages.length
+                )) {
+                    dispatch(
+                        scheduleConsoleOutputAction(async () => {
+                            await printMessage({
+                                message,
+                                prefixDivider: true,
+                            });
+                        })
+                    );
+                }
+
+                conversation.messages.splice(
+                    0,
+                    conversation.messages.length,
+                    ...state.messages
+                );
+                await conversation.save();
+            }).pipe(ignoreElements());
+        };
+    };
+
+    const promptWrapped = async () => {
+        await prompt({
+            messages: conversation.messages,
+            abortSignal: () => stopController.signal,
+            functionsRepository: () => functionsRepository,
+            llmDependencies: () => llmDependencies,
+            temperature: 0,
+            choices: 1,
+            middlewares: (defaults) => [
+                printAndSaveNewConversationMessages(),
+                ...defaults.defaultMiddlewares,
+            ],
+            ...(opts.functions && {
+                allowedFunctions: allowedFunctionsSchema.parse(opts.functions),
+            }),
+        });
+    };
+
+    return {
+        conversation,
+        stopController,
+        conversationFile,
+        functionsRepository,
+        watcher,
+        get model() {
+            return model;
+        },
+        watchForChangesOnce: async () => {
+            return watcher.watchForChangesOnce(conversationFile, {
+                signal: stopController.signal,
+            });
+        },
+        refreshModel,
+        displaySpinnerText,
+        displayProgressText,
+        prompt: promptWrapped,
+    };
+};
+
+export const run = async (opts: {
+    model?: Models;
+    watch?: boolean;
+    manual?: boolean;
+    functions?: string[];
+}) => {
+    const state = await initialize(opts);
+    if (!state) {
+        return;
+    }
+
+    const {
+        conversation,
+        stopController,
+        watchForChangesOnce,
+        displaySpinnerText,
+        displayProgressText,
+        prompt,
+    } = state;
+
+    const firstMessages = conversation.messages
+        .slice(0, 2)
+        .filter(
+            (message) => message.role === 'user' || message.role === 'system'
+        );
+    if (firstMessages.length > 0) {
+        await printMarkdown(
+            text.startOfConversationText({
+                messages: firstMessages,
+            })
+        );
+    }
+
+    while (!stopController.signal.aborted) {
         saveCursorPosition();
 
-        while (!convo.sendConfirmed() && opts.watch) {
+        while (!conversation.sendConfirmed() && opts.watch) {
             restoreCursorPosition();
             clearScreenFromCursorTillTheEnd();
 
-            if (convo.lastMessage) {
+            if (stopController.signal.aborted) {
+                break;
+            }
+
+            if (conversation.lastMessage) {
                 await printMarkdown(
-                    text.watchingWithLastMessage(convo.lastMessage)
+                    text.watchingWithLastMessage(conversation.lastMessage)
                 );
             }
 
             const price = estimatePrice({
-                model: opts.model ?? 'gpt-3.5-turbo',
-                messages: convo.messages,
+                model: state.model,
+                messages: conversation.messages,
                 functions,
             }).toFixed(4);
 
-            await oraPromise(watcher.watchForChangesOnce(conversationFile), {
-                text: spinner.text || text.watchingSpinnerText(price),
-            });
+            await displayProgressText(
+                watchForChangesOnce(),
+                (spinner) => spinner.text || text.watchingSpinnerText(price)
+            );
 
-            await convo.load();
+            await state.conversation.load();
 
-            if (!convo.canSend()) {
-                spinner.text = text.watchingCannotSend(price);
-                await convo.hint(stripAnsi(spinner.text));
-                await watcher.watchForChangesOnce(conversationFile);
-            } else if (!convo.sendConfirmed()) {
-                spinner.text = text.watchingNoConfirmation(price);
-                await convo.hint(stripAnsi(spinner.text));
-                await watcher.watchForChangesOnce(conversationFile);
-            }
-        }
-
-        let choice: Response['choices'][0];
-        if (convo.canSend()) {
-            await printMarkdown(text.requesting);
-            if (opts.watch) {
-                await convo.hint(text.requesting);
-            }
-
-            const response = await oraPromise(
-                chatCompletions({
-                    model: opts.model ?? 'gpt-3.5-turbo',
-                    messages: convo.messages,
-                    functions: functionsRepository.describeFunctions(),
-                    temperature: 0,
-                }),
+            await displaySpinnerText(
+                !conversation.canSend()
+                    ? text.watchingCannotSend(price)
+                    : text.watchingNoConfirmation(price),
                 {
-                    text: text.requestingSpinnerText,
+                    hint: true,
                 }
             );
-            totalPrice += calculatePrice({
-                model: opts.model ?? 'gpt-3.5-turbo',
-                ...response,
-            }).totalPrice;
-
-            if (response.choices.length > 1) {
-                throw new Error(line`
-                    There are more than one choice returned from the API,
-                    the current implementation is not designed to handle
-                    multiple choices
-                `);
-            }
-
-            choice = response.choices[0];
-
-            // print last known request/message:
-            if (convo.lastMessage && !opts.watch) {
-                await printMarkdown(formatMessage(convo.lastMessage));
-            }
-
-            // add new message:
-            convo.messages.push(choice.message);
-            await printMarkdown(formatMessage(choice.message, true));
-        } else {
-            const { lastMessage } = convo;
-            if (
-                lastMessage &&
-                lastMessage.role === 'assistant' &&
-                'functionCall' in lastMessage
-            ) {
-                choice = {
-                    index: 0,
-                    finishReason: 'function_call' as const,
-                    message: lastMessage,
-                };
-            } else {
-                await printMarkdown(text.errorNoMessagesToSend);
-                return;
-            }
+            await watchForChangesOnce();
         }
 
-        await printMarkdown(text.totalSpend(totalPrice.toFixed(4)));
-
-        if (isManual) {
-            let result = await promptForNextAction(
-                (
-                    [
-                        'discard',
-                        'save',
-                        choice.finishReason === 'function_call' && 'execute',
-                        choice.finishReason !== 'stop' && 'auto',
-                    ] as const
-                ).filter(isTruthy),
-                choice
-            );
-
-            if (result.nextAction === 'save') {
-                await convo.save();
-            }
-
-            if (
-                choice.finishReason === 'function_call' &&
-                result.nextAction !== 'execute'
-            ) {
-                result = await promptForNextAction(['execute', 'auto'], choice);
-            }
-
-            isManual = result.nextAction !== 'auto';
-        } else {
-            await convo.save();
+        if (stopController.signal.aborted) {
+            break;
         }
 
-        if (choice.finishReason === 'function_call') {
-            try {
-                const { functionCall } = choice.message;
-                const result = await functionsRepository
-                    .executeFunction({
-                        name: functionCall.name,
-                        arguments: JSON.parse(
-                            functionCall.arguments
-                        ) as unknown,
-                    })
-                    .then(
-                        (executeResult) =>
-                            ({
-                                role: 'function',
-                                name: functionCall.name,
-                                content: JSON.stringify(executeResult),
-                            }) satisfies FunctionResultMessage
-                    )
-                    .catch(
-                        (e: unknown) =>
-                            ({
-                                role: 'function',
-                                name: functionCall.name,
-                                content: JSON.stringify({
-                                    status: 'error',
-                                    message:
-                                        e instanceof Error
-                                            ? e.message
-                                            : String(e),
-                                }),
-                            }) satisfies FunctionResultMessage
-                    );
-
-                convo.messages.push(result);
-                await printMessage(result, true);
-
-                if (isManual) {
-                    const promptResult = await promptForNextAction(
-                        ['discard', 'save', 'auto'],
-                        choice
-                    );
-
-                    if (promptResult.nextAction === 'save') {
-                        await convo.save();
-                    }
-                } else {
-                    await convo.save();
-                }
-            } catch (e) {
-                throw new Error(`Failed to execute the function`, {
-                    cause: e,
-                });
-            }
+        if (conversation.canSend()) {
+            await prompt();
         } else {
+            await printMarkdown(text.errorNoMessagesToSend);
+
             if (!opts.watch) {
+                break;
+            }
+            if (stopController.signal.aborted) {
                 break;
             }
         }

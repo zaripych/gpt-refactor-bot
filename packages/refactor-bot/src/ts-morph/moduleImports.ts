@@ -104,8 +104,6 @@ export async function moduleImports(
     // does the module path we are searching for include the file name?
     const hasSubModulePath = args.module.includes('/');
 
-    const moduleSpecifierIsSourceFile = project.getSourceFile(args.module);
-
     const moduleSpecifierIsPackagePath = projects.find(
         (project) =>
             project.packageInfo?.packageJson.name === args.module.trim()
@@ -149,18 +147,6 @@ export async function moduleImports(
               return !!descendant;
           });
 
-    if (!initialSourceFile && !moduleSpecifierIsSourceFile) {
-        if (args.initialFilePath) {
-            throw new Error(
-                `No source files found at "${args.initialFilePath}"`
-            );
-        } else {
-            throw new Error(
-                `No source files found that import "${args.module}"`
-            );
-        }
-    }
-
     const firstImport = initialSourceFile
         ? initialSourceFile
               .getFirstDescendantOrThrow(findImport, () =>
@@ -171,15 +157,7 @@ export async function moduleImports(
               .asKindOrThrow(SyntaxKind.ImportDeclaration)
         : undefined;
 
-    const lookupSourceFile = firstImport
-        ? firstImport.getModuleSpecifierSourceFile()
-        : moduleSpecifierIsSourceFile;
-
-    if (!lookupSourceFile) {
-        throw new Error(
-            `Cannot find source file for module "${args.module}" in the repository`
-        );
-    }
+    const lookupSourceFile = firstImport?.getModuleSpecifierSourceFile();
 
     const results: Map<
         string,
@@ -233,13 +211,12 @@ export async function moduleImports(
 
         for (const { node, moduleSpecifier, moduleSourceFile } of allNodes) {
             if (
-                !moduleSourceFile &&
+                !lookupSourceFile &&
                 (!moduleSpecifier || !modules.includes(moduleSpecifier))
             ) {
                 continue;
             }
-
-            if (moduleSourceFile !== lookupSourceFile) {
+            if (lookupSourceFile && moduleSourceFile !== lookupSourceFile) {
                 continue;
             }
 

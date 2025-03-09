@@ -120,9 +120,9 @@ export const evaluateUnchangedFile = makeCachedFunction({
         const { filePath, requirements, fileContents, issues } = input;
 
         const validateResponse = (message: RegularAssistantMessage) =>
-            parseJsonResponse(
-                message.content,
-                z.object({
+            parseJsonResponse({
+                response: message.content,
+                schema: z.object({
                     summary: z.string(),
                     requirements: z.array(
                         z.object({
@@ -130,8 +130,8 @@ export const evaluateUnchangedFile = makeCachedFunction({
                             satisfied: z.boolean(),
                         })
                     ),
-                })
-            );
+                }),
+            });
 
         const result = await prompt(
             {
@@ -145,7 +145,7 @@ export const evaluateUnchangedFile = makeCachedFunction({
                 }),
                 temperature: input.temperature ?? 0.2,
                 choices: input.choices,
-                shouldStop: (message) => {
+                shouldStop: ({ message }) => {
                     try {
                         validateResponse(message);
                         return true;
