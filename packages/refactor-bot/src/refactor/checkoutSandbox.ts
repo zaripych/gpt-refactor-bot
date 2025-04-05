@@ -145,6 +145,9 @@ export const checkoutSandbox = makeCachedFunction({
 
         const defaultBranch = await gitDefaultBranch({
             location: sandboxDirectoryPath,
+        }).catch((error) => {
+            logger.warn('Cannot determine default branch', error);
+            return Promise.resolve(undefined);
         });
 
         const packageManager = await determinePackageManager({

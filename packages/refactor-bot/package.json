@@ -73,7 +73,11 @@
     },
     "peerDependencies": {
         "prettier": "3.0.3",
-        "typescript": "5.2.2"
+        "typescript": "5.2.2",
+        "@langchain/openai": "0.5.4",
+        "@langchain/anthropic": "0.3.16",
+        "@langchain/core": "0.3.43",
+        "langchain": "0.3.20"
     },
     "packageManager": "pnpm@8.9.0",
     "engines": {

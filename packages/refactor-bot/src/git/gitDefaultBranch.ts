@@ -6,19 +6,25 @@ export async function gitDefaultBranch(opts: { location: string }) {
         exitCodes: [0],
         logOnError: 'stderr',
     });
-    const { stdout } = await spawnResult(
-        'git',
-        ['remote', 'show', gitRemote.stdout.trim()],
-        {
-            cwd: opts.location,
-            exitCodes: [0],
-            logOnError: 'stderr',
-            env: {
-                ...process.env,
-                LC_ALL: 'C',
-            },
-        }
-    );
-    const [, defaultBranch] = /HEAD branch: (.*)/g.exec(stdout) || [];
-    return defaultBranch;
+    try {
+        const { stdout } = await spawnResult(
+            'git',
+            ['remote', 'show', gitRemote.stdout.trim()],
+            {
+                cwd: opts.location,
+                exitCodes: [0],
+                logOnError: 'stderr',
+                env: {
+                    ...process.env,
+                    LC_ALL: 'C',
+                },
+            }
+        );
+        const [, defaultBranch] = /HEAD branch: (.*)/g.exec(stdout) || [];
+        return defaultBranch;
+    } catch (e) {
+        throw new Error('Cannot determine default branch', {
+            cause: e,
+        });
+    }
 }

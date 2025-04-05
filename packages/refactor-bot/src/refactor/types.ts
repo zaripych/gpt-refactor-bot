@@ -94,11 +94,6 @@ export const refactorConfigSchema = z.object({
     allowDirtyWorkingTree: z.boolean().optional().default(false),
 
     /**
-     * Maximum amount of money we can spend on a single run
-     */
-    budgetCents: z.number().optional().default(10_00),
-
-    /**
      * An optional list of package.json scripts to run before the
      * refactor starts
      */

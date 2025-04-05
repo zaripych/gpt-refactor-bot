@@ -3,7 +3,6 @@ import { filter, type Observable, scan, startWith, takeUntil } from 'rxjs';
 import type { z } from 'zod';
 
 import { explainCacheKey } from '../cache/cache';
-import { calculatePrice } from '../chat-gpt/pricing';
 import { actions, type AnyAction } from '../event-bus';
 import { ofTypes } from '../event-bus/operators';
 import type { llmUsageEntrySchema } from '../refactor/types';
@@ -71,45 +70,6 @@ export function startCollectingLlmUsage(
             subscription.unsubscribe();
             return result;
         },
-    };
-}
-
-export function summarizeLlmUsagePrice(params: { usage: Array<Usage> }) {
-    const priceBySteps = new Map<
-        string,
-        {
-            promptPrice: number;
-            completionPrice: number;
-            totalPrice: number;
-        }
-    >();
-
-    let totalPrice = 0;
-
-    for (const { model, usage, steps } of params.usage) {
-        const price = calculatePrice({ model, usage });
-
-        for (const step of steps) {
-            const current = priceBySteps.get(step) ?? {
-                promptPrice: 0,
-                completionPrice: 0,
-                totalPrice: 0,
-            };
-
-            priceBySteps.set(step, {
-                promptPrice: current.promptPrice + price.promptPrice,
-                completionPrice:
-                    current.completionPrice + price.completionPrice,
-                totalPrice: current.totalPrice + price.totalPrice,
-            });
-        }
-
-        totalPrice += price.totalPrice;
-    }
-
-    return {
-        priceBySteps,
-        totalPrice,
     };
 }
 

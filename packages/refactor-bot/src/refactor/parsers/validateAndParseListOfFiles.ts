@@ -22,6 +22,10 @@ export async function validateAndParseListOfFiles(opts: {
         ),
     ];
 
+    if (filePaths.length === 0) {
+        return [];
+    }
+
     const fileStatsOrNull = (filePath: string) =>
         stat(join(sandboxDirectoryPath, filePath)).catch(
             (error: NodeJS.ErrnoException) => {

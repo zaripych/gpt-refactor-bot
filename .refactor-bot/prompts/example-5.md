@@ -739,7 +739,6 @@ const initialize = async (opts: {
 
     const llmDependencies = await prepareLlmDependencies({
         model,
-        budgetCents: 100,
         modelByStepCode: {},
         useMoreExpensiveModelsOnRetry: {},
     });

@@ -5,22 +5,24 @@ import type { RegularAssistantMessage } from '../chat-gpt/api';
 import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
 import { llmDependenciesSchema } from '../llm/llmDependencies';
 import { markdown } from '../markdown/markdown';
+import { formatBulletList } from '../prompt-formatters/formatBulletList';
 import { formatZodError } from '../prompt-formatters/formatZodError';
 import { prompt } from '../refactor/prompt';
 import { parseJsonResponse } from '../response-parsers/parseJsonResponse';
 import { format } from '../text/format';
 import { ensureHasOneElement } from '../utils/hasOne';
 
-export const extractRequirementsInput = z.object({
-    objective: z.string(),
-    choices: z.number().optional(),
+const requirementsArraySchema = z.array(z.string()).nonempty();
+
+export const filterRequirementsInput = z.object({
+    requirements: requirementsArraySchema,
+    filePath: z.string(),
     temperature: z.number().optional(),
+    choices: z.number().optional(),
 
     llmDependencies: llmDependenciesSchema,
     functionsRepository: functionsRepositorySchema,
 });
-
-const requirementsArraySchema = z.array(z.string()).nonempty();
 
 export const extractRequirementsResult = z.object({
     key: z.string().optional(),
@@ -36,24 +38,25 @@ const systemPromptText = markdown`
     follow instructions exactly.
 `;
 
-const promptText = (opts: { objective: string }) =>
+const promptText = (opts: {
+    filePath: string;
+    requirements: z.output<typeof requirementsArraySchema>;
+}) =>
     format(
         markdown`
-            <objective>
-            %objective%
-            </objective>
+            <requirements>
+            %requirements%
+            </requirements>
 
-            Given above objective, split it into requirements.
+            Given above list of requirements, filter out the requirements that
+            are not relevant to the file \`%filePath%\`. Filtering out should
+            only be done if the requirement explicitly mentions the file it
+            applies to. If the requirement does not mention a file, it should be
+            kept in the list.
 
             Do not modify the requirements. Do not add new requirements. Do not
             try to guess what the implementation would look like. Do not look
-            too far ahead. Do not rephrase the requirements. Only extract the
-            minimum which is explicitly specified. Do not include implied
-            requirements. There should be a minimum of 1 requirements as a
-            result. Strive to minimize the number of requirements. Requirements
-            should not be redundant. There should be no duplicate requirements.
-            Do not duplicate requirements per-file, ie if the same requirements
-            apply to multiple files, list them only once.
+            too far ahead. Do not rephrase the requirements.
 
             Return list of requirements in the following format:
 
@@ -62,15 +65,19 @@ const promptText = (opts: { objective: string }) =>
             ~~~
         `,
         {
-            objective: opts.objective,
+            requirements: formatBulletList({
+                items: ensureHasOneElement(opts.requirements),
+                heading: `List of requirements:`,
+            }),
+            filePath: opts.filePath,
         }
     );
 
-export const extractRequirements = async (
-    input: z.input<typeof extractRequirementsInput>,
+export const filterRequirements = async (
+    input: z.input<typeof filterRequirementsInput>,
     ctx?: CacheStateRef
 ) => {
-    const { objective } = input;
+    const { requirements, filePath } = input;
 
     const validateResponse = (message: RegularAssistantMessage) =>
         parseJsonResponse({
@@ -83,7 +90,8 @@ export const extractRequirements = async (
             ...input,
             preface: systemPromptText,
             prompt: promptText({
-                objective,
+                requirements,
+                filePath,
             }),
             temperature: input.temperature ?? 0.2,
             choices: input.choices,

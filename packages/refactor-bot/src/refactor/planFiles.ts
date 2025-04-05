@@ -50,6 +50,8 @@ const systemPrompt = markdown`
     other than what was given in the instructions.
 `;
 
+const noSourceFilesToEdit = `There are no files to edit at this time`;
+
 const planFilesPromptText = (objective: string) =>
     format(
         /**
@@ -61,9 +63,9 @@ const planFilesPromptText = (objective: string) =>
 
             Given the above objective, follow the steps below:
 
-            1. If the objective is already complete, respond "There are no files
-               to edit at this time". Follow it with short sentence of reasoning
-               why editing is not required.
+            1. If the objective is already complete, respond
+               "%noSourceFilesToEdit%". Follow it with short sentence of
+               reasoning why editing is not required.
 
             2. Use the tool box via OpenAI function calling to find all files
                that require editing and where the objective is not complete yet.
@@ -86,7 +88,7 @@ const planFilesPromptText = (objective: string) =>
             the list of files with any text. Follow it with short sentence of
             reasoning why editing is required.
         `,
-        { objective }
+        { objective, noSourceFilesToEdit }
     );
 
 export const planFiles = makeCachedFunction({
@@ -101,11 +103,17 @@ export const planFiles = makeCachedFunction({
                 prompt: planFilesPromptText(input.objective),
                 temperature: 1,
                 shouldStop: async ({ message }) => {
-                    await validateAndParseListOfFiles({
+                    const result = await validateAndParseListOfFiles({
                         sandboxDirectoryPath: input.sandboxDirectoryPath,
                         text: message.content,
                         sortBySize: false,
                     });
+                    if (result.length === 0) {
+                        if (message.content.includes(noSourceFilesToEdit)) {
+                            return true as const;
+                        }
+                        throw new Error(`No files were found in the response.`);
+                    }
                     return true as const;
                 },
             },

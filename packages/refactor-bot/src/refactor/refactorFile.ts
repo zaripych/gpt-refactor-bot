@@ -9,6 +9,7 @@ import { AbortError } from '../errors/abortError';
 import { CycleDetectedError } from '../errors/cycleDetectedError';
 import { OutOfContextBoundsError } from '../errors/outOfContextBoundsError';
 import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
+import { gitCherryPick } from '../git/gitCherryPick';
 import { gitDiffRange } from '../git/gitDiffRange';
 import { gitFilesDiff } from '../git/gitFilesDiff';
 import { gitResetHard } from '../git/gitResetHard';
@@ -151,6 +152,83 @@ function fixLocalIssuesPromptText(opts: {
         .filter((text) => text?.trim())
         .join('\n\n');
 }
+
+// NOTE: this function should be used instead of refactorFile to
+// handle situations when the refactorFile is executed multiple times
+// across different refactor attempts to ensure the commits produced
+// by the refactorFile are re-integrated into the sandbox
+export const refactorFileAndIntegrateCommits = async (
+    input: z.input<typeof refactorFileInputSchema>
+): Promise<z.output<typeof refactorFileResultSchema>> => {
+    // remember the commit we started with
+    const beforeRefactorCommit = await gitRevParse({
+        location: input.sandboxDirectoryPath,
+        ref: 'HEAD',
+    });
+
+    // this result can be cached result
+    const refactorFileResult = await refactorFile(input);
+
+    const currentCommit = await gitRevParse({
+        location: input.sandboxDirectoryPath,
+        ref: 'HEAD',
+    });
+
+    if (refactorFileResult.file.status === 'failure') {
+        if (currentCommit !== beforeRefactorCommit) {
+            // reset to the commit before refactor started
+            logger.warn('Resetting to previous commit', beforeRefactorCommit);
+
+            await gitResetHard({
+                location: input.sandboxDirectoryPath,
+                ref: beforeRefactorCommit,
+            });
+        }
+
+        return refactorFileResult;
+    }
+
+    // looks like we got ourselves cached result
+    if (currentCommit !== refactorFileResult.file.lastCommit) {
+        // we going to simply replace old commits with new commits
+        // using text replace, to reduce having to maintain the
+        // code responsible for changing the commit hashes
+        let text = JSON.stringify(refactorFileResult);
+
+        // cherry pick every commit
+
+        for (const step of refactorFileResult.file.steps) {
+            if (!step.commit) {
+                // when no commit, the step was unsuccessful
+                continue;
+            }
+
+            // the integration of the commit is not likely to fail, because
+            // the refactorFile function has the initial file hash in its input
+            // and the failures are only likely if we are trying to apply commit
+            // on top of the file that has been changed
+            // the only time this could fail, if somebody did `git gc` in the
+            // sandbox directory, or deleted the sandbox directory
+            logger.info('Cherry-picking', step.commit);
+
+            await gitCherryPick({
+                location: input.sandboxDirectoryPath,
+                commit: step.commit,
+            });
+
+            const newCommit = await gitRevParse({
+                location: input.sandboxDirectoryPath,
+                ref: 'HEAD',
+            });
+
+            text = text.replaceAll(step.commit, newCommit);
+        }
+
+        return JSON.parse(text) as z.output<typeof refactorFileResultSchema>;
+    }
+
+    return refactorFileResult;
+};
 
 export const refactorFile = makeCachedFunction({
     name: 'file',

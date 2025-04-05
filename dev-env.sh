@@ -4,4 +4,4 @@ if [ -n "$checkInsideDevEnvironment" ]; then
 fi
 
 nix flake update --flake ./nix --override-input package-json-src path:./package.json package-json-src
-nix develop ./nix --override-input package-json-src path:./package.json --command $SHELL
+nix develop --profile $TMPDIR/refactor-bot-env ./nix --override-input package-json-src path:./package.json --command $SHELL

@@ -16,7 +16,6 @@ import {
 import stripAnsi from 'strip-ansi';
 
 import type { Message, Models } from '../chat-gpt/api';
-import { estimatePrice } from '../chat-gpt/pricing';
 import { actions, declareAction, dispatch } from '../event-bus';
 import { ofTypes } from '../event-bus/operators';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
@@ -51,13 +50,13 @@ const note = '**NOTE**';
 const hr = '`"---"`';
 
 const text = {
-    watchingSpinnerText: (price: string) =>
+    watchingSpinnerText: () =>
         format(
             markdown`
                 Watching for file changes, please finish with a user prompt and
-                confirm with %hr% to send it ... [+ ~USD %price%]
+                confirm with %hr% to send it ...
             `,
-            { hr, price }
+            { hr }
         ),
 
     watchingWithLastMessage: (lastMessage: Message) =>
@@ -71,22 +70,22 @@ const text = {
             '',
         ].join('\n\n---\n\n'),
 
-    watchingCannotSend: (price: string) =>
+    watchingCannotSend: () =>
         format(
             markdown`
                 Last message is not a user prompt, please add another message
-                and finish with %hr% to confirm ... [+ ~USD %price%]
+                and finish with %hr% to confirm ...
             `,
-            { price, hr }
+            { hr }
         ),
 
-    watchingNoConfirmation: (price: string) =>
+    watchingNoConfirmation: () =>
         format(
             markdown`
                 %note% We can send your request now ... finish with %hr% to
-                confirm ... [+ ~USD %price%]
+                confirm ...
             `,
-            { hr, note, price }
+            { hr, note }
         ),
 
     errorNoMessagesToSend: format(
@@ -264,7 +263,6 @@ const initialize = async (opts: {
 
     const llmDependencies = await prepareLlmDependencies({
         model,
-        budgetCents: 100,
         modelByStepCode: {},
         useMoreExpensiveModelsOnRetry: {},
     });
@@ -505,23 +503,17 @@ export const run = async (opts: {
                 );
             }
 
-            const price = estimatePrice({
-                model: state.model,
-                messages: conversation.messages,
-                functions,
-            }).toFixed(4);
-
             await displayProgressText(
                 watchForChangesOnce(),
-                (spinner) => spinner.text || text.watchingSpinnerText(price)
+                (spinner) => spinner.text || text.watchingSpinnerText()
             );
 
             await state.conversation.load();
 
             await displaySpinnerText(
                 !conversation.canSend()
-                    ? text.watchingCannotSend(price)
-                    : text.watchingNoConfirmation(price),
+                    ? text.watchingCannotSend()
+                    : text.watchingNoConfirmation(),
                 {
                     hint: true,
                 }

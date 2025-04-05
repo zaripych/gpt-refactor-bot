@@ -1,7 +1,6 @@
 refactorConfig:
     name: test-likely-success
     ref: 8f1a3da55caeee3df75853042e57978c45513f18
-    budgetCents: 100
     model: gpt-4o
     objective:
         Replace all usages of `readFile` from `fs/promises` module with

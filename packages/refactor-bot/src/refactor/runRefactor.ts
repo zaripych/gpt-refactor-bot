@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 import { ConfigurationError } from '../errors/configurationError';
 import { findRepositoryRoot } from '../file-system/findRepositoryRoot';
-import { summarizeLlmUsagePrice } from '../llm/collectLlmUsage';
+import { summarizeLlmUsageTokens } from '../llm/collectLlmUsage';
 import { extractErrorInfo } from '../logger/extractErrorInfo';
 import { formatObject } from '../logger/formatObject';
 import { glowFormat } from '../markdown/glowFormat';
@@ -88,7 +88,6 @@ async function promptForConfig(refactors: RefactorConfig[]) {
                     \`\`\`yaml
                     # For information about possible options have a look at the code:
                     # https://github.com/zaripych/refactor-bot/blob/main/src/refactor/types.ts#L5
-                    budgetCents: 100
                     model: ${refactorConfigSchema.shape.model._def.defaultValue()}
                     \`\`\`
 
@@ -468,7 +467,7 @@ const unhandledErrorReport = async (opts: { error: unknown }) => {
                 markdown`
                     # Unhandled error
 
-                    ~~~
+                    ~~~txt
                     %errorDetails%
                     ~~~
                 `,
@@ -483,6 +482,10 @@ const unhandledErrorReport = async (opts: { error: unknown }) => {
                     ),
                 }
             ),
+            /**
+             * Do not word wrap the error message that might contain file paths
+             */
+            disableWordWrap: true,
         })
     );
 };
@@ -519,31 +522,31 @@ const analyticsReport = async (opts: {
     performance: boolean;
 }) => {
     if (opts.costs) {
-        const totalCost = summarizeLlmUsagePrice({
+        const totalTokens = summarizeLlmUsageTokens({
             usage: opts.result.usage,
         });
-        const costs = Array.from(totalCost.priceBySteps).map(
+        const tokens = Array.from(totalTokens.tokensBySteps).map(
             ([step, costs]) => ({
                 step,
                 costs,
             })
         );
 
-        const orderedCosts = orderBy(costs, ['costs.totalPrice'], ['desc']);
+        const orderedTokens = orderBy(tokens, ['costs.totalTokens'], ['desc']);
 
         console.log(
             await glowFormat({
                 input: format(
                     markdown`
-                        # Cost
+                        # Costs
 
-                        Total cost: %total% USD
+                        Total tokens: %total%
 
-                        %costByStep%
+                        %tokensByStep%
                     `,
                     {
-                        total: totalCost.totalPrice.toFixed(3),
-                        costByStep: orderedCosts
+                        total: totalTokens.totalTokens.toFixed(0),
+                        tokensByStep: orderedTokens
                             .filter(
                                 /**
                                  * Exclude low level steps which are used by all
@@ -555,9 +558,9 @@ const analyticsReport = async (opts: {
                                     )
                             )
                             .map((data) =>
-                                format(`- %step% - %price% USD`, {
+                                format(`- %step% - %tokens%`, {
                                     step: data.step.padEnd(20, ' '),
-                                    price: data.costs.totalPrice.toFixed(3),
+                                    tokens: data.costs.totalTokens.toFixed(0),
                                 })
                             )
                             .join('\n'),

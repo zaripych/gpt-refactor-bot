@@ -2,6 +2,7 @@ import assert from 'assert';
 import { z } from 'zod';
 
 import { evaluateFileScore } from '../evaluate/evaluateFileScore';
+import { filterRequirements } from '../evaluate/filterRequirements';
 import { dispatch } from '../event-bus';
 import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
 import { gitResetHard } from '../git/gitResetHard';
@@ -12,7 +13,7 @@ import { acceptedEdit } from './actions/acceptedEdit';
 import { discardedEdit } from './actions/discardedEdit';
 import { checkDependenciesSchema } from './code-checking/prepareCodeCheckingDeps';
 import { formatDependenciesSchema } from './code-formatting/prepareCodeFormattingDeps';
-import { refactorFile } from './refactorFile';
+import { refactorFileAndIntegrateCommits } from './refactorFile';
 import type { RefactorFilesResult } from './types';
 import { refactorConfigSchema } from './types';
 
@@ -47,7 +48,7 @@ export const refactorBatch = async (
             ref: 'HEAD',
         });
 
-        const refactorFileResult = await refactorFile({
+        const refactorFileResult = await refactorFileAndIntegrateCommits({
             filePath,
             ...input,
         });
@@ -61,8 +62,17 @@ export const refactorBatch = async (
             const lastCommit = file.lastCommit;
             assert(lastCommit);
 
+            const {
+                choices: [{ requirements }],
+            } = await filterRequirements({
+                ...input,
+                filePath,
+                choices: 1,
+            });
+
             refactorFileResult.evaluation = await evaluateFileScore({
                 ...input,
+                requirements,
                 filePath: file.filePath,
                 commitBeforeChanges: beforeRefactorCommit,
                 commit: lastCommit,

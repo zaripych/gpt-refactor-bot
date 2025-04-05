@@ -1,12 +1,7 @@
 import { z } from 'zod';
 
 import { makeCachedFunction } from '../cache/makeCachedFunction';
-import {
-    chatCompletions,
-    messageSchema,
-    responseSchema,
-} from '../chat-gpt/api';
-import { calculatePrice } from '../chat-gpt/pricing';
+import { messageSchema, responseSchema } from '../chat-gpt/api';
 import { GptRequestError } from '../errors/gptRequestError';
 import { functionsRepositorySchema } from '../functions/prepareFunctionsRepository';
 import { refactorConfigSchema } from '../refactor/types';
@@ -23,7 +18,6 @@ export type LlmDependencies = Awaited<
 
 const llmDependenciesConfigSchema = refactorConfigSchema.pick({
     model: true,
-    budgetCents: true,
     modelByStepCode: true,
     useMoreExpensiveModelsOnRetry: true,
 });
@@ -32,8 +26,6 @@ export async function prepareLlmDependencies(
     rawConfig: z.output<typeof llmDependenciesConfigSchema>
 ) {
     const config = await llmDependenciesConfigSchema.parseAsync(rawConfig);
-
-    let totalSpend = 0;
 
     const chat = makeCachedFunction({
         name: 'chat',
@@ -58,6 +50,10 @@ export async function prepareLlmDependencies(
                 },
                 ctx
             );
+            const { prepareUniversalChatModel } = await import(
+                '../chat-gpt/prepareUniversalChatModel'
+            );
+            const { chatCompletions } = prepareUniversalChatModel();
             try {
                 ctx.dispatch(
                     gptRequestStarted({
@@ -74,17 +70,6 @@ export async function prepareLlmDependencies(
                     tools: params.functionsRepository().describeFunctions(),
                     abortSignal: params.abortSignal?.(),
                 });
-
-                const spent = calculatePrice({
-                    ...response,
-                    model: modelParameters.model,
-                });
-
-                totalSpend += spent.totalPrice;
-
-                if (totalSpend * 100 > config.budgetCents) {
-                    throw new GptRequestError('Spent too much');
-                }
 
                 ctx.dispatch(
                     gptRequestSuccess({

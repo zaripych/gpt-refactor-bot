@@ -29,7 +29,9 @@ export const conversationState = (opts: { conversationFile: string }) => {
                 model: modelsSchema.optional(),
                 functions: z.array(z.string()).optional(),
             })
-            .parse(loadYaml(text))
+            .optional()
+            .default({})
+            .parse(loadYaml(text) || undefined)
     );
 
     let contents: string;

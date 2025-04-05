@@ -1,8 +1,8 @@
-import { formatWithOptions } from 'node:util';
+import { formatWithOptions, inspect } from 'node:util';
 
 import type { CommandModule } from 'yargs';
 
-import { type Models, modelsSchema } from '../chat-gpt/api';
+import { type Models } from '../chat-gpt/api';
 import { functions } from '../functions/registry';
 
 export const promptCommand: CommandModule<
@@ -17,7 +17,7 @@ export const promptCommand: CommandModule<
     builder: (yargs) =>
         yargs
             .option('model', {
-                choices: modelsSchema.options,
+                type: 'string',
             })
             .option('watch', {
                 type: 'boolean',
@@ -34,6 +34,7 @@ export const promptCommand: CommandModule<
             }),
     handler: async (opts) => {
         try {
+            inspect.defaultOptions.depth = 20;
             const { run } = await import('./run');
             await run(opts);
         } catch (err) {

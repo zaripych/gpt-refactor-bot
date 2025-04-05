@@ -26,7 +26,6 @@ export async function prepareMinimalDeps(minimalConfig: {
 
     const llmDependencies = await prepareLlmDependencies({
         model: config.model,
-        budgetCents: config.budgetCents,
         modelByStepCode: config.modelByStepCode,
         useMoreExpensiveModelsOnRetry: config.useMoreExpensiveModelsOnRetry,
     });
