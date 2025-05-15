@@ -9,5 +9,6 @@ dist
 .refactor-bot/prompts/playground.md
 .refactor-bot/playground-cache
 .refactor-bot/reviews/*/state
+.refactor-bot/mcp/*/state
 .direnv
 .pr-train.yml

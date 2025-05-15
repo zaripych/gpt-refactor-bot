@@ -26,7 +26,10 @@ export const diffFunction = makeFunction({
     name: 'diff',
     description: markdown`
         Returns a diff between the current working tree and the target ref,
-        optionally filtered by file path.
+        optionally filtered by file path. Please note that this function can
+        return a large amount of data, it makes sense to use "nameOnly" to limit
+        the output to file names only at first and then proceed based on the
+        result.
     `,
     implementation: async (args, config) => {
         return await gitFilesDiff({

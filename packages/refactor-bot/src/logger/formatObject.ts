@@ -1,3 +1,4 @@
+import { supportsColorStderr } from 'chalk';
 import { formatWithOptions } from 'util';
 
 export const formatObject = (
@@ -16,7 +17,10 @@ export const formatObject = (
                 typeof value === 'string'
                     ? value
                     : formatWithOptions(
-                          { colors: true, depth: Number.POSITIVE_INFINITY },
+                          {
+                              colors: !!supportsColorStderr,
+                              depth: Number.POSITIVE_INFINITY,
+                          },
                           value
                       );
             const extraIndent = '';

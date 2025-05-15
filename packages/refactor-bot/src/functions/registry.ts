@@ -36,4 +36,6 @@ export const allowedFunctionsSchema = z
         'declarations',
         'listFiles',
         'search',
+        'readFile',
+        'diff',
     ]);

@@ -7,7 +7,8 @@ import { formatObject } from './formatObject';
 function formatLocation(input: string) {
     const cwd = process.env['LOG_RELATIVE_TO_CWD'] ?? process.cwd();
     if (input.startsWith(cwd)) {
-        return relative(cwd, input);
+        const relativePath = relative(cwd, input);
+        return relativePath === '' ? './' : relativePath;
     }
     return input;
 }

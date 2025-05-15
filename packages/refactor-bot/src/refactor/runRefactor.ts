@@ -20,8 +20,8 @@ import { hasOneElement } from '../utils/hasOne';
 import { loadRefactorConfigs } from './loadRefactors';
 import { refactor } from './refactor';
 import {
-    type RefactorConfig,
     refactorConfigSchema,
+    type RefactorConfigWithObjective,
     summarizeRefactorFilesResult,
 } from './types';
 
@@ -36,7 +36,7 @@ const validateUsingSchema =
         }
     };
 
-async function promptForConfig(refactors: RefactorConfig[]) {
+async function promptForConfig(refactors: RefactorConfigWithObjective[]) {
     const answers = (await prompts({
         name: 'config',
         message: 'Select the refactor to run',
@@ -52,7 +52,7 @@ async function promptForConfig(refactors: RefactorConfig[]) {
             },
         ],
     })) as {
-        config?: RefactorConfig | 'new';
+        config?: RefactorConfigWithObjective | 'new';
     };
 
     if (answers.config === 'new') {
@@ -135,7 +135,7 @@ Please describe the refactoring in the file, save the file and restart the comma
 async function determineConfig(opts: {
     id?: string;
     name?: string;
-    configs: RefactorConfig[];
+    configs: RefactorConfigWithObjective[];
 }) {
     if (opts.name) {
         const config = opts.configs.find((config) => config.name === opts.name);

@@ -19,7 +19,7 @@ import { discardedEdit } from './actions/discardedEdit';
 import { planFilesCompleted } from './actions/planFilesCompleted';
 import { checkoutSandboxResultSchema } from './checkoutSandbox';
 import { planFilesResultSchema } from './planFiles';
-import type { RefactorConfig, refactorFileResultSchema } from './types';
+import type { refactorFileResultSchema } from './types';
 import { llmUsageEntrySchema, refactorFilesResultSchema } from './types';
 
 export const collectedRefactorResultSchema = z
@@ -241,7 +241,7 @@ export function resultsCollector(deps = { actions }) {
             usage.finishCollecting();
         },
         finalizeResults: (
-            config: RefactorConfig & { id: string },
+            config: { id: string; objective: string },
             error?: Error
         ): z.output<typeof collectedRefactorResultSchema> => {
             if (error) {

@@ -17,85 +17,138 @@ import { determinePackageManager } from '../package-manager/determinePackageMana
 import { installDependencies } from '../package-manager/installDependencies';
 import { runPackageManagerScript } from '../package-manager/runPackageManagerScript';
 import { createSandbox, sandboxLocation } from '../sandbox/createSandbox';
-import { ensureTruthy } from '../utils/isTruthy';
-import { refactorConfigSchema } from './types';
+import { format } from '../text/format';
+import { line } from '../text/line';
+import { checkoutAndSandboxSchema } from './types';
 
-export const checkoutSandboxInputSchema = refactorConfigSchema
-    .pick({
-        id: true,
-        name: true,
-        repository: true,
-        ref: true,
-        bootstrapScripts: true,
-        allowDirtyWorkingTree: true,
-        ignore: true,
-        ignoreFiles: true,
-    })
-    .transform(async (input) => {
-        if (!input.repository && !input.ref) {
-            const root = await findRepositoryRoot();
-            return {
-                ...input,
-                ...(await changedFilesHash({
-                    location: root,
-                })),
-            };
+async function ensureCreateSandboxIsCompatibleWithOtherProps<
+    T extends z.output<typeof checkoutAndSandboxSchema>,
+>(input: T) {
+    if (input.createSandbox) {
+        return input;
+    }
+
+    const root = await findRepositoryRoot(input.location);
+
+    if (input.ref) {
+        const changes = await changedFilesHash({
+            location: root,
+        });
+
+        if (changes) {
+            throw new ConfigurationError(
+                format(
+                    line`
+                        We cannot checkout a ref "%ref%" in "%root%" directory without
+                        loosing the changes in the working tree. Please commit or stash
+                        the changes and try again. 
+                    `,
+                    { ref: input.ref, root }
+                )
+            );
         }
+    }
 
+    return input;
+}
+
+async function addChangedFilesHash<
+    T extends z.output<typeof checkoutAndSandboxSchema>,
+>(input: T) {
+    const newLocation = await findRepositoryRoot(input.location);
+
+    if (input.ref) {
         return {
             ...input,
-            changedFilesHash: undefined,
+            location: newLocation,
         };
+    }
+
+    return {
+        ...input,
+        location: newLocation,
+        ...(await changedFilesHash({
+            location: newLocation,
+        })),
+    };
+}
+
+export const checkoutSandboxInputSchema = checkoutAndSandboxSchema
+    .augment({
+        commitDirtyWorkingTree: z.boolean().default(true),
+        installDependencies: z.boolean().default(true),
+    })
+    .transform(async (input) => {
+        return addChangedFilesHash(
+            await ensureCreateSandboxIsCompatibleWithOtherProps(input)
+        );
     });
 
 export const checkoutSandboxResultSchema = z.object({
     startCommit: z.string(),
     originalBranch: z.string().optional(),
-    defaultBranch: z.string(),
+    defaultBranch: z.string().optional(),
     sandboxDirectoryPath: z.string(),
 });
+
+async function createSandboxOrUseLocation(
+    config: z.output<typeof checkoutSandboxInputSchema>
+) {
+    if (!config.createSandbox) {
+        return {
+            sandboxId: config.id,
+            sandboxDirectoryPath: config.location,
+        };
+    }
+
+    const { sandboxId, sandboxDirectoryPath } = sandboxLocation({
+        tag: config.name,
+        sandboxId: config.id,
+    });
+
+    if (config.repository) {
+        logger.trace(`Cloning "${config.repository}"`);
+
+        await gitClone({
+            repository: config.repository,
+            cloneDestination: sandboxDirectoryPath,
+            ref: config.ref,
+        });
+    } else {
+        logger.trace(`Creating sandbox from "${config.location}"`);
+
+        await createSandbox({
+            tag: config.name,
+            source: config.location,
+            sandboxId,
+            ignore: config.ignore,
+            ignoreFiles: config.ignoreFiles,
+        });
+
+        if (config.ref) {
+            await gitAddAll({
+                location: sandboxDirectoryPath,
+            });
+            await gitResetHard({
+                location: sandboxDirectoryPath,
+                ref: config.ref,
+            });
+        }
+    }
+
+    return {
+        sandboxId,
+        sandboxDirectoryPath,
+    };
+}
 
 export const checkoutSandbox = makeCachedFunction({
     name: 'checkout-sandbox',
     inputSchema: checkoutSandboxInputSchema,
     resultSchema: checkoutSandboxResultSchema,
     transform: async (config) => {
-        const root = await findRepositoryRoot();
-
-        const { sandboxId, sandboxDirectoryPath } = sandboxLocation({
-            tag: config.name,
-            sandboxId: config.id,
-        });
-
-        if (config.repository) {
-            logger.trace(`Cloning "${config.repository}"`);
-
-            await gitClone({
-                repository: config.repository,
-                cloneDestination: sandboxDirectoryPath,
-                ref: config.ref,
-            });
-        } else {
-            logger.trace(`Creating sandbox from "${root}"`);
-
-            await createSandbox({
-                tag: config.name,
-                source: root,
-                sandboxId,
-                ignore: config.ignore,
-                ignoreFiles: config.ignoreFiles,
-            });
-
-            if (config.ref) {
-                await gitAddAll({
-                    location: sandboxDirectoryPath,
-                });
-                await gitResetHard({
-                    location: sandboxDirectoryPath,
-                    ref: config.ref,
-                });
-            }
-        }
+        const { sandboxDirectoryPath } =
+            await createSandboxOrUseLocation(config);
 
         const status = await gitStatus({
             location: sandboxDirectoryPath,
@@ -103,35 +156,35 @@ export const checkoutSandbox = makeCachedFunction({
 
         if (Object.values(status).some((files) => files.length > 0)) {
             if (!config.allowDirtyWorkingTree) {
-                throw new ConfigurationError(
-                    `Sandbox has non-committed files, please set ` +
-                        `allowDirtyWorkingTree to ignore this and continue. ` +
-                        `Running with dirty working tree will lead to non ` +
-                        `deterministic results even when refactor is run ` +
-                        `multiple times with the same "id". `
-                );
+                throw new ConfigurationError(line`
+                    Sandbox has non-committed files, please  set  
+                    allowDirtyWorkingTree to ignore this and continue. Running
+                    with dirty working tree will lead to non deterministic
+                    results even when refactor is run multiple times with the
+                    same "id".
+                `);
             }
 
-            logger.warn(
-                `**WARNING** Sandbox has non-committed files. ` +
-                    `We are going to commit ` +
-                    `those files to ensure that the sandbox is in a clean ` +
-                    `state before refactor. Before pushing the changes, ` +
-                    `please make sure that the changes do not contain any ` +
-                    `sensitive information.`
-            );
+            if (config.commitDirtyWorkingTree) {
+                logger.warn(line`
+                    **WARNING** Sandbox has non-committed files. We are going to
+                    commit those files to ensure that the sandbox is in a clean
+                    state before refactor. Before pushing the changes, please make
+                    sure that the changes do not contain any sensitive information.
+                `);
 
-            await gitAddAll({
-                location: sandboxDirectoryPath,
-            });
+                await gitAddAll({
+                    location: sandboxDirectoryPath,
+                });
 
-            await gitCommit({
-                location: sandboxDirectoryPath,
-                message:
-                    `chore: cleanup before refactor - committing` +
-                    ` modified changes that are not part of ` +
-                    ` the refactor`,
-            });
+                await gitCommit({
+                    location: sandboxDirectoryPath,
+                    message: line`
+                        chore: cleanup before refactor - committing modified changes
+                        that are not part of the refactor
+                    `,
+                });
+            }
         }
 
         const branch = await gitCurrentBranch({
@@ -154,10 +207,15 @@ export const checkoutSandbox = makeCachedFunction({
             directory: sandboxDirectoryPath,
         });
 
-        await installDependencies({
-            directory: sandboxDirectoryPath,
-            packageManager,
-        });
+        if (config.installDependencies) {
+            logger.debug(
+                `Installing dependencies in ${sandboxDirectoryPath} using ${packageManager}`
+            );
+            await installDependencies({
+                directory: sandboxDirectoryPath,
+                packageManager,
+            });
+        }
 
         if (config.bootstrapScripts) {
             await config.bootstrapScripts.reduce(async (previous, script) => {
@@ -171,13 +229,11 @@ export const checkoutSandbox = makeCachedFunction({
             }, Promise.resolve());
         }
 
-        const result = {
+        return {
             startCommit: refactorStartCommit,
             originalBranch: branch,
-            defaultBranch: ensureTruthy(defaultBranch),
+            defaultBranch,
             sandboxDirectoryPath,
         };
-
-        return result;
     },
 });

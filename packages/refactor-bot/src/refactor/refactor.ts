@@ -1,6 +1,7 @@
 import { writeFile } from 'fs/promises';
 import { dump } from 'js-yaml';
 import { join } from 'path';
+import type { z } from 'zod';
 
 import { getExecutionLog } from '../cache/log';
 import { createCachedPipeline } from '../cache/state';
@@ -22,10 +23,10 @@ import {
     resultsCollector,
 } from './resultsCollector';
 import { retrieveParameters } from './retrieveParameters';
-import { type RefactorConfig, refactorConfigSchema } from './types';
+import { refactorConfigWithObjectiveSchema } from './types';
 
 export async function refactor(opts: {
-    config: RefactorConfig;
+    config: z.input<typeof refactorConfigWithObjectiveSchema>;
     saveToCache?: boolean;
     enableCacheFor?: string[];
     disableCacheFor?: string[];
@@ -59,8 +60,10 @@ export async function refactor(opts: {
         saveToCache: opts.saveToCache ?? true,
         disableCacheFor: opts.disableCacheFor,
         cleanCache: opts.cleanCache ?? false,
-        pipeline: async (inputRaw: RefactorConfig) => {
-            const input = refactorConfigSchema.parse(inputRaw);
+        pipeline: async (
+            inputRaw: z.input<typeof refactorConfigWithObjectiveSchema>
+        ) => {
+            const input = refactorConfigWithObjectiveSchema.parse(inputRaw);
 
             const checkoutResult = await checkoutSandbox(input);
 

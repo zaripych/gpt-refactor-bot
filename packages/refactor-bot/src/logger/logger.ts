@@ -1,5 +1,5 @@
 import type { ForegroundColorName } from 'chalk';
-import chalk from 'chalk';
+import chalk, { supportsColorStderr } from 'chalk';
 import { once as onEvent } from 'events';
 import type { Writable } from 'stream';
 import { pipeline, Transform } from 'stream';
@@ -114,7 +114,7 @@ const destination = once(() => {
             const colorName = colors[level as LogLevel];
 
             const result = [
-                chalk[colorName](level),
+                supportsColorStderr ? chalk[colorName](level) : level,
                 ': ',
                 message,
                 prettyMessage,
@@ -127,12 +127,12 @@ const destination = once(() => {
             callback(undefined, result);
         },
     });
-    // prevent process.stdout from participating in the "close"
+    // prevent process.stderr from participating in the "close"
     // event handling of the pipeline
     const consoleOutput = new Transform({
         autoDestroy: true,
         transform: (chunk: string, _encoding, callback) => {
-            process.stdout.write(chunk, callback);
+            process.stderr.write(chunk, callback);
         },
     });
     pipeline(formatter, stringifier, consoleOutput, (err) => {
@@ -171,7 +171,11 @@ const createLogger = (opts: {
             [levelSymbol]: entry.level,
             [messageSymbol]: entry.message,
         };
-        opts.destination.write(logEntry);
+        opts.destination.write(logEntry, (err) => {
+            if (err) {
+                console.error('Logging failed due to', err);
+            }
+        });
     };
 
     const result = levels.reduce((acc, level) => {

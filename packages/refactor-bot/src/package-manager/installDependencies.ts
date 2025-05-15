@@ -13,7 +13,10 @@ export async function installDependencies(opts: {
                 exitCodes: [0],
                 env: {
                     ...process.env,
+                    // prevent interactive prompts
                     CI: 'true',
+                    // install dev dependencies
+                    NODE_ENV: 'development',
                 },
             });
             break;

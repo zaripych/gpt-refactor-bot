@@ -5,7 +5,11 @@ import { makeCachedFunction } from '../../cache/makeCachedFunction';
 import { diffHash } from '../../git/diffHash';
 import { filesDiffHash } from '../../git/filesDiffHash';
 import { runCheckCommand } from '../../package-manager/runCheckCommand';
-import type { CheckIssuesResult, Issue, RefactorConfig } from '../types';
+import type {
+    CheckIssuesResult,
+    codeCheckingConfigSchema,
+    Issue,
+} from '../types';
 import { checkIssuesResultSchema } from '../types';
 
 export const scriptSchema = z.object({
@@ -64,7 +68,7 @@ export const check = makeCachedFunction({
 });
 
 export const checkScriptsFromConfig = (
-    config: Pick<RefactorConfig, 'tsc' | 'eslint' | 'jest'>,
+    config: z.input<typeof codeCheckingConfigSchema>,
     discoverResults: {
         tsc: boolean;
         eslint: boolean;

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { CacheStateRef } from '../../cache/types';
 import { ConfigurationError } from '../../errors/configurationError';
 import { determinePackageManager } from '../../package-manager/determinePackageManager';
-import type { RefactorConfig } from '../types';
+import type { codeCheckingConfigSchema } from '../types';
 import { check, checkScriptsFromConfig } from './check';
 import { discoverCheckDependencies } from './discoverDependencies';
 
@@ -21,7 +21,7 @@ export async function prepareCodeCheckingDeps(
     opts: {
         location: string;
         startCommit: string;
-    } & Pick<RefactorConfig, 'tsc' | 'eslint' | 'jest'>
+    } & z.input<typeof codeCheckingConfigSchema>
 ) {
     const checks = await discoverCheckDependencies({
         location: opts.location,

@@ -5,121 +5,7 @@ import { allowedFunctionsSchema } from '../functions/registry';
 import { functionsConfigSchema } from '../functions/types';
 import { randomText } from '../utils/randomText';
 
-export const refactorConfigSchema = z.object({
-    /**
-     * Short name of the refactor, should be a valid directory name
-     * and also used as a git branch name.
-     */
-    name: z.string(),
-
-    /**
-     * Objective of the refactor, the objective is read from a goal.md file
-     * in a directory located at the root of the repository:
-     *
-     * `.refactor-bot/refactors/${name}/goal.md`
-     *
-     * The `goal.md` file is a markdown file can have a frontmatter section
-     * with fields that map to the fields of this schema. The frontmatter
-     * section is optional.
-     */
-    objective: z.string(),
-
-    /**
-     * List of files to edit or refactor - the refactoring will be done in the
-     * same order as the files are specified here. File names should be relative
-     * to the repository root.
-     *
-     * When not explicitly specified, the files are determined from the
-     * objective. When the objective doesn't explicitly state the files to be
-     * edited or refactored, the files are determined automatically by the LLM
-     * by analyzing the objective and contents of the repository.
-     */
-    filesToEdit: z.array(z.string()).nonempty().optional(),
-
-    /**
-     * Name of the `tsconfig.json` file to use for the refactor, defaults
-     * to `tsconfig.json`. In mono-repos scenarios this will affect the name
-     * of every `tsconfig.json` file for every package.
-     */
-    tsConfigJsonFileName: functionsConfigSchema.shape.tsConfigJsonFileName,
-
-    /**
-     * List of package names or directory names where tsconfig.json files
-     * are to be found, to include in the refactoring process. If
-     * not specified all tsconfig.json files in the repository are included.
-     */
-    scope: functionsConfigSchema.shape.scope,
-
-    /**
-     * List of file globs to ignore when copying the repository to the
-     * sandbox directory.
-     *
-     * This also affects `tsconfig.json` files lookup.
-     *
-     * When overriding this value, make sure to include the default
-     * value as well: `['**\/node_modules\/**', '.env*', '.vscode\/**']`
-     */
-    ignore: functionsConfigSchema.shape.ignore,
-
-    /**
-     * List of globs pointing to .gitignore-style files with patterns to
-     * ignore when copying the repository to the sandbox directory.
-     *
-     * When overriding this value, consider including the default value
-     * as well: `['.gitignore']`
-     */
-    ignoreFiles: functionsConfigSchema.shape.ignoreFiles,
-
-    /**
-     * List of function names allowed to be called during refactor
-     */
-    allowedFunctions: allowedFunctionsSchema,
-
-    /**
-     * A git repository which is the target of the refactor, could be
-     * undefined if the target is current repository.
-     */
-    repository: z.string().url().optional(),
-
-    /**
-     * git ref to start the refactor from, could be undefined if the
-     * target is currently checked out ref.
-     */
-    ref: z.string().optional(),
-
-    /**
-     * Whether to allow modified files in the working tree, before
-     * starting the refactor. Defaults to false.
-     */
-    allowDirtyWorkingTree: z.boolean().optional().default(false),
-
-    /**
-     * An optional list of package.json scripts to run before the
-     * refactor starts
-     */
-    bootstrapScripts: z.array(z.string()).optional(),
-
-    /**
-     * The default model to use for the refactor
-     */
-    model: modelsSchema.optional().default('gpt-4o'),
-
-    /**
-     * A map of step codes to models to use for that step
-     */
-    modelByStepCode: z.record(modelsSchema).optional().default({}),
-
-    /**
-     * Whether to use a more expensive model when a step fails due
-     * to the model not being able to generate a processable result.
-     */
-    useMoreExpensiveModelsOnRetry: z
-        .record(modelsSchema, modelsSchema)
-        .optional()
-        .default({
-            'gpt-3.5-turbo': 'gpt-4o',
-        }),
-
+export const codeCheckingConfigSchema = z.object({
     /**
      * `eslint` is supported by default as a checker for the code produced
      * by the model during refactor. It also can serve as a formatter in
@@ -174,7 +60,129 @@ export const refactorConfigSchema = z.object({
             args: z.array(z.string()).nonempty(),
         })
         .optional(),
+});
 
+export const checkoutAndSandboxSchema = z.object({
+    /**
+     * Unique identifier of the refactor, used to identify and restore
+     * the refactor state and finding the right sandbox when running
+     * multiple times.
+     */
+    id: z.string().default(() => randomText(8)),
+
+    /**
+     * Short name of the refactor, should be a valid directory name
+     * and also used as a git branch name.
+     */
+    name: z.string(),
+
+    /**
+     * Location of the repository to be refactored. This is a local path
+     * with the source code checked out. It defaults to the current directory.
+     */
+    location: z.string().default(() => process.cwd()),
+
+    /**
+     * List of file globs to ignore when copying the repository to the
+     * sandbox directory.
+     *
+     * This also affects `tsconfig.json` files lookup.
+     *
+     * When overriding this value, make sure to include the default
+     * value as well: `['**\/node_modules\/**', '.env*', '.vscode\/**']`
+     */
+    ignore: functionsConfigSchema.shape.ignore,
+
+    /**
+     * List of globs pointing to .gitignore-style files with patterns to
+     * ignore when copying the repository to the sandbox directory.
+     *
+     * When overriding this value, consider including the default value
+     * as well: `['.gitignore']`
+     */
+    ignoreFiles: functionsConfigSchema.shape.ignoreFiles,
+
+    /**
+     * A git repository which is the target of the refactor, could be
+     * undefined if the target is current repository.
+     */
+    repository: z.string().url().optional(),
+
+    /**
+     * git ref to start the refactor from, could be undefined if the
+     * target is currently checked out ref.
+     */
+    ref: z.string().optional(),
+
+    /**
+     * Whether to create a sandbox directory or work in the current directory.
+     * Defaults to `true` - which means a sandbox will be automatically created.
+     *
+     * The value of `false` is incompatible with `ref` option and dirty working
+     * trees. If the current directory is dirty and the `ref` parameter is not
+     * specified, we will automatically commit all the changes before starting
+     * the refactor.
+     */
+    createSandbox: z.boolean().optional().default(true),
+
+    /**
+     * Whether to allow modified files in the working tree, before
+     * starting the refactor. Defaults to false.
+     */
+    allowDirtyWorkingTree: z.boolean().optional().default(false),
+
+    /**
+     * An optional list of package.json scripts to run before the
+     * refactor starts
+     */
+    bootstrapScripts: z.array(z.string()).optional(),
+});
+
+export const modelParametersSchema = z.object({
+    /**
+     * The default model to use for the refactor
+     */
+    model: modelsSchema.optional().default('gpt-4o'),
+
+    /**
+     * A map of step codes to models to use for that step
+     */
+    modelByStepCode: z.record(modelsSchema).optional().default({}),
+
+    /**
+     * Whether to use a more expensive model when a step fails due
+     * to the model not being able to generate a processable result.
+     */
+    useMoreExpensiveModelsOnRetry: z
+        .record(modelsSchema, modelsSchema)
+        .optional()
+        .default({
+            'gpt-3.5-turbo': 'gpt-4o',
+        }),
+});
+
+export const toolboxParametersSchema = z.object({
+    /**
+     * Name of the `tsconfig.json` file to use for the refactor, defaults
+     * to `tsconfig.json`. In mono-repos scenarios this will affect the name
+     * of every `tsconfig.json` file for every package.
+     */
+    tsConfigJsonFileName: functionsConfigSchema.shape.tsConfigJsonFileName,
+
+    /**
+     * List of package names or directory names where tsconfig.json files
+     * are to be found, to include in the refactoring process. If
+     * not specified all tsconfig.json files in the repository are included.
+     */
+    scope: functionsConfigSchema.shape.scope,
+
+    /**
+     * List of function names allowed to be called during refactor
+     */
+    allowedFunctions: allowedFunctionsSchema,
+});
+
+export const evaluationParametersSchema = z.object({
     /**
      * Whether to evaluate every file before accepting it as success and
      * committing it to the repository.
@@ -190,16 +198,45 @@ export const refactorConfigSchema = z.object({
      * `evaluate` option is enabled. Defaults to 0.5.
      */
     evaluateMinScore: z.number().optional().default(0.5),
-
-    /**
-     * Unique identifier of the refactor, used to identify and restore
-     * the refactor state and finding the right sandbox when running
-     * multiple times.
-     */
-    id: z.string().default(() => randomText(8)),
 });
 
-export type RefactorConfig = z.input<typeof refactorConfigSchema>;
+export const refactorConfigSchema = z
+    .object({
+        /**
+         * List of files to edit or refactor - the refactoring will be done in the
+         * same order as the files are specified here. File names should be relative
+         * to the repository root.
+         *
+         * When not explicitly specified, the files are determined from the
+         * objective. When the objective doesn't explicitly state the files to be
+         * edited or refactored, the files are determined automatically by the LLM
+         * by analyzing the objective and contents of the repository.
+         */
+        filesToEdit: z.array(z.string()).nonempty().optional(),
+    })
+    .augment(modelParametersSchema.shape)
+    .augment(checkoutAndSandboxSchema.shape)
+    .augment(codeCheckingConfigSchema.shape)
+    .augment(toolboxParametersSchema.shape)
+    .augment(evaluationParametersSchema.shape);
+
+export const refactorConfigWithObjectiveSchema = refactorConfigSchema.augment({
+    /**
+     * Objective of the refactor, the objective is read from a goal.md file
+     * in a directory located at the root of the repository:
+     *
+     * `.refactor-bot/refactors/${name}/goal.md`
+     *
+     * The `goal.md` file is a markdown file can have a frontmatter section
+     * with fields that map to the fields of this schema. The frontmatter
+     * section is optional.
+     */
+    objective: z.string(),
+});
+
+export type RefactorConfigWithObjective = z.input<
+    typeof refactorConfigWithObjectiveSchema
+>;
 
 export const issueSchema = z.object({
     command: z.string(),

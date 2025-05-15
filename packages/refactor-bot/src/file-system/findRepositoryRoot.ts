@@ -31,7 +31,8 @@ export async function findRepositoryRoot(startAt = process.cwd()) {
     });
     assert(
         repoRoot,
-        `Could not find a repository root starting from "${startAt}"`
+        `Could not find a repository root starting from "${startAt}". refactor-bot is looking for ` +
+            `a NodeJS repository with a package.json file or a lockfile.`
     );
     const result = await stat(join(repoRoot, 'package.json'));
     assert(

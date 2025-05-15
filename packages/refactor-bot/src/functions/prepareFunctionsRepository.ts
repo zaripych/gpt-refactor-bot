@@ -253,6 +253,12 @@ const createExecuteFunctions = (opts: {
 
     return {
         executeFunction,
+        sanitizeFunctionResult: async (result: unknown) => {
+            return await sanitizeFunctionResult({
+                result,
+                config,
+            });
+        },
         executeGptFunction,
         executeGptToolCall,
     };
@@ -338,6 +344,8 @@ export interface FunctionsRepository<
         suggestionMessage?: z.output<typeof systemMessageSchema>;
     }>;
 
+    functions(): FunctionDefinitionConstraint[];
+
     describeFunctions(): FunctionDescription[];
 
     addFunctions<AddFns extends FunctionDefinitionConstraint[]>(opts: {
@@ -372,6 +380,8 @@ export interface FunctionsRepository<
     setAllowedFunctions(
         allowedFunctions: string[]
     ): FunctionsRepository<string, Config, Args, Results>;
+
+    sanitizeFunctionResult: (result: unknown) => Promise<unknown>;
 }
 
 function createFunctionsRepository<
@@ -382,7 +392,7 @@ function createFunctionsRepository<
         FunctionsConfig;
 }): FunctionsRepositoryFromRegistry<Fns> {
     return {
-        functions: state.functions,
+        functions: () => state.functions,
         config: state.config,
         ...createExecuteFunctions(state),
         describeFunctions: createDescribeFunctions(state),
